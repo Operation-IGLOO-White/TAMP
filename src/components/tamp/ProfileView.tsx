@@ -1,19 +1,7 @@
 "use client";
 
 import { useNavigate } from "@/lib/nav";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BadgeCheck,
-  Camera,
-  Copy,
-  Lock,
-  LogOut,
-  Plus,
-  Star,
-  Trash2,
-  User,
-  Webhook,
-} from "lucide-react";
+import { BadgeCheck, Camera, Lock, LogOut, Star, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   changePassword as changePasswordFn,
@@ -23,12 +11,6 @@ import {
 } from "@/fns/auth";
 import { uploadKycDocument } from "@/fns/parties";
 import { uploadFile } from "@/fns/upload";
-import {
-  createWebhook,
-  deleteWebhook,
-  listWebhookDeliveries,
-  listWebhooks,
-} from "@/fns/webhooks";
 import { ROLE_SHORT } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
 import type { Party } from "@/lib/tamp-types";
@@ -43,13 +25,12 @@ const VERIFICATION_TONE: Record<Party["verification"], string> = {
   REJECTED: "bg-danger/15 text-danger",
 };
 
-type Tab = "profile" | "security" | "verification" | "developer";
+type Tab = "profile" | "security" | "verification";
 
 const NAV: { key: Tab; label: string; icon: typeof User }[] = [
   { key: "profile", label: "Profile", icon: User },
   { key: "security", label: "Security", icon: Lock },
   { key: "verification", label: "Verification", icon: BadgeCheck },
-  { key: "developer", label: "Developer", icon: Webhook },
 ];
 
 export function ProfileView() {
@@ -105,7 +86,6 @@ export function ProfileView() {
           {tab === "profile" && <ProfileTab me={me} updateProfile={updateProfile} />}
           {tab === "security" && <SecurityTab me={me} />}
           {tab === "verification" && <VerificationTab me={me} role={role} />}
-          {tab === "developer" && <DeveloperTab />}
         </section>
       </div>
     </div>
@@ -725,203 +705,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// ── Developer tab: outbound webhooks ─────────────────────────────
-const WEBHOOK_EVENT_OPTIONS = [
-  "MATCH_ACCEPTED",
-  "ENGAGEMENT_CONFIRMED",
-  "TRIP_STATUS_CHANGED",
-  "LOAD_DELIVERED",
-  "MATCH_EXPIRED",
-  "VERIFICATION_CHANGED",
-] as const;
-
-function DeveloperTab() {
-  const queryClient = useQueryClient();
-  const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [freshSecret, setFreshSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const { data: endpoints = [] } = useQuery({ queryKey: ["webhooks"], queryFn: listWebhooks });
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["webhook-deliveries"],
-    queryFn: () => listWebhookDeliveries(20),
-    refetchInterval: 15_000,
-  });
-
-  const create = useMutation({
-    mutationFn: () => createWebhook(url.trim(), events),
-    onSuccess: (res) => {
-      setFreshSecret(res.secret);
-      setUrl("");
-      setEvents([]);
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey: ["webhooks"] });
-    },
-    onError: (e) => setError(e instanceof Error ? e.message : "Couldn't create endpoint."),
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => deleteWebhook(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["webhooks"] });
-      void queryClient.invalidateQueries({ queryKey: ["webhook-deliveries"] });
-    },
-  });
-
-  const toggleEvent = (e: string) =>
-    setEvents((cur) => (cur.includes(e) ? cur.filter((x) => x !== e) : [...cur, e]));
-
-  return (
-    <>
-      <div className="border-b border-border px-6 py-4">
-        <h2 className="text-xl font-extrabold tracking-tight">Developer</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Send domain events to your own systems. We POST a signed JSON payload with an{" "}
-          <code className="rounded bg-background px-1">x-tamp-signature</code> HMAC-SHA256 header.
-        </p>
-      </div>
-
-      <div className="space-y-6 p-6">
-        {/* One-time secret banner */}
-        {freshSecret && (
-          <div className="rounded-lg border border-positive/40 bg-positive/10 p-4">
-            <div className="mb-1 text-sm font-bold text-positive">Endpoint created</div>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Copy your signing secret now — it won't be shown again.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 truncate rounded bg-background px-2 py-1.5 font-mono text-xs">
-                {freshSecret}
-              </code>
-              <button
-                onClick={() => {
-                  void navigator.clipboard?.writeText(freshSecret);
-                  setCopied(true);
-                }}
-                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-steel/40"
-              >
-                <Copy className="size-3.5" /> {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Create form */}
-        <div className="space-y-3">
-          <Field label="Endpoint URL (HTTPS)">
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://api.yourcompany.co.za/tamp/webhook"
-              className={inputCls}
-            />
-          </Field>
-          <div>
-            <span className="mb-1.5 block text-sm font-semibold">Events</span>
-            <div className="flex flex-wrap gap-2">
-              {WEBHOOK_EVENT_OPTIONS.map((e) => {
-                const on = events.includes(e);
-                return (
-                  <button
-                    key={e}
-                    onClick={() => toggleEvent(e)}
-                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
-                      on
-                        ? "border-signal bg-signal/15 text-signal-foreground"
-                        : "border-border text-muted-foreground hover:bg-steel/40"
-                    }`}
-                  >
-                    {e}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {error && <p className="text-xs font-medium text-danger">{error}</p>}
-          <button
-            onClick={() => create.mutate()}
-            disabled={create.isPending || !url.trim() || events.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-signal px-4 py-2 text-sm font-bold text-signal-foreground hover:brightness-105 disabled:opacity-40"
-          >
-            <Plus className="size-4" /> {create.isPending ? "Creating…" : "Add endpoint"}
-          </button>
-        </div>
-
-        {/* Existing endpoints */}
-        <div>
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Your endpoints
-          </div>
-          {endpoints.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-              No endpoints yet.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-              {endpoints.map((ep) => (
-                <li key={ep.id} className="flex items-start justify-between gap-3 p-3">
-                  <div className="min-w-0">
-                    <div className="truncate font-mono text-xs">{ep.url}</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {ep.events.map((e) => (
-                        <span
-                          key={e}
-                          className="rounded bg-steel/60 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground"
-                        >
-                          {e}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-1 font-mono text-[10px] text-muted-foreground">
-                      secret {ep.secretHint}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => remove.mutate(ep.id)}
-                    className="shrink-0 rounded-lg border border-border p-2 text-muted-foreground hover:border-danger hover:text-danger"
-                    aria-label="Delete endpoint"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Recent deliveries */}
-        {deliveries.length > 0 && (
-          <div>
-            <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Recent deliveries
-            </div>
-            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-              {deliveries.map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
-                  <span className="font-mono">{d.event}</span>
-                  <span className="flex items-center gap-2">
-                    {d.responseCode && (
-                      <span className="font-mono text-muted-foreground">{d.responseCode}</span>
-                    )}
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase ${
-                        d.status === "SUCCESS"
-                          ? "bg-positive/15 text-positive"
-                          : d.status === "FAILED"
-                            ? "bg-danger/15 text-danger"
-                            : "bg-steel/60 text-muted-foreground"
-                      }`}
-                    >
-                      {d.status}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}

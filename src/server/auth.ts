@@ -90,11 +90,15 @@ export function readCookie(cookieHeader: string | null, name: string): string | 
   return null;
 }
 
+// `Secure` in production so the session cookie is only ever sent over HTTPS.
+// Omitted in dev — a Secure cookie wouldn't be stored over plain-HTTP localhost.
+const SECURE = process.env["NODE_ENV"] === "production" ? " Secure;" : "";
+
 export function sessionCookie(token: string): string {
   const maxAge = SESSION_DAYS * 24 * 60 * 60;
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly;${SECURE} SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 export function clearedCookie(): string {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly;${SECURE} SameSite=Lax; Max-Age=0`;
 }

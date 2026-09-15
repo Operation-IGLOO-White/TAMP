@@ -1,9 +1,10 @@
 {
-  "/api/health/route": "app/api/health/route.js",
   "/api/trpc/[trpc]/route": "app/api/trpc/[trpc]/route.js",
-  "/api/uploads/route": "app/api/uploads/route.js",
-  "/api/files/[id]/route": "app/api/files/[id]/route.js",
   "/page": "app/page.js",
+  "/owner/loads/[loadId]/page": "app/owner/loads/[loadId]/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/admin/logs/page": "app/admin/logs/page.js",
+  "/admin/profile/page": "app/admin/profile/page.js",
   "/owner/page": "app/owner/page.js",
-  "/owner/profile/page": "app/owner/profile/page.js"
+  "/owner/board/page": "app/owner/board/page.js"
 }

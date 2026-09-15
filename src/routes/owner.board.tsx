@@ -37,6 +37,9 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "rate-asc", label: "Rate: low to high" },
 ];
 
+// Posts older than this (with no carrier requests) expire off the board.
+const LOAD_EXPIRY_DAYS = 7;
+
 function BoardPage() {
   // All domain data comes from the store, hydrated from Postgres on load.
   const { loads, matches, trips, disputes, trucks, parties, acceptMatch, acceptRequest } =
@@ -57,6 +60,14 @@ function BoardPage() {
     () =>
       loads
         .filter((l) => l.status !== "COMPLETED" && l.status !== "CLOSED")
+        // Drop stale posts: POSTED > 7 days with no carrier requests. They move
+        // to the dashboard's "Expired posts" where they can be re-posted.
+        .filter((l) => {
+          if (l.status !== "POSTED") return true;
+          const ageDays = (Date.now() - new Date(l.createdAt).getTime()) / 864e5;
+          if (ageDays < LOAD_EXPIRY_DAYS) return true;
+          return matches.some((m) => m.loadId === l.id && m.status === "OFFERED");
+        })
         .map((load) => {
           const status = displayStatusForLoad(load, matches, trips, disputes);
           const activeMatch = activeMatchForLoad(load.id, matches);
@@ -343,7 +354,7 @@ function LoadCard({
         ) : topMatch ? (
           <div className="rounded-lg border border-signal/40 bg-signal/5 p-3">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-signal-foreground">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
                 Best match
               </span>
               <span className="flex items-baseline gap-0.5">

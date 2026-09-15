@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@/lib/nav";
-import { AlertTriangle, Clock, Plus, Star, Truck } from "lucide-react";
+import { AlertTriangle, Clock, Plus, RefreshCw, Star, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Panel } from "@/components/tamp/StatCard";
@@ -22,8 +22,13 @@ import {
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
 
+// A POSTED load with no engagement expires off the active board after 7 days;
+// the owner can re-post it (which resets the clock).
+const LOAD_EXPIRY_DAYS = 7;
+
 function OwnerDashboard() {
-  const { loads, trucks, matches, trips, disputes, ratings, audit, parties, me } = useTamp();
+  const { loads, trucks, matches, trips, disputes, ratings, audit, parties, me, repostLoad } =
+    useTamp();
   const data = { matches, loads, trucks, parties };
 
   // ① Needs you
@@ -44,8 +49,9 @@ function OwnerDashboard() {
     .map((t) => enrichTrip(t, data))
     .filter((e) => e.load);
 
-  // ③ Open loads
-  const openLoads = loads
+  // ③ Open loads — split active (posted within 7 days) from expired (older),
+  // which drop off the active board and can be re-posted.
+  const postedLoads = loads
     .filter((l) => l.status === "POSTED")
     .map((l) => ({
       load: l,
@@ -53,6 +59,13 @@ function OwnerDashboard() {
       age: daysSince(l.createdAt),
     }))
     .sort((a, b) => b.age - a.age);
+  // A load with pending carrier requests is engaged — it never expires.
+  const hasOffers = (loadId: string) =>
+    matches.some((m) => m.loadId === loadId && m.status === "OFFERED");
+  const openLoads = postedLoads.filter((l) => l.age < LOAD_EXPIRY_DAYS || hasOffers(l.load.id));
+  const expiredLoads = postedLoads.filter(
+    (l) => l.age >= LOAD_EXPIRY_DAYS && !hasOffers(l.load.id),
+  );
 
   // ④ Performance
   const confirmedMatches = matches.filter((m) => m.confirmedByOwnerAt);
@@ -245,6 +258,35 @@ function OwnerDashboard() {
               })}
             </div>
           </Panel>
+
+          {expiredLoads.length > 0 && (
+            <Panel title={`Expired posts (${expiredLoads.length})`} className="mt-4">
+              <p className="border-b border-border px-4 py-2 text-[11px] text-muted-foreground">
+                Posted over {LOAD_EXPIRY_DAYS} days ago with no engagement — removed from the board.
+                Re-post to refresh the date and get new suggestions.
+              </p>
+              <div className="divide-y divide-border">
+                {expiredLoads.map(({ load, age }) => (
+                  <div key={load.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold uppercase leading-tight text-muted-foreground">
+                        {load.origin.label} → {load.destination.label}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground">
+                        #{load.id} · expired · posted {age}d ago
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => repostLoad(load.id)}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-signal px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
+                    >
+                      <RefreshCw className="size-3.5" /> Re-post
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
         </Section>
 
         {/* ④ Performance */}

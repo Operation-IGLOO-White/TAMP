@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Route as RouteIcon,
+  ScrollText,
   ShieldCheck,
   Truck,
   User,
@@ -59,6 +60,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/admin/users", label: "Users", icon: Users },
     { to: "/admin/trucks", label: "Trucks", icon: Truck },
     { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck },
+    { to: "/admin/logs", label: "System Logs", icon: ScrollText },
     { to: "/admin/profile", label: "Profile", icon: User },
   ],
 };

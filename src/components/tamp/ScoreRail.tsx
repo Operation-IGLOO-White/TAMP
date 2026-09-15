@@ -1,44 +1,34 @@
-// CMP-03 Score Rail — segmented bar, one segment per rule, width ∝ weight,
-// fill ∝ earned. This is the deliberate risk from spec §7.1: segmented and
-// labelled, not a smooth progress bar, because that's the whole argument
-// for a rule-based marketplace over a phone call.
+// CMP-03 Score breakdown — the numbers, not a bar. One cell per rule showing
+// earned/weight, so the rule-based score is legible at a glance (the whole
+// argument for a rule-based marketplace over a phone call). A smooth progress
+// bar hid the maths; this shows it.
 
 import type { MatchScoreComponent } from "@/lib/tamp-types";
 
 export function ScoreRail({ breakdown }: { breakdown: MatchScoreComponent[] }) {
-  const totalWeight = breakdown.reduce((s, c) => s + c.weight, 0);
-
   return (
-    <div className="w-full">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-sm border border-border">
-        {breakdown.map((c) => {
-          const fillPct = Math.max(0, Math.min(100, (c.earned / c.weight) * 100));
-          return (
-            <div
-              key={c.ruleId}
-              title={`${c.label}: +${c.earned.toFixed(1)}/${c.weight} — ${c.detail}`}
-              style={{ width: `${(c.weight / totalWeight) * 100}%` }}
-              className="relative h-full border-r border-background last:border-r-0 bg-steel/40"
-            >
-              <div
-                className="absolute inset-y-0 left-0 bg-signal"
-                style={{ width: `${fillPct}%` }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between mt-1 text-[8px] font-mono text-muted-foreground uppercase tracking-wide">
-        {breakdown.map((c) => (
-          <span
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+      {breakdown.map((c) => {
+        // "Full" when the rule earned (almost) all of its weight.
+        const full = c.earned >= c.weight - 0.05;
+        return (
+          <div
             key={c.ruleId}
-            style={{ width: `${(c.weight / totalWeight) * 100}%` }}
-            className="truncate"
+            title={`${c.label}: +${c.earned.toFixed(1)}/${c.weight} — ${c.detail}`}
+            className="flex items-baseline justify-between gap-2"
           >
-            {c.ruleId.replace("R-", "")}
-          </span>
-        ))}
-      </div>
+            <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {c.ruleId.replace(/^R-/, "")}
+            </span>
+            <span className="shrink-0 font-mono text-xs font-bold tabular-nums">
+              <span className={full ? "text-positive" : "text-foreground"}>
+                {c.earned.toFixed(1)}
+              </span>
+              <span className="text-muted-foreground">/{c.weight}</span>
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

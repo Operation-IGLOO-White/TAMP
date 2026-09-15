@@ -1,9 +1,11 @@
 "use client";
 
 import { Link, useNavigate } from "@/lib/nav";
-import { useEffect, useState } from "react";
+import { Clock, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
+import type { Party } from "@/lib/tamp-types";
 
 const OAUTH_ERRORS: Record<string, string> = {
   google_not_configured: "Google sign-in isn't configured yet.",
@@ -19,22 +21,39 @@ function Landing() {
   const [email, setEmail] = useState("n.khumalo@highveldlog.co.za");
   const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+
+  // Single, deduped redirect. Both the effect below (returning user / Google
+  // callback) and a fresh sign-in call this; the ref guarantees we navigate
+  // once. `replace` keeps the login page out of history. The overlay it turns
+  // on covers the (dev-compile) navigation gap so it never looks frozen.
+  const didRedirect = useRef(false);
+  const goHome = (party: Party) => {
+    if (didRedirect.current) return;
+    didRedirect.current = true;
+    setRedirecting(true);
+    navigate({
+      to: party.onboardingComplete === false ? "/welcome" : HOME_BY_ROLE[party.role],
+      replace: true,
+    });
+  };
 
   // Already signed in (incl. arriving back from a Google sign-in that set the
   // session cookie) → go to onboarding or the right dashboard.
   useEffect(() => {
-    if (!authReady || !authParty) return;
-    navigate({
-      to: authParty.onboardingComplete === false ? "/welcome" : HOME_BY_ROLE[authParty.role],
-    });
+    if (authReady && authParty) goHome(authParty);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, authParty]);
 
-  // Surface an OAuth error passed back as ?error=… by the callback.
+  // Surface an OAuth error passed back as ?error=… by the callback, or a
+  // ?timeout flag set when the session was ended for inactivity.
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("error");
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("error");
     if (code) setError(OAUTH_ERRORS[code] ?? "Sign-in failed. Please try again.");
+    if (params.get("timeout")) setNotice("You were signed out after a period of inactivity.");
   }, []);
 
   const loadsPosted = loads.length;
@@ -49,7 +68,7 @@ function Landing() {
     setBusy(true);
     try {
       const party = await login(email.trim(), password);
-      navigate({ to: HOME_BY_ROLE[party.role] });
+      goHome(party); // busy stays true — the overlay carries us to the dashboard
     } catch {
       setError("Invalid email or password.");
       setBusy(false);
@@ -58,6 +77,19 @@ function Landing() {
 
   return (
     <main className="grid min-h-screen md:grid-cols-2">
+      {/* Redirect overlay — a smooth, animated hand-off to the dashboard that
+          also covers the first-navigation compile so it never looks stuck. */}
+      {redirecting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <span className="grid size-12 place-items-center rounded-xl bg-signal font-extrabold text-signal-foreground shadow-lg animate-in zoom-in-50 duration-300">
+            T
+          </span>
+          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Signing you in…
+          </div>
+        </div>
+      )}
+
       <section className="flex flex-col justify-center border-b border-border bg-graphite p-8 md:border-b-0 md:border-r md:p-14">
         <div className="mb-8 flex items-center gap-2">
           <span className="grid size-8 place-items-center rounded-md bg-signal font-extrabold text-signal-foreground">
@@ -82,13 +114,19 @@ function Landing() {
       </section>
 
       <section className="flex flex-col justify-center p-8 md:p-14">
-        <form onSubmit={signIn} className="mx-auto w-full max-w-sm space-y-5">
+        <form onSubmit={signIn} className="mx-auto w-full max-w-sm space-y-5 animate-slide">
           <div>
             <h2 className="text-lg font-bold tracking-tight">Sign in</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Welcome back. Use the demo credentials below or your own.
             </p>
           </div>
+
+          {notice && (
+            <div className="flex items-center gap-2 rounded-md border border-signal/40 bg-signal/10 px-3 py-2 text-xs font-medium text-foreground">
+              <Clock className="size-4 shrink-0 text-signal" /> {notice}
+            </div>
+          )}
 
           {/* Social sign-in */}
           <a
@@ -137,8 +175,9 @@ function Landing() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-md bg-signal py-2.5 text-sm font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-signal py-2.5 text-sm font-bold uppercase tracking-wide text-signal-foreground transition-all hover:brightness-105 disabled:opacity-70"
           >
+            {busy && <Loader2 className="size-4 animate-spin" />}
             {busy ? "Signing in…" : "Sign in"}
           </button>
 

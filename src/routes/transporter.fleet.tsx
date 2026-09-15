@@ -306,7 +306,7 @@ function TruckCard({
         ) : best ? (
           <div className="rounded-lg border border-signal/40 bg-signal/5 p-3">
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-signal-foreground">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
                 Best matching load
               </span>
               <span className="flex items-baseline gap-0.5">

@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { prisma } from "../prisma";
-import { protectedProcedure, router } from "../trpc";
+import { adminProcedure, router } from "../trpc";
 
 export const WEBHOOK_EVENTS = [
   "MATCH_ACCEPTED",
@@ -25,7 +25,7 @@ const wid = (prefix: string) =>
 const maskSecret = (s: string) => `whsec_…${s.slice(-4)}`;
 
 export const webhooksRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: adminProcedure.query(async ({ ctx }) => {
     const rows = await prisma.webhookEndpoint.findMany({
       where: { partyId: ctx.partyId },
       orderBy: { createdAt: "desc" },
@@ -40,7 +40,7 @@ export const webhooksRouter = router({
     }));
   }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         url: z.string().url().refine((u) => u.startsWith("https://"), "Endpoint must be HTTPS."),
@@ -68,7 +68,7 @@ export const webhooksRouter = router({
       return { id: row.id, url: row.url, events: input.events as string[], secret };
     }),
 
-  setActive: protectedProcedure
+  setActive: adminProcedure
     .input(z.object({ id: z.string(), active: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       const owned = await prisma.webhookEndpoint.findFirst({
@@ -79,7 +79,7 @@ export const webhooksRouter = router({
       return { ok: true as const };
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const owned = await prisma.webhookEndpoint.findFirst({
@@ -94,7 +94,7 @@ export const webhooksRouter = router({
     }),
 
   // Recent delivery attempts across the caller's endpoints — the debugging view.
-  deliveries: protectedProcedure
+  deliveries: adminProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(30) }).optional())
     .query(async ({ input, ctx }) => {
       const endpoints = await prisma.webhookEndpoint.findMany({

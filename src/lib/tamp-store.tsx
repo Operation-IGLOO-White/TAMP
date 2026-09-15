@@ -52,6 +52,9 @@ import type {
 
 const STORAGE_KEY = "tamp-state-v4";
 
+// Auto-sign-out after this much inactivity (mouse/keys/scroll/touch reset it).
+const IDLE_TIMEOUT_MS = 30 * 60_000; // 30 minutes
+
 interface State {
   role: Role;
   parties: Party[];
@@ -155,6 +158,7 @@ interface Store extends State {
   markNotificationsRead: () => void;
   registerParty: (p: NewPartyInput) => string;
   addLoad: (l: NewLoadInput) => void;
+  repostLoad: (loadId: string) => void;
   addTruck: (t: NewTruckInput) => void;
   updateTruck: (
     truckId: string,
@@ -167,6 +171,7 @@ interface Store extends State {
         | "availableTo"
         | "payloadCapacityKg"
         | "preferredLanes"
+        | "licenceExpiry"
       >
     >,
   ) => void;
@@ -196,9 +201,9 @@ export interface NewFuelInput {
   truckId: string;
   litres: number;
   amount: number; // ZAR total
-  odometerKm?: number;
-  station?: string;
-  note?: string;
+  odometerKm?: number | undefined;
+  station?: string | undefined;
+  note?: string | undefined;
   filledAt: string;
 }
 export interface NewMaintenanceInput {
@@ -206,8 +211,8 @@ export interface NewMaintenanceInput {
   kind: MaintenanceKind;
   title: string;
   dueDate: string;
-  amount?: number; // cost in ZAR
-  note?: string;
+  amount?: number | undefined; // cost in ZAR
+  note?: string | undefined;
 }
 export interface NewProofInput {
   tripId: string;
@@ -381,6 +386,12 @@ export function TampProvider({ children }: { children: ReactNode }) {
       acceptances: [],
       reservations: [],
       audit: [],
+      // Clear the JSON-blob collections too, so the next account never sees the
+      // previous one's data and they don't diff as "new" against the reset
+      // baseline (which was triggering a stray sync on sign-out).
+      fuelLogs: [],
+      maintenance: [],
+      proofs: [],
     }));
   }, []);
 
@@ -433,6 +444,9 @@ export function TampProvider({ children }: { children: ReactNode }) {
   // (debounced so a burst of updates collapses into one delta).
   useEffect(() => {
     if (!hydrated) return;
+    // No session → nothing to persist. Skips the write-through so signing out
+    // (which resets the domain) never fires a doomed 401 sync.
+    if (!auth.party) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const { changed, delta } = computeDelta(persistedRef.current, state);
@@ -454,7 +468,42 @@ export function TampProvider({ children }: { children: ReactNode }) {
     state.reservations,
     state.audit,
     hydrated,
+    auth.party,
   ]);
+
+  // Idle session timeout: sign the user out after a stretch of no interaction.
+  // We end the server session and hard-navigate to the login page (with a
+  // ?timeout flag) so the app reloads clean — no stale in-memory state.
+  useEffect(() => {
+    if (!auth.party) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let last = 0;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          await authLogout();
+        } catch {
+          /* clear the session best-effort */
+        }
+        window.location.href = "/?timeout=1";
+      }, IDLE_TIMEOUT_MS);
+    };
+    // Throttle: activity fires constantly; only re-arm at most once/second.
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - last < 1000) return;
+      last = now;
+      arm();
+    };
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"] as const;
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    arm();
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+    };
+  }, [auth.party]);
 
   const log = useCallback(
     (
@@ -646,6 +695,55 @@ export function TampProvider({ children }: { children: ReactNode }) {
               "LOAD",
               id,
               `${ownerParty.companyName} posted ${id} (${load.origin.label} → ${load.destination.label}).`,
+            ),
+          };
+        }),
+
+      // Re-post an expired (stale) load: reset its post date so the 7-day clock
+      // starts over, ensure it's POSTED, and regenerate fresh suggestions
+      // (dropping the load's old SUGGESTED matches).
+      repostLoad: (loadId) =>
+        setState((s) => {
+          const existing = s.loads.find((l) => l.id === loadId);
+          if (!existing) return s;
+          const load: Load = {
+            ...existing,
+            status: "POSTED",
+            createdAt: new Date().toISOString(),
+          };
+          const ownerParty = s.parties.find((p) => p.id === load.ownerId)!;
+          const available = s.trucks.filter((t) => t.status === "AVAILABLE");
+          const scored = scoreLoadAgainstTrucks(load, available, s.parties, ownerParty).filter(
+            (m) => m.passed,
+          );
+          const generated: Match[] = scored.map((m) => ({
+            id: nextRef("MT"),
+            loadId,
+            truckPostingId: m.truck.id,
+            score: m.score,
+            breakdown: m.breakdown,
+            hardFilterResults: m.hardFilterResults,
+            status: "SUGGESTED",
+            initiatedBy: "SYSTEM",
+            expiresAt: new Date(Date.now() + 864e5).toISOString(),
+            createdAt: new Date().toISOString(),
+          }));
+          return {
+            ...s,
+            loads: s.loads.map((l) => (l.id === loadId ? load : l)),
+            // Replace this load's stale SUGGESTED matches with the fresh ones.
+            matches: [
+              ...generated,
+              ...s.matches.filter((m) => !(m.loadId === loadId && m.status === "SUGGESTED")),
+            ],
+            audit: log(
+              s.audit,
+              "LOAD_POSTED",
+              load.ownerId,
+              "FREIGHT_OWNER",
+              "LOAD",
+              loadId,
+              `${ownerParty.companyName} re-posted ${loadId} (${load.origin.label} → ${load.destination.label}).`,
             ),
           };
         }),

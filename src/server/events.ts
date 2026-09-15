@@ -51,15 +51,21 @@ export async function notify(type: DomainEventType, specs: NotificationSpec[]): 
   return rows.length;
 }
 
-// Fan an event out to subscribed, active endpoints owned by the involved
-// parties, by enqueuing a delivery row per endpoint. The scheduler signs and
+// Fan an event out to subscribed, active endpoints, by enqueuing a delivery row
+// per endpoint. An endpoint receives an event if its owner is one of the
+// involved parties OR its owner is an ADMIN — admin endpoints are a
+// platform-wide monitoring feed and get every event. The scheduler signs and
 // POSTs these with retry/backoff.
 export async function enqueueWebhooks(
   event: DomainEventType,
   data: unknown,
   involvedPartyIds: string[],
 ): Promise<number> {
-  const parties = new Set(involvedPartyIds.filter(Boolean));
+  const admins = await prisma.party.findMany({
+    where: { role: "ADMIN" },
+    select: { id: true },
+  });
+  const parties = new Set([...involvedPartyIds.filter(Boolean), ...admins.map((a) => a.id)]);
   if (!parties.size) return 0;
   const endpoints = await prisma.webhookEndpoint.findMany({
     where: { active: true, partyId: { in: [...parties] } },

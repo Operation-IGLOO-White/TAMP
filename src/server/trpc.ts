@@ -3,6 +3,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { logger } from "./logger";
+import { prisma } from "./prisma";
 
 export interface Context {
   partyId: string | null; // logged-in party (from the session cookie), or null
@@ -45,4 +46,15 @@ export const publicProcedure = t.procedure.use(observed);
 export const protectedProcedure = t.procedure.use(observed).use(({ ctx, next }) => {
   if (!ctx.partyId) throw new TRPCError({ code: "UNAUTHORIZED" });
   return next({ ctx: { ...ctx, partyId: ctx.partyId } });
+});
+
+// Requires an authenticated session whose party is an ADMIN. The role is read
+// from the DB (never trusted from the client) on each call.
+export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const me = await prisma.party.findUnique({
+    where: { id: ctx.partyId },
+    select: { role: true },
+  });
+  if (me?.role !== "ADMIN") throw new TRPCError({ code: "FORBIDDEN", message: "Admins only." });
+  return next({ ctx });
 });
