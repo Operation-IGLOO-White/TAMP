@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../trpc";
 import { bodyTypesForCargo, roadDistanceKm, scoreLoadAgainstTrucks } from "../matching";
-import type { CargoType, Place } from "../types";
+import type { CargoType, Load, Party, Place, TruckPosting } from "../types";
 
 const cargoTypeSchema = z.enum([
   "GENERAL_PALLETISED",
@@ -53,7 +53,7 @@ const partySchema = z.object({
     .optional(),
   onboardingComplete: z.boolean().optional(),
   createdAt: z.string(),
-}) satisfies z.ZodType<Party>;
+});
 
 const loadSchema = z.object({
   id: z.string(),
@@ -81,7 +81,7 @@ const loadSchema = z.object({
     "EXPIRED",
   ]),
   createdAt: z.string(),
-}) satisfies z.ZodType<Load>;
+});
 
 const truckPostingSchema = z.object({
   id: z.string(),
@@ -100,7 +100,7 @@ const truckPostingSchema = z.object({
   licenceExpiry: z.string().optional(),
   status: z.enum(["AVAILABLE", "RESERVED", "ON_TRIP", "OFFLINE", "EXPIRED"]),
   createdAt: z.string(),
-}) satisfies z.ZodType<TruckPosting>;
+});
 
 export const matchingRouter = router({
   score: publicProcedure
@@ -113,7 +113,15 @@ export const matchingRouter = router({
       }),
     )
     .query(({ input }) =>
-      scoreLoadAgainstTrucks(input.load, input.trucks, input.operators, input.owner),
+      // zod's .optional() types absent fields as `T | undefined`, which the
+      // domain types (under exactOptionalPropertyTypes) don't — the runtime
+      // shapes match, so this is a type-level-only cast.
+      scoreLoadAgainstTrucks(
+        input.load as unknown as Load,
+        input.trucks as unknown as TruckPosting[],
+        input.operators as unknown as Party[],
+        input.owner as unknown as Party,
+      ),
     ),
 
   bodyTypesForCargo: publicProcedure
