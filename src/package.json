@@ -75,7 +75,7 @@
     "eslint-config-next": "^15.5.4",
     "eslint-config-prettier": "^10.1.1",
     "prettier": "^3.7.3",
-    "tamp-backend": "file:../Tamp-backend",
+    "tamp-backend": "github:Operation-IGLOO-White/TAMP-Backend",
     "typescript": "^5.8.3",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^5.0.0"

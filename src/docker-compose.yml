@@ -6,7 +6,7 @@ services:
     build:
       # Repo root, not this directory — see Dockerfile for why.
       context: ..
-      dockerfile: Tamp-frontend/Dockerfile
+      dockerfile: src/Dockerfile
       args:
         NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-dev}
     env_file:
