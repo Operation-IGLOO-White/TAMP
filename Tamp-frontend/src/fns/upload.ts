@@ -15,7 +15,8 @@ export async function uploadFile(file: File, kind: FileKind): Promise<UploadedFi
   const body = new FormData();
   body.append("file", file);
   body.append("kind", kind);
-  const res = await fetch(`${process.env["NEXT_PUBLIC_BACKEND_URL"]}/api/uploads`, {
+  // Same-origin, via the /api/ reverse proxy — see src/lib/trpc.ts.
+  const res = await fetch("/api/uploads", {
     method: "POST",
     credentials: "include",
     body,

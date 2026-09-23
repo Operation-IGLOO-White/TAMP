@@ -1,0 +1,51 @@
+services:
+  # Next.js standalone server. Not published directly — frontend-proxy is the
+  # only container exposed on the host.
+  frontend:
+    image: tamp-frontend:${TAG:-latest}
+    build:
+      # Repo root, not this directory — see Dockerfile for why.
+      context: ..
+      dockerfile: Tamp-frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-dev}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://host.docker.internal:4000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # nginx reverse proxy — the only container publishing a port. Proxies /api/
+  # straight to the backend and everything else to `frontend`.
+  frontend-proxy:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    depends_on:
+      frontend:
+        condition: service_healthy
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      BACKEND_TARGET: ${BACKEND_INTERNAL_URL:-http://host.docker.internal:4000}
+      FRONTEND_APP_TARGET: http://frontend:3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
