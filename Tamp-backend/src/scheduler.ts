@@ -7,7 +7,7 @@
 // would move to a proper worker + durable queue, but the job logic is the same.
 import { createHmac, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import type { Match } from "@/lib/tamp-types";
+import type { Match } from "./types";
 import { gcExpired } from "./auth";
 import { emitEvent } from "./events";
 import { logger } from "./logger";

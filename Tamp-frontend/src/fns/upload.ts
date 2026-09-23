@@ -15,7 +15,11 @@ export async function uploadFile(file: File, kind: FileKind): Promise<UploadedFi
   const body = new FormData();
   body.append("file", file);
   body.append("kind", kind);
-  const res = await fetch("/api/uploads", { method: "POST", body });
+  const res = await fetch(`${process.env["NEXT_PUBLIC_BACKEND_URL"]}/api/uploads`, {
+    method: "POST",
+    credentials: "include",
+    body,
+  });
   if (!res.ok) {
     const msg = await res
       .json()

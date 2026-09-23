@@ -43,7 +43,7 @@ export const emailRouter = router({
       // testable. Never leaked once a real key is set, or in production.
       const live = mailerLive();
       const devCode =
-        !live && process.env.NODE_ENV !== "production" ? code : undefined;
+        !live && process.env["NODE_ENV"] !== "production" ? code : undefined;
       return { sent: true, live, devCode };
     }),
 });

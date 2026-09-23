@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-// Backend/unit tests. Node environment; `@/` resolves to ./src.
+// Frontend unit tests. Node environment; `@/` resolves to ./src.
 export default defineConfig({
   resolve: {
     alias: {

@@ -6,7 +6,7 @@ import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { formatMoney } from "@/lib/tamp-data";
 import { useTamp } from "@/lib/tamp-store";
-import type { MaintenanceKind } from "@/lib/tamp-types";
+import type { MaintenanceKind } from "tamp-backend/src/types";
 
 const KINDS: { value: MaintenanceKind; label: string }[] = [
   { value: "SERVICE", label: "Service" },

@@ -85,7 +85,7 @@ export function PodCapture({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6">
       <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-graphite shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0">

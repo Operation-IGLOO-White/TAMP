@@ -1,7 +1,7 @@
 // Client wrapper over the tRPC `routes` router (server-side Google Routes API).
 import { trpc } from "@/lib/trpc";
-import type { RouteResult } from "@/server/routers/routes";
-import type { Place } from "@/lib/tamp-types";
+import type { RouteResult } from "tamp-backend/src/routers/routes";
+import type { Place } from "tamp-backend/src/types";
 
 export type { RouteResult };
 

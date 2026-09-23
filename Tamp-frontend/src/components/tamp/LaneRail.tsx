@@ -1,7 +1,7 @@
 // CMP-02 Lane Rail — origin ● ————— ▲ ————— ● destination.
 // Distance in mono above; truck glyph sits at progress point.
 
-import type { Place } from "@/lib/tamp-types";
+import type { Place } from "tamp-backend/src/types";
 
 export function LaneRail({
   origin,

@@ -2,23 +2,10 @@
 logs
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
 node_modules
 dist
-dist-ssr
-.output
-.vinxi
-.tanstack/**
-.nitro
 *.local
-
-# Wrangler / Cloudflare
-.wrangler/
-.dev.vars
 
 # Editor directories and files
 .vscode/*
@@ -34,3 +21,6 @@ dist-ssr
 
 # Local uploaded files (object store)
 .uploads/
+
+# Build artifacts
+*.tsbuildinfo

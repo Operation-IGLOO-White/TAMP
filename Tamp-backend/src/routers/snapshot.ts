@@ -23,7 +23,7 @@ import type {
   Reservation,
   Trip,
   TruckPosting,
-} from "@/lib/tamp-types";
+} from "../types";
 import { TRPCError } from "@trpc/server";
 import { type BlobKind, validateBlob } from "../blobSchemas";
 import { logger } from "../logger";

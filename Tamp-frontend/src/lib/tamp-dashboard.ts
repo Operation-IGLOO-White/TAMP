@@ -1,7 +1,7 @@
 // Derived metrics shared by the role dashboards. Everything here reads from
 // the store's entities — nothing is persisted.
 
-import type { Dispute, Load, Match, Party, Trip, TruckPosting } from "./tamp-types";
+import type { Dispute, Load, Match, Party, Trip, TruckPosting } from "tamp-backend/src/types";
 
 export const ACTIVE_TRIP_STATUSES = [
   "SCHEDULED",

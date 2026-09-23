@@ -7,7 +7,7 @@ import {
   tripForMatch,
 } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { Acceptance, Load } from "@/lib/tamp-types";
+import type { Acceptance, Load } from "tamp-backend/src/types";
 import { DisputeDialog } from "./DisputeDialog";
 
 const RATING_TAGS = [

@@ -9,7 +9,7 @@ import { Avatar } from "@/components/tamp/Avatar";
 import { setPartyVerification } from "@/fns/parties";
 import { ROLE_SHORT } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
-import type { Party, Role } from "@/lib/tamp-types";
+import type { Party, Role } from "tamp-backend/src/types";
 
 const ROLE_TABS: { key: Role | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Party } from "@/lib/tamp-types";
+import type { Party } from "tamp-backend/src/types";
 
 // Deterministic portrait for a party. Uses the party's own avatarUrl when set,
 // otherwise a stable generated photo keyed by id, with an initials fallback if

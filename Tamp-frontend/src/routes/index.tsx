@@ -5,7 +5,7 @@ import { Clock, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
-import type { Party } from "@/lib/tamp-types";
+import type { Party } from "tamp-backend/src/types";
 
 const OAUTH_ERRORS: Record<string, string> = {
   google_not_configured: "Google sign-in isn't configured yet.",

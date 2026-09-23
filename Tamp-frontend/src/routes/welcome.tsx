@@ -4,10 +4,10 @@ import { useNavigate } from "@/lib/nav";
 import { Boxes, Briefcase, CheckCircle2, IdCard, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { completeOnboarding } from "@/fns/parties";
-import { checkSaMobile } from "@/lib/phone";
+import { checkSaMobile } from "@/fns/phone";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
-import type { OnboardingUserType } from "@/lib/tamp-types";
+import type { OnboardingUserType } from "tamp-backend/src/types";
 
 const PROVINCES = ["GP", "KZN", "WC", "EC", "FS", "NW", "LP", "MP", "NC"];
 
@@ -38,13 +38,27 @@ function Welcome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, authParty]);
 
-  const phoneCheck = checkSaMobile(phone);
+  const [phoneCheck, setPhoneCheck] = useState<{ valid: boolean; reason?: string }>({
+    valid: false,
+  });
+  useEffect(() => {
+    let cancelled = false;
+    const id = setTimeout(() => {
+      checkSaMobile(phone).then((c) => {
+        if (!cancelled) setPhoneCheck(c);
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [phone]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userType) return setError("Choose how you'll use TAMP.");
     if (!companyName.trim()) return setError("Enter your name or company.");
-    if (!phoneCheck.valid) return setError("Enter a valid South African mobile number.");
+    if (!(await checkSaMobile(phone)).valid) return setError("Enter a valid South African mobile number.");
     setError("");
     setBusy(true);
     try {

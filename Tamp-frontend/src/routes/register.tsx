@@ -13,12 +13,12 @@ import {
   ShieldCheck,
   Truck,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { sendVerificationCode } from "@/fns/email";
 import { registerParty } from "@/fns/parties";
-import { checkSaMobile } from "@/lib/phone";
-import type { BodyType, OnboardingUserType, Place } from "@/lib/tamp-types";
+import { checkSaMobile } from "@/fns/phone";
+import type { BodyType, OnboardingUserType, Place } from "tamp-backend/src/types";
 
 const PROVINCES = ["GP", "KZN", "WC", "EC", "FS", "NW", "LP", "MP", "NC"];
 const BUSINESS_TYPES = ["Pty Ltd", "Close Corporation", "Sole Proprietor", "Partnership", "Other"];
@@ -142,7 +142,19 @@ function PhoneField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const check = checkSaMobile(value);
+  const [check, setCheck] = useState<{ valid: boolean; reason?: string }>({ valid: false });
+  useEffect(() => {
+    let cancelled = false;
+    const id = setTimeout(() => {
+      checkSaMobile(value).then((c) => {
+        if (!cancelled) setCheck(c);
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [value]);
   const show = value.trim().length > 0;
   return (
     <div>
@@ -349,7 +361,7 @@ function Register() {
     void sendCode();
   };
 
-  const submitYou = (e: React.FormEvent) => {
+  const submitYou = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordStrength(you.password).score < 2) {
       setPwError("Choose a stronger password — at least 8 characters with a mix of letters and numbers.");
@@ -359,7 +371,7 @@ function Register() {
       setPwError("Passwords don't match.");
       return;
     }
-    if (!checkSaMobile(you.phone).valid) {
+    if (!(await checkSaMobile(you.phone)).valid) {
       setPwError("Enter a valid South African mobile number.");
       return;
     }

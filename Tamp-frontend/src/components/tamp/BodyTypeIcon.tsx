@@ -1,4 +1,4 @@
-import type { BodyType } from "@/lib/tamp-types";
+import type { BodyType } from "tamp-backend/src/types";
 
 // Human-readable labels for each truck body type.
 export const BODY_TYPE_LABEL: Record<BodyType, string> = {

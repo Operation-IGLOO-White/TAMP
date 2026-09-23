@@ -10,7 +10,7 @@ import type {
   Place,
   RuleResult,
   TruckPosting,
-} from "./tamp-types";
+} from "./types";
 
 const SOURCING_RADIUS_KM = 150;
 const ROAD_FACTOR = 1.25;

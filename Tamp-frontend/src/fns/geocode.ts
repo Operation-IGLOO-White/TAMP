@@ -1,7 +1,7 @@
 // Client wrappers over the tRPC `geocode` router (server-side Google Places).
 import { trpc } from "@/lib/trpc";
-import type { Prediction } from "@/server/routers/geocode";
-import type { Place } from "@/lib/tamp-types";
+import type { Prediction } from "tamp-backend/src/routers/geocode";
+import type { Place } from "tamp-backend/src/types";
 
 export type { Prediction };
 

@@ -10,8 +10,8 @@ import type {
   Party,
   Role,
   VerificationStatus,
-} from "@/lib/tamp-types";
-import { checkSaMobile } from "@/lib/phone";
+} from "../types";
+import { checkSaMobile } from "../phone";
 import { hashPassword, verifyPassword } from "../auth";
 import { emitEvent } from "../events";
 import { prisma } from "../prisma";

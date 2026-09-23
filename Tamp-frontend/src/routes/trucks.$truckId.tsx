@@ -14,7 +14,7 @@ import { findDriver } from "@/fns/parties";
 import { daysSince, estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { Party } from "@/lib/tamp-types";
+import type { Party } from "tamp-backend/src/types";
 
 function TruckDetail() {
   const { truckId } = useParams<{ truckId: string }>();

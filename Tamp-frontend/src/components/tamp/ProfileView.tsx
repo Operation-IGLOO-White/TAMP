@@ -13,7 +13,7 @@ import { uploadKycDocument } from "@/fns/parties";
 import { uploadFile } from "@/fns/upload";
 import { ROLE_SHORT } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
-import type { Party } from "@/lib/tamp-types";
+import type { Party } from "tamp-backend/src/types";
 import { Avatar } from "./Avatar";
 
 const PROVINCES = ["GP", "WC", "KZN", "EC", "FS", "NW", "LP", "MP", "NC"];

@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Link } from "@/lib/nav";
 import { ChevronRight, Plus, Search, Star, Truck, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { BODY_TYPE_LABEL } from "@/components/tamp/BodyTypeIcon";
@@ -11,7 +11,7 @@ import { PostLoadForm } from "@/components/tamp/PostLoadForm";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { formatMoney } from "@/lib/tamp-data";
 import { maskRegistration } from "@/lib/tamp-mask";
-import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/lib/tamp-matching";
+import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/fns/matching";
 import {
   activeMatchForLoad,
   type DisplayStatus,
@@ -19,7 +19,7 @@ import {
   tripForMatch,
 } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { Load, Party, Trip, TruckPosting } from "@/lib/tamp-types";
+import type { Load, Party, Trip, TruckPosting } from "tamp-backend/src/types";
 
 type TruckRequest = {
   truck: TruckPosting;
@@ -54,8 +54,41 @@ function BoardPage() {
   );
   const [sort, setSort] = useState<SortKey>("newest");
 
+  // Match scoring now happens server-side (src/fns/matching.ts): one call per
+  // POSTED load, scoring it against every truck at once.
+  const postedLoadIds = useMemo(
+    () =>
+      loads
+        .filter((l) => l.status === "POSTED")
+        .map((l) => l.id)
+        .join(","),
+    [loads],
+  );
+  const [topMatchByLoadId, setTopMatchByLoadId] = useState<Map<string, ScoredMatch>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const posted = loads.filter((l) => l.status === "POSTED");
+      const next = new Map<string, ScoredMatch>();
+      await Promise.all(
+        posted.map(async (load) => {
+          const owner = parties.find((p) => p.id === load.ownerId);
+          if (!owner) return;
+          const scored = await scoreLoadAgainstTrucks(load, trucks, parties, owner);
+          const top = scored.find((m) => m.passed);
+          if (top) next.set(load.id, top);
+        }),
+      );
+      if (!cancelled) setTopMatchByLoadId(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postedLoadIds, trucks, parties]);
+
   // The board is the active ledger — completed/closed loads live under History.
-  // For open loads we compute the highest-ranked suggested match live.
   const rows = useMemo(
     () =>
       loads
@@ -72,11 +105,7 @@ function BoardPage() {
           const status = displayStatusForLoad(load, matches, trips, disputes);
           const activeMatch = activeMatchForLoad(load.id, matches);
           const trip = tripForMatch(activeMatch?.id, trips);
-          const owner = parties.find((p) => p.id === load.ownerId);
-          const topMatch =
-            status === "POSTED" && owner
-              ? scoreLoadAgainstTrucks(load, trucks, parties, owner).find((m) => m.passed)
-              : undefined;
+          const topMatch = status === "POSTED" ? topMatchByLoadId.get(load.id) : undefined;
           const engagedTruck = activeMatch
             ? trucks.find((t) => t.id === activeMatch.truckPostingId)
             : undefined;
@@ -100,7 +129,7 @@ function BoardPage() {
             .sort((a, b) => b.score - a.score);
           return { load, status, trip, topMatch, engagedTruck, engagedOperator, requests };
         }),
-    [loads, matches, trips, disputes, trucks, parties],
+    [loads, matches, trips, disputes, trucks, parties, topMatchByLoadId],
   );
 
   const statusOptions = useMemo(() => {

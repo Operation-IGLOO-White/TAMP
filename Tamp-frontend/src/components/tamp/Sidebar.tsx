@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useTamp } from "@/lib/tamp-store";
-import type { Role } from "@/lib/tamp-types";
+import type { Role } from "tamp-backend/src/types";
 
 type NavItem = {
   to: string;

@@ -1,6 +1,6 @@
 // Client wrappers over the server-side notification store.
 import { trpc } from "@/lib/trpc";
-import type { ClientNotification } from "@/server/routers/notifications";
+import type { ClientNotification } from "tamp-backend/src/routers/notifications";
 
 export type { ClientNotification };
 

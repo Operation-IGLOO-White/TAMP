@@ -3,7 +3,7 @@
 // pick into coordinates + province. Falls back to OpenStreetMap Nominatim when
 // no GOOGLE_MAPS_API_KEY is configured, so the address fields always work.
 import { z } from "zod";
-import type { Place } from "@/lib/tamp-types";
+import type { Place } from "../types";
 import { publicProcedure, router } from "../trpc";
 
 const PROVINCE_CODE: Record<string, string> = {
@@ -105,7 +105,16 @@ interface NominatimResult {
   display_name: string;
   lat: string;
   lon: string;
-  address?: { state?: string; city?: string; town?: string; village?: string; suburb?: string };
+  address?: {
+    house_number?: string;
+    road?: string;
+    state?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    suburb?: string;
+    neighbourhood?: string;
+  };
 }
 
 async function nominatimAutocomplete(query: string): Promise<Prediction[]> {
@@ -117,7 +126,11 @@ async function nominatimAutocomplete(query: string): Promise<Prediction[]> {
   const data = (await res.json()) as NominatimResult[];
   return data.map((r, i) => {
     const a = r.address ?? {};
-    const label = a.city ?? a.town ?? a.village ?? a.suburb ?? r.display_name.split(",")[0]!;
+    // Prefer a street-level label (house number + road) so "200 Dorp St" reads
+    // as an address, not just its city. Fall back to locality names.
+    const street = [a.house_number, a.road].filter(Boolean).join(" ");
+    const locality = a.suburb ?? a.neighbourhood ?? a.city ?? a.town ?? a.village ?? "";
+    const label = street || locality || r.display_name.split(",")[0]!;
     return {
       id: `osm:${i}`,
       primary: label,
@@ -139,14 +152,25 @@ export const geocodeRouter = router({
     .input(z.object({ query: z.string().min(1), sessionToken: z.string().optional() }))
     .query(async ({ input }): Promise<Prediction[]> => {
       if (input.query.trim().length < 3) return [];
-      if (KEY()) return googleAutocomplete(input.query, input.sessionToken);
+      // Try Google when configured; on any failure (no billing, restricted key,
+      // error) fall back to free OpenStreetMap so the address field still works.
+      if (KEY()) {
+        try {
+          const preds = await googleAutocomplete(input.query, input.sessionToken);
+          if (preds.length) return preds;
+        } catch {
+          /* fall through to Nominatim */
+        }
+      }
       return nominatimAutocomplete(input.query);
     }),
 
   details: publicProcedure
     .input(z.object({ placeId: z.string().min(1), sessionToken: z.string().optional() }))
     .query(async ({ input }): Promise<Place> => {
-      if (!KEY()) throw new Error("no geocoding key");
-      return googleDetails(input.placeId, input.sessionToken);
+      // Only Google predictions carry an unresolved placeId; OSM predictions
+      // arrive pre-resolved, so this is reached only when Google is in use.
+      if (KEY()) return googleDetails(input.placeId, input.sessionToken);
+      throw new Error("no geocoding key");
     }),
 });

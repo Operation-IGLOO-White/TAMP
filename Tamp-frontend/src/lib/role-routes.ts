@@ -1,4 +1,4 @@
-import type { Role } from "./tamp-types";
+import type { Role } from "tamp-backend/src/types";
 
 export const HOME_BY_ROLE: Record<
   Role,

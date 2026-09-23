@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Link } from "@/lib/nav";
 import { ChevronRight, Flag, Star, UserPlus } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -9,10 +10,10 @@ import { StatusChip } from "@/components/tamp/StatusChip";
 import { TripProgress } from "@/components/tamp/TripProgress";
 import { formatMoney } from "@/lib/tamp-data";
 import { maskRegistration } from "@/lib/tamp-mask";
-import { scoreLoadAgainstTrucks } from "@/lib/tamp-matching";
+import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { Load, Party, Rating, Trip, TruckPosting } from "@/lib/tamp-types";
+import type { Load, Party, Rating, Trip, TruckPosting } from "tamp-backend/src/types";
 
 export interface Engagement {
   trip: Trip;
@@ -64,7 +65,7 @@ function EngagementsPage() {
   const requestedLoadIds = new Set(requested.map((r) => r.load.id));
 
   const confirmable: Opportunity[] = [];
-  const opportunities: Opportunity[] = [];
+  const postedLoads: { load: Load; owner: Party }[] = [];
 
   for (const load of activeLoads) {
     if (requestedLoadIds.has(load.id)) continue; // already requested — shown below
@@ -83,26 +84,48 @@ function EngagementsPage() {
         });
       }
     } else if (ds === "POSTED" && owner) {
-      // Open job — surface it only if a truck matches 70+.
-      let best: { truck: TruckPosting; score: number } | undefined;
-      for (const truck of availableTrucks) {
-        const scored = scoreLoadAgainstTrucks(load, [truck], parties, owner).find((m) => m.passed);
-        if (scored && scored.score >= 70 && (!best || scored.score > best.score)) {
-          best = { truck, score: scored.score };
-        }
-      }
-      if (best) {
-        const b = best;
-        opportunities.push({
-          load,
-          truck: b.truck,
-          operator: parties.find((p) => p.id === b.truck.transporterId),
-          score: b.score,
-        });
-      }
+      postedLoads.push({ load, owner });
     }
   }
-  opportunities.sort((a, b) => b.score - a.score);
+
+  // Open jobs surfaced only if a truck matches 70+ — scored server-side
+  // (src/fns/matching.ts), one call per posted load against every available
+  // truck at once.
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const postedLoadIds = postedLoads.map((p) => p.load.id).join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const found: Opportunity[] = [];
+      await Promise.all(
+        postedLoads.map(async ({ load, owner }) => {
+          if (availableTrucks.length === 0) return;
+          const scored = await scoreLoadAgainstTrucks(load, availableTrucks, parties, owner);
+          let best: { truck: TruckPosting; score: number } | undefined;
+          for (const m of scored) {
+            if (m.passed && m.score >= 70 && (!best || m.score > best.score)) {
+              best = { truck: m.truck, score: m.score };
+            }
+          }
+          if (best) {
+            found.push({
+              load,
+              truck: best.truck,
+              operator: parties.find((p) => p.id === best!.truck.transporterId),
+              score: best.score,
+            });
+          }
+        }),
+      );
+      found.sort((a, b) => b.score - a.score);
+      if (!cancelled) setOpportunities(found);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postedLoadIds, availableTrucks, parties]);
 
   const totalOpen = confirmable.length + requested.length + opportunities.length;
 

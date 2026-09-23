@@ -11,7 +11,7 @@ import type {
   Role,
   Trip,
   TruckPosting,
-} from "./tamp-types";
+} from "tamp-backend/src/types";
 
 export interface Notification {
   id: string;

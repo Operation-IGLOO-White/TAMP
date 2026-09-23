@@ -14,7 +14,7 @@ import { ROLE_SHORT } from "@/lib/role-routes";
 import { formatMoney } from "@/lib/tamp-data";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { OnboardingUserType, Party } from "@/lib/tamp-types";
+import type { OnboardingUserType, Party } from "tamp-backend/src/types";
 
 const USER_TYPE_LABEL: Record<OnboardingUserType, string> = {
   CARGO_OWNER: "Cargo Owner",

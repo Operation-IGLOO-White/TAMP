@@ -2,7 +2,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import type { Party, VerificationStatus } from "@/lib/tamp-types";
+import type { Party, VerificationStatus } from "../types";
 import {
   clearedCookie,
   createSession,
@@ -25,7 +25,7 @@ const CODE_TTL_MS = 10 * 60_000;
 const RESEND_COOLDOWN_MS = 30_000;
 const MAX_CODE_ATTEMPTS = 5;
 const devCodeFor = (code: string) =>
-  !mailerLive() && process.env.NODE_ENV !== "production" ? code : undefined;
+  !mailerLive() && process.env["NODE_ENV"] !== "production" ? code : undefined;
 
 type PartyRow = Prisma.PartyGetPayload<object>;
 

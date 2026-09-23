@@ -4,16 +4,16 @@ import { useParams } from "next/navigation";
 import { BadgeCheck } from "lucide-react";
 
 import { Link } from "@/lib/nav";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LaneRail } from "@/components/tamp/LaneRail";
 import { MatchTicket } from "@/components/tamp/MatchTicket";
 import { ShareTrackingLink } from "@/components/tamp/ShareTrackingLink";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { Waybill } from "@/components/tamp/Waybill";
-import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/lib/tamp-matching";
+import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/fns/matching";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { MatchScoreComponent, Trip, TripStatus } from "@/lib/tamp-types";
+import type { MatchScoreComponent, Trip, TripStatus } from "tamp-backend/src/types";
 
 // §6.2 weighted score rules — the matching-rules explainer, stated plainly
 // and never collapsed away (C2 obligation).
@@ -88,9 +88,19 @@ function LoadDetail() {
   const load = loads.find((l) => l.id === loadId);
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
 
-  const scored: ScoredMatch[] = useMemo(() => {
-    if (!load || !owner) return [];
-    return scoreLoadAgainstTrucks(load, trucks, parties, owner);
+  const [scored, setScored] = useState<ScoredMatch[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!load || !owner) {
+      setScored([]);
+      return;
+    }
+    scoreLoadAgainstTrucks(load, trucks, parties, owner).then((result) => {
+      if (!cancelled) setScored(result);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [load, owner, trucks, parties]);
 
   const suggestions = useMemo(() => {

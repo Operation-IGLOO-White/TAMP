@@ -1,7 +1,7 @@
 // Delete expired sessions and verification/reset/change codes. Run on a schedule
 // (e.g. cron: `*/30 * * * * npm run db:gc`).
-import { gcExpired } from "../src/server/auth";
-import { prisma } from "../src/server/prisma";
+import { gcExpired } from "../src/auth";
+import { prisma } from "../src/prisma";
 
 async function main() {
   await gcExpired();

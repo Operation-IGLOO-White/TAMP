@@ -2,7 +2,7 @@
 // Deterministic and explainable: distance × base rate, adjusted for the cargo
 // type (equipment/fuel/permit demands) and the load weight. Excl. VAT.
 
-import type { CargoType, Money } from "./tamp-types";
+import type { CargoType, Money } from "./types";
 
 export const BASE_RATE_PER_KM = 22; // R/km reference, excl. VAT
 

@@ -23,12 +23,13 @@ import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { DisputeDialog } from "@/components/tamp/DisputeDialog";
 import { PodCapture } from "@/components/tamp/PodCapture";
+import { NavMap } from "@/components/tamp/NavMap";
 import { TripRouteMap } from "@/components/tamp/TripRouteMap";
 import { zar } from "@/lib/tamp-data";
 import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { openDisputeForTrip } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { Load, Party, Trip, TruckPosting } from "@/lib/tamp-types";
+import type { Load, Party, Trip, TruckPosting } from "tamp-backend/src/types";
 
 interface Job {
   trip: Trip;
@@ -38,7 +39,7 @@ interface Job {
 }
 
 const NEXT_STEP: Record<string, string> = {
-  SCHEDULED: "Arrived at pickup",
+  SCHEDULED: "Start trip",
   AT_PICKUP: "Loaded",
   LOADED: "In transit",
   IN_TRANSIT: "Arrived at drop-off",
@@ -74,12 +75,23 @@ function DriverJobs() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [disputeLoadId, setDisputeLoadId] = useState<string | null>(null);
   const [mapJob, setMapJob] = useState<Job | null>(null);
+  const [mapNav, setMapNav] = useState(false);
   const [podJob, setPodJob] = useState<Job | null>(null);
 
-  // Delivering requires proof: at drop-off, capture POD first, then advance.
+  const openMap = (job: Job, navMode = false) => {
+    setMapJob(job);
+    setMapNav(navMode);
+  };
+
+  // Advance the trip a step. Starting it (from scheduled) also activates the
+  // in-app destination navigation; delivering first captures proof of delivery.
   const advance = (job: Job) => {
-    if (job.trip.status === "AT_DROPOFF") setPodJob(job);
-    else void advanceTrip(job.load.id);
+    if (job.trip.status === "AT_DROPOFF") {
+      setPodJob(job);
+      return;
+    }
+    void advanceTrip(job.load.id);
+    if (job.trip.status === "SCHEDULED") openMap(job, true);
   };
 
   const jobs: Job[] = useMemo(
@@ -194,7 +206,7 @@ function DriverJobs() {
                   onSelect={() => {
                     setSelectedId(job.trip.id);
                     // On mobile the map is hidden — open the fullscreen map.
-                    if (window.matchMedia("(max-width: 1023px)").matches) setMapJob(job);
+                    if (window.matchMedia("(max-width: 1023px)").matches) openMap(job, true);
                   }}
                 />
               ))
@@ -218,7 +230,7 @@ function DriverJobs() {
                 disputed={!!openDisputeForTrip(selected.trip.id, disputes)}
                 onAdvance={() => advance(selected)}
                 onFlag={() => setDisputeLoadId(selected.load.id)}
-                onFullscreen={() => setMapJob(selected)}
+                onFullscreen={() => openMap(selected, true)}
               />
             </>
           ) : (
@@ -238,37 +250,46 @@ function DriverJobs() {
         onClose={() => setDisputeLoadId(null)}
       />
 
-      {/* Fullscreen route map (mobile + "expand"). */}
-      {mapJob && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col bg-black/60 p-3 sm:p-6"
-          onClick={() => setMapJob(null)}
-        >
-          <div
-            className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-graphite shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-bold uppercase">
-                  {mapJob.load.origin.label} → {mapJob.load.destination.label}
-                </div>
-                <div className="font-mono text-[11px] text-muted-foreground">
-                  {mapJob.trip.id} · live route
-                </div>
-              </div>
-              <button
-                onClick={() => setMapJob(null)}
-                aria-label="Close map"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-steel/50 hover:text-foreground"
+      {/* Fullscreen route map / in-app navigation (mobile + "expand" + Start trip). */}
+      {mapJob &&
+        (() => {
+          // Follow the live trip so navigation updates as the trip advances.
+          const live = jobs.find((j) => j.trip.id === mapJob.trip.id) ?? mapJob;
+          return (
+            <div
+              className="fixed inset-0 z-50 flex flex-col bg-black/60 p-3 sm:p-6"
+              onClick={() => setMapJob(null)}
+            >
+              <div
+                className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-graphite shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                <X className="size-5" />
-              </button>
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold uppercase">
+                      {mapNav ? "Navigation" : `${live.load.origin.label} → ${live.load.destination.label}`}
+                    </div>
+                    <div className="font-mono text-[11px] text-muted-foreground">
+                      {live.trip.id} · {mapNav ? "in-app navigation" : "live route"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setMapJob(null)}
+                    aria-label="Close map"
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-steel/50 hover:text-foreground"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+                {mapNav ? (
+                  <NavMap load={live.load} trip={live.trip} className="min-h-0 flex-1" />
+                ) : (
+                  <TripRouteMap load={live.load} trip={live.trip} className="min-h-0 flex-1" />
+                )}
+              </div>
             </div>
-            <TripRouteMap load={mapJob.load} trip={mapJob.trip} className="min-h-0 flex-1" />
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* Proof of delivery capture — on marking the trip Delivered. */}
       {podJob && (

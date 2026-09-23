@@ -13,7 +13,7 @@ import { computeRoute } from "@/fns/routes";
 import { isActiveTrip } from "@/lib/tamp-dashboard";
 import { decodePolyline, pointAlong, type LatLng } from "@/lib/polyline";
 import { useTamp } from "@/lib/tamp-store";
-import type { Load, Trip } from "@/lib/tamp-types";
+import type { Load, Trip } from "tamp-backend/src/types";
 
 // Truck status → colour + label.
 function toneFor(trip: Trip): { color: string; label: string } {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Link } from "@/lib/nav";
 import { ClipboardList, MapPin, PackageCheck, Star, TrendingUp, Truck } from "lucide-react";
 import type { ReactNode } from "react";
@@ -7,7 +8,7 @@ import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { TripRouteMap } from "@/components/tamp/TripRouteMap";
 import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
-import { scoreLoadAgainstTrucks } from "@/lib/tamp-matching";
+import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
 
@@ -34,16 +35,35 @@ function DriverDashboard() {
   }).length;
   const onTimePct = done.length ? Math.round((onTime / done.length) * 100) : null;
 
-  // Open opportunities that this driver's available trucks match at 70+.
+  // Open opportunities that this driver's available trucks match at 70+,
+  // scored server-side (src/fns/matching.ts).
   const availableTrucks = trucks.filter((t) => t.status === "AVAILABLE");
-  const opportunities = loads.filter((l) => {
-    if (l.status !== "POSTED") return false;
-    const owner = parties.find((p) => p.id === l.ownerId);
-    if (!owner) return false;
-    return scoreLoadAgainstTrucks(l, availableTrucks, parties, owner).some(
-      (m) => m.passed && m.score >= 70,
-    );
-  }).length;
+  const postedLoads = loads.filter((l) => l.status === "POSTED");
+  const postedLoadIds = postedLoads.map((l) => l.id).join(",");
+  const [opportunities, setOpportunities] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (availableTrucks.length === 0) {
+        setOpportunities(0);
+        return;
+      }
+      const hits = await Promise.all(
+        postedLoads.map(async (l) => {
+          const owner = parties.find((p) => p.id === l.ownerId);
+          if (!owner) return false;
+          const scored = await scoreLoadAgainstTrucks(l, availableTrucks, parties, owner);
+          return scored.some((m) => m.passed && m.score >= 70);
+        }),
+      );
+      if (!cancelled) setOpportunities(hits.filter(Boolean).length);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postedLoadIds, availableTrucks, parties]);
 
   const first = me.contactName.split(" ")[0];
 

@@ -12,7 +12,7 @@ import {
   seedRatings,
   seedTrips,
   seedTrucks,
-} from "../src/lib/tamp-data";
+} from "./seedData";
 
 const prisma = new PrismaClient();
 const J = (v: unknown) => v as unknown as Prisma.InputJsonValue;

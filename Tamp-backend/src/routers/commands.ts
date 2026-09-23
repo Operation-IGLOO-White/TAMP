@@ -7,7 +7,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import type { Acceptance, AuditEvent, Match, Proof, Role, Trip } from "@/lib/tamp-types";
+import type { Acceptance, AuditEvent, Match, Proof, Role, Trip } from "../types";
 import { emitEvent, type NotificationSpec } from "../events";
 import { prisma } from "../prisma";
 import { protectedProcedure, router } from "../trpc";

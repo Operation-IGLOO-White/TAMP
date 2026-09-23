@@ -8,7 +8,7 @@ const ORDER: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 const MIN_LEVEL: Level =
   (process.env["LOG_LEVEL"] as Level) ??
-  (process.env.NODE_ENV === "production" ? "info" : "debug");
+  (process.env["NODE_ENV"] === "production" ? "info" : "debug");
 
 export type LogMeta = Record<string, unknown>;
 

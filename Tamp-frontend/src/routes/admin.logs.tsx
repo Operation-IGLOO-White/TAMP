@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Panel } from "@/components/tamp/StatCard";
-import type { AuditEvent } from "@/lib/tamp-types";
+import type { AuditEvent } from "tamp-backend/src/types";
 import { useTamp } from "@/lib/tamp-store";
 
 // The audit trail IS the system log — every domain event, incl. SYSTEM-actor

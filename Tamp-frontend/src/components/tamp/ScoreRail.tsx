@@ -3,7 +3,7 @@
 // argument for a rule-based marketplace over a phone call). A smooth progress
 // bar hid the maths; this shows it.
 
-import type { MatchScoreComponent } from "@/lib/tamp-types";
+import type { MatchScoreComponent } from "tamp-backend/src/types";
 
 export function ScoreRail({ breakdown }: { breakdown: MatchScoreComponent[] }) {
   return (

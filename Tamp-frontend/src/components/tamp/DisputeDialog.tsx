@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTamp } from "@/lib/tamp-store";
-import type { DisputeCategory } from "@/lib/tamp-types";
+import type { DisputeCategory } from "tamp-backend/src/types";
 
 export const DISPUTE_CATEGORIES: { value: DisputeCategory; label: string }[] = [
   { value: "NON_ARRIVAL", label: "Truck didn't arrive" },

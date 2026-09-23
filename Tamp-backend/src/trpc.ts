@@ -8,7 +8,10 @@ import { prisma } from "./prisma";
 export interface Context {
   partyId: string | null; // logged-in party (from the session cookie), or null
   cookieHeader: string | null;
-  resHeaders: Headers; // to set/clear the session cookie
+  // Duck-typed against both the Fetch `Headers` API and Express's `Response`
+  // (which both expose `.append(name, value)` and correctly emit repeated
+  // Set-Cookie headers) so routers stay adapter-agnostic.
+  resHeaders: { append(name: string, value: string): void };
   ip: string | null; // client IP (best-effort, for rate limiting)
 }
 

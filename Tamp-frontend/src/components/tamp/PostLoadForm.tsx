@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { computeRoute } from "@/fns/routes";
 import { formatMoney, PLACES } from "@/lib/tamp-data";
-import { bodyTypesForCargo, roadDistanceKm } from "@/lib/tamp-matching";
-import { priceLoad } from "@/lib/tamp-pricing";
+import { bodyTypesForCargo, roadDistanceKm } from "@/fns/matching";
+import { priceLoad, type PriceBreakdown } from "@/fns/pricing";
 import { useTamp } from "@/lib/tamp-store";
-import type { CargoType, Place } from "@/lib/tamp-types";
+import type { BodyType, CargoType, Place } from "tamp-backend/src/types";
 
 const cargoTypes: { value: CargoType; label: string }[] = [
   { value: "GENERAL_PALLETISED", label: "General palletised" },
@@ -53,10 +53,49 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
     };
   }, [origin.lat, origin.lng, destination.lat, destination.lng]);
 
-  const distanceKm = route?.km ?? roadDistanceKm(origin, destination);
-  // Platform-derived: cargo type → suitable trucks; pricing engine → quote.
-  const suitableBodies = bodyTypesForCargo(form.cargoType);
-  const quote = priceLoad(distanceKm, form.weightKg, form.cargoType);
+  // Straight-line fallback distance, from the backend (src/fns/matching.ts),
+  // used until the driving-route effect above resolves.
+  const [fallbackDistanceKm, setFallbackDistanceKm] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    roadDistanceKm(origin, destination).then((km) => {
+      if (!cancelled) setFallbackDistanceKm(km);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [origin.lat, origin.lng, destination.lat, destination.lng]);
+
+  const distanceKm = route?.km ?? fallbackDistanceKm;
+
+  // Platform-derived: cargo type → suitable trucks (src/fns/matching.ts).
+  const [suitableBodies, setSuitableBodies] = useState<BodyType[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    bodyTypesForCargo(form.cargoType).then((b) => {
+      if (!cancelled) setSuitableBodies(b);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.cargoType]);
+
+  // Pricing engine → quote (src/fns/pricing.ts).
+  const [quote, setQuote] = useState<PriceBreakdown>({
+    amount: 0,
+    perKm: 0,
+    distanceKm: 0,
+    components: [],
+  });
+  useEffect(() => {
+    let cancelled = false;
+    priceLoad(distanceKm, form.weightKg, form.cargoType).then((q) => {
+      if (!cancelled) setQuote(q);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [distanceKm, form.weightKg, form.cargoType]);
 
   return (
     <form

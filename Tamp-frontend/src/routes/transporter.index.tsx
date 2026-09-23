@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Link } from "@/lib/nav";
 import { AlertTriangle, BookmarkCheck, Leaf, Plus, Repeat, TrendingUp, UserX } from "lucide-react";
 import type { ReactNode } from "react";
@@ -10,9 +11,9 @@ import { Panel } from "@/components/tamp/StatCard";
 import { bestNextLoad, haulMetrics, type HaulSuggestion } from "@/lib/tamp-backhaul";
 import { formatMoney } from "@/lib/tamp-data";
 import { daysSince, enrichTrip, estimateEta, isActiveTrip, zarShort } from "@/lib/tamp-dashboard";
-import { scoreLoadAgainstTrucks } from "@/lib/tamp-matching";
+import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { useTamp } from "@/lib/tamp-store";
-import type { Load, TruckPosting } from "@/lib/tamp-types";
+import type { Load, TruckPosting } from "tamp-backend/src/types";
 
 const RATE_BENCHMARK = 26; // R/km reference for the lane
 
@@ -39,31 +40,48 @@ function TransporterDashboard() {
   const noDriver = activeTrips.filter((e) => e.truck && !e.truck.driverId);
   const idleTrucks = trucks.filter((t) => t.status === "AVAILABLE" && daysSince(t.createdAt) >= 3);
   const available = trucks.filter((t) => t.status === "AVAILABLE");
-  const opportunityTrucks = available.filter((t) =>
-    openLoads.some((l) => {
-      const owner = parties.find((p) => p.id === l.ownerId);
-      if (!owner) return false;
-      return scoreLoadAgainstTrucks(l, [t], parties, owner).some((m) => m.passed);
-    }),
-  );
 
-  // ③ Earning opportunities — best open load per available truck
-  const opportunities: { load: Load; truck: TruckPosting; score: number }[] = [];
-  available.forEach((t) => {
-    let bestLoad: Load | null = null;
-    let bestScore = -1;
-    openLoads.forEach((l) => {
-      const owner = parties.find((p) => p.id === l.ownerId);
-      if (!owner) return;
-      const scored = scoreLoadAgainstTrucks(l, [t], parties, owner).find((m) => m.passed);
-      if (scored && scored.score > bestScore) {
-        bestScore = scored.score;
-        bestLoad = l;
-      }
-    });
-    if (bestLoad) opportunities.push({ truck: t, load: bestLoad, score: bestScore });
-  });
-  opportunities.sort((a, b) => b.score - a.score);
+  // ①③ Match scoring now happens server-side (src/fns/matching.ts). One call
+  // per open load, scoring it against every available truck at once, rather
+  // than one call per truck×load pair.
+  const [opportunityTrucks, setOpportunityTrucks] = useState<TruckPosting[]>([]);
+  const [opportunities, setOpportunities] = useState<
+    { load: Load; truck: TruckPosting; score: number }[]
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const bestByTruck = new Map<string, { load: Load; score: number }>();
+      await Promise.all(
+        openLoads.map(async (l) => {
+          const owner = parties.find((p) => p.id === l.ownerId);
+          if (!owner || available.length === 0) return;
+          const scored = await scoreLoadAgainstTrucks(l, available, parties, owner);
+          for (const m of scored) {
+            if (!m.passed) continue;
+            const current = bestByTruck.get(m.truck.id);
+            if (!current || m.score > current.score) bestByTruck.set(m.truck.id, { load: l, score: m.score });
+          }
+        }),
+      );
+      if (cancelled) return;
+      const opp = available.filter((t) => bestByTruck.has(t.id));
+      const best = available
+        .map((t) => {
+          const hit = bestByTruck.get(t.id);
+          return hit ? { truck: t, load: hit.load, score: hit.score } : null;
+        })
+        .filter((x): x is { truck: TruckPosting; load: Load; score: number } => x !== null)
+        .sort((a, b) => b.score - a.score);
+      setOpportunityTrucks(opp);
+      setOpportunities(best);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLoads, available, parties]);
 
   // Backhaul optimisation & forward-haul pre-booking: for each truck on a trip,
   // either its reserved backhaul, or the best open load to pre-book at its
@@ -73,47 +91,57 @@ function TransporterDashboard() {
   const reservedLoadIds = new Set(activeReservations.map((r) => r.loadId));
   const openForBackhaul = openLoads.filter((l) => !reservedLoadIds.has(l.id));
 
-  const backhaul = activeTrips
-    .filter((e) => e.truck && e.load)
-    .map((e) => {
-      const truck = e.truck!;
-      const load = e.load!;
-      const eta = estimateEta(load, e.trip);
-      const reservation = reservedByTruck.get(truck.id);
-      if (reservation) {
-        const resLoad = loads.find((l) => l.id === reservation.loadId);
-        if (!resLoad) return null;
-        const suggestion = haulMetrics(
-          truck,
-          load.destination,
-          load.origin,
-          eta.toISOString(),
-          resLoad,
-        );
-        return { truck, dest: load.destination.label, eta, suggestion, reserved: true };
-      }
-      const suggestion = bestNextLoad({
-        truck,
-        fromPlace: load.destination,
-        basePlace: load.origin,
-        availableFrom: eta.toISOString(),
-        openLoads: openForBackhaul,
-      });
-      return suggestion && suggestion.eligible
-        ? { truck, dest: load.destination.label, eta, suggestion, reserved: false }
-        : null;
-    })
-    .filter(
-      (
-        x,
-      ): x is {
-        truck: TruckPosting;
-        dest: string;
-        eta: Date;
-        suggestion: HaulSuggestion;
-        reserved: boolean;
-      } => x !== null,
-    );
+  type BackhaulEntry = {
+    truck: TruckPosting;
+    dest: string;
+    eta: Date;
+    suggestion: HaulSuggestion;
+    reserved: boolean;
+  };
+  const [backhaul, setBackhaul] = useState<BackhaulEntry[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        activeTrips
+          .filter((e) => e.truck && e.load)
+          .map(async (e): Promise<BackhaulEntry | null> => {
+            const truck = e.truck!;
+            const load = e.load!;
+            const eta = estimateEta(load, e.trip);
+            const reservation = reservedByTruck.get(truck.id);
+            if (reservation) {
+              const resLoad = loads.find((l) => l.id === reservation.loadId);
+              if (!resLoad) return null;
+              const suggestion = await haulMetrics(
+                truck,
+                load.destination,
+                load.origin,
+                eta.toISOString(),
+                resLoad,
+              );
+              return { truck, dest: load.destination.label, eta, suggestion, reserved: true };
+            }
+            const suggestion = await bestNextLoad({
+              truck,
+              fromPlace: load.destination,
+              basePlace: load.origin,
+              availableFrom: eta.toISOString(),
+              openLoads: openForBackhaul,
+            });
+            return suggestion && suggestion.eligible
+              ? { truck, dest: load.destination.label, eta, suggestion, reserved: false }
+              : null;
+          }),
+      );
+      if (!cancelled) setBackhaul(entries.filter((x): x is BackhaulEntry => x !== null));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTrips, openForBackhaul, reservedByTruck, loads]);
 
   const reservedCount = backhaul.filter((b) => b.reserved).length;
   const emptyKmAvoidable = Math.round(

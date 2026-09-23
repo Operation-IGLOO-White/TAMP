@@ -8,7 +8,7 @@
 import { Loader2, MapPin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { geocodeAutocomplete, geocodeDetails, type Prediction } from "@/fns/geocode";
-import type { Place } from "@/lib/tamp-types";
+import type { Place } from "tamp-backend/src/types";
 
 export function AddressInput({
   value,

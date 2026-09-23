@@ -8,7 +8,7 @@ import { LaneRail } from "@/components/tamp/LaneRail";
 import { estimateEta } from "@/lib/tamp-dashboard";
 import { activeMatchForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/lib/tamp-store";
-import type { Load, Trip, TripStatus } from "@/lib/tamp-types";
+import type { Load, Trip, TripStatus } from "tamp-backend/src/types";
 
 // Public, unauthenticated tracking page — the link a cargo owner shares with
 // the consignee. No account, no commercials (no rates), no app chrome.

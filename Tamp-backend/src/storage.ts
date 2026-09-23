@@ -11,6 +11,10 @@ import { prisma } from "./prisma";
 export const UPLOAD_DIR =
   process.env["UPLOAD_DIR"] ?? path.join(process.cwd(), ".uploads");
 
+// Files are served from this process (see src/routes/files.ts), so uploaders
+// on the frontend origin need an absolute URL, not a same-origin-relative one.
+const backendUrl = () => process.env["BACKEND_URL"] ?? "http://localhost:4000";
+
 export const FILE_KINDS = ["AVATAR", "KYC", "POD", "TRUCK_PHOTO"] as const;
 export type FileKind = (typeof FILE_KINDS)[number];
 
@@ -75,7 +79,7 @@ export async function saveUpload(args: {
   });
   return {
     id,
-    url: `/api/files/${id}`,
+    url: `${backendUrl()}/api/files/${id}`,
     kind: args.kind,
     filename: args.filename,
     contentType: args.contentType,

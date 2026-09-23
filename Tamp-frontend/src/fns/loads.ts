@@ -1,7 +1,7 @@
 // Client wrappers over the tRPC `loads` router. Signatures match the previous
 // TanStack server functions so existing React Query call sites are unchanged.
 import { trpc } from "@/lib/trpc";
-import type { CargoType, Load, Place } from "@/lib/tamp-types";
+import type { CargoType, Load, Place } from "tamp-backend/src/types";
 
 export const listLoads = (): Promise<Load[]> => trpc.loads.list.query();
 

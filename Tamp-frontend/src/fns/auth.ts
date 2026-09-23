@@ -1,6 +1,6 @@
 // Client wrappers over the tRPC `auth` router (real session-based login).
 import { trpc } from "@/lib/trpc";
-import type { Party } from "@/lib/tamp-types";
+import type { Party } from "tamp-backend/src/types";
 
 export const login = (email: string, password: string): Promise<Party> =>
   trpc.auth.login.mutate({ email, password });

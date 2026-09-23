@@ -1,7 +1,7 @@
 // Client wrappers over the tRPC `parties` router. Signatures match the previous
 // TanStack server functions so existing call sites are unchanged.
 import { trpc } from "@/lib/trpc";
-import type { OnboardingData, OnboardingUserType, Party, VerificationStatus } from "@/lib/tamp-types";
+import type { OnboardingData, OnboardingUserType, Party, VerificationStatus } from "tamp-backend/src/types";
 
 export const listParties = (): Promise<Party[]> => trpc.parties.list.query();
 

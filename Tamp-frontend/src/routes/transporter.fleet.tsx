@@ -2,15 +2,15 @@
 
 
 import { Camera, CheckCircle2, FileUp, MapPin, Pencil, Plus, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { formatMoney, PLACES } from "@/lib/tamp-data";
-import { scoreLoadAgainstTrucks } from "@/lib/tamp-matching";
+import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { useTamp } from "@/lib/tamp-store";
-import type { BodyType, Load, Place, TruckPosting } from "@/lib/tamp-types";
+import type { BodyType, Load, Place, TruckPosting } from "tamp-backend/src/types";
 
 const bodyTypes: BodyType[] = [
   "TAUTLINER",
@@ -60,17 +60,39 @@ function FleetPage() {
     );
   }, [trucks, query]);
 
-  // Best-matching open load for a given truck (highest score it passes).
-  const bestLoadFor = (truck: TruckPosting): { load: Load; score: number } | undefined => {
-    let best: { load: Load; score: number } | undefined;
-    for (const load of openLoads) {
-      const owner = parties.find((p) => p.id === load.ownerId);
-      if (!owner) continue;
-      const scored = scoreLoadAgainstTrucks(load, [truck], parties, owner).find((m) => m.passed);
-      if (scored && (!best || scored.score > best.score)) best = { load, score: scored.score };
-    }
-    return best;
-  };
+  // Best-matching open load per truck (highest score it passes). Scored
+  // server-side (src/fns/matching.ts) — one call per open load, scoring every
+  // available truck at once, rather than one call per truck×load pair.
+  const availableTrucks = useMemo(() => trucks.filter((t) => t.status === "AVAILABLE"), [trucks]);
+  const [bestLoadByTruckId, setBestLoadByTruckId] = useState<
+    Map<string, { load: Load; score: number }>
+  >(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const best = new Map<string, { load: Load; score: number }>();
+      await Promise.all(
+        openLoads.map(async (load) => {
+          const owner = parties.find((p) => p.id === load.ownerId);
+          if (!owner || availableTrucks.length === 0) return;
+          const scored = await scoreLoadAgainstTrucks(load, availableTrucks, parties, owner);
+          for (const m of scored) {
+            if (!m.passed) continue;
+            const current = best.get(m.truck.id);
+            if (!current || m.score > current.score) best.set(m.truck.id, { load, score: m.score });
+          }
+        }),
+      );
+      if (!cancelled) setBestLoadByTruckId(best);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [openLoads, availableTrucks, parties]);
+
+  const bestLoadFor = (truck: TruckPosting): { load: Load; score: number } | undefined =>
+    bestLoadByTruckId.get(truck.id);
 
   return (
     <AppShell>

@@ -4,7 +4,7 @@ import { useNavigate } from "@/lib/nav";
 import { useEffect, type ReactNode } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/lib/tamp-store";
-import type { Role } from "@/lib/tamp-types";
+import type { Role } from "tamp-backend/src/types";
 
 // Route-level role guard — spec §3: a user must never reach a role's route
 // while acting as another role.

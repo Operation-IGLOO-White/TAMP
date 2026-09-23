@@ -2,9 +2,9 @@
 // server-side. Ported from the previous TanStack server functions.
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import { bodyTypesForCargo } from "@/lib/tamp-matching";
-import { priceLoadMoney } from "@/lib/tamp-pricing";
-import type { CargoType, Load, LoadStatus, Money, Place } from "@/lib/tamp-types";
+import { bodyTypesForCargo } from "../matching";
+import { priceLoadMoney } from "../pricing";
+import type { CargoType, Load, LoadStatus, Money, Place } from "../types";
 import { prisma } from "../prisma";
 import { publicProcedure, router } from "../trpc";
 

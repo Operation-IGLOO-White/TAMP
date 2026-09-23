@@ -24,8 +24,8 @@ import {
   type PodInput,
 } from "@/fns/commands";
 import { applyDelta, loadState, type SnapshotDelta } from "@/fns/snapshot";
-import { bodyTypesForCargo, scoreLoadAgainstTrucks } from "./tamp-matching";
-import { priceLoadMoney } from "./tamp-pricing";
+import { bodyTypesForCargo, scoreLoadAgainstTrucks } from "@/fns/matching";
+import { priceLoadMoney } from "@/fns/pricing";
 import { activeMatchForLoad, tripForMatch } from "./tamp-selectors";
 import type {
   Acceptance,
@@ -48,7 +48,7 @@ import type {
   TripStatus,
   TruckPosting,
   VerificationStatus,
-} from "./tamp-types";
+} from "tamp-backend/src/types";
 
 const STORAGE_KEY = "tamp-state-v4";
 
@@ -157,9 +157,9 @@ interface Store extends State {
   toggleSidebar: () => void;
   markNotificationsRead: () => void;
   registerParty: (p: NewPartyInput) => string;
-  addLoad: (l: NewLoadInput) => void;
-  repostLoad: (loadId: string) => void;
-  addTruck: (t: NewTruckInput) => void;
+  addLoad: (l: NewLoadInput) => Promise<void>;
+  repostLoad: (loadId: string) => Promise<void>;
+  addTruck: (t: NewTruckInput) => Promise<void>;
   updateTruck: (
     truckId: string,
     patch: Partial<
@@ -650,121 +650,123 @@ export function TampProvider({ children }: { children: ReactNode }) {
         return id;
       },
 
-      addLoad: (input) =>
-        setState((s) => {
-          const id = nextRef("LD");
-          // The platform derives the equipment and the price — the cargo owner
-          // supplies neither. Cargo type → compatible bodies; pricing engine →
-          // quoted rate.
-          const load: Load = {
-            id,
-            reference: id,
-            status: "POSTED",
-            createdAt: new Date().toISOString(),
-            ...input,
-            requiredBodyTypes: bodyTypesForCargo(input.cargoType),
-            targetRate: priceLoadMoney(input.distanceKm, input.weightKg, input.cargoType),
-          };
-          const ownerParty = s.parties.find((p) => p.id === load.ownerId)!;
-          const available = s.trucks.filter((t) => t.status === "AVAILABLE");
-          const scored = scoreLoadAgainstTrucks(load, available, s.parties, ownerParty).filter(
-            (m) => m.passed,
-          );
-          const generated: Match[] = scored.map((m) => ({
-            id: nextRef("MT"),
-            loadId: id,
-            truckPostingId: m.truck.id,
-            score: m.score,
-            breakdown: m.breakdown,
-            hardFilterResults: m.hardFilterResults,
-            status: "SUGGESTED",
-            initiatedBy: "SYSTEM",
-            expiresAt: new Date(Date.now() + 864e5).toISOString(),
-            createdAt: new Date().toISOString(),
-          }));
+      addLoad: async (input) => {
+        const id = nextRef("LD");
+        // The platform derives the equipment and the price — the cargo owner
+        // supplies neither. Cargo type → compatible bodies; pricing engine →
+        // quoted rate. Computed server-side (src/fns/matching.ts, src/fns/pricing.ts).
+        const [requiredBodyTypes, targetRate] = await Promise.all([
+          bodyTypesForCargo(input.cargoType),
+          priceLoadMoney(input.distanceKm, input.weightKg, input.cargoType),
+        ]);
+        const load: Load = {
+          id,
+          reference: id,
+          status: "POSTED",
+          createdAt: new Date().toISOString(),
+          ...input,
+          requiredBodyTypes,
+          targetRate,
+        };
+        const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
+        const available = state.trucks.filter((t) => t.status === "AVAILABLE");
+        const scored = (await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)).filter(
+          (m) => m.passed,
+        );
+        const generated: Match[] = scored.map((m) => ({
+          id: nextRef("MT"),
+          loadId: id,
+          truckPostingId: m.truck.id,
+          score: m.score,
+          breakdown: m.breakdown,
+          hardFilterResults: m.hardFilterResults,
+          status: "SUGGESTED",
+          initiatedBy: "SYSTEM",
+          expiresAt: new Date(Date.now() + 864e5).toISOString(),
+          createdAt: new Date().toISOString(),
+        }));
 
-          return {
-            ...s,
-            loads: [load, ...s.loads],
-            matches: [...generated, ...s.matches],
-            audit: log(
-              s.audit,
-              "LOAD_POSTED",
-              load.ownerId,
-              "FREIGHT_OWNER",
-              "LOAD",
-              id,
-              `${ownerParty.companyName} posted ${id} (${load.origin.label} → ${load.destination.label}).`,
-            ),
-          };
-        }),
+        setState((s) => ({
+          ...s,
+          loads: [load, ...s.loads],
+          matches: [...generated, ...s.matches],
+          audit: log(
+            s.audit,
+            "LOAD_POSTED",
+            load.ownerId,
+            "FREIGHT_OWNER",
+            "LOAD",
+            id,
+            `${ownerParty.companyName} posted ${id} (${load.origin.label} → ${load.destination.label}).`,
+          ),
+        }));
+      },
 
       // Re-post an expired (stale) load: reset its post date so the 7-day clock
       // starts over, ensure it's POSTED, and regenerate fresh suggestions
       // (dropping the load's old SUGGESTED matches).
-      repostLoad: (loadId) =>
-        setState((s) => {
-          const existing = s.loads.find((l) => l.id === loadId);
-          if (!existing) return s;
-          const load: Load = {
-            ...existing,
-            status: "POSTED",
-            createdAt: new Date().toISOString(),
-          };
-          const ownerParty = s.parties.find((p) => p.id === load.ownerId)!;
-          const available = s.trucks.filter((t) => t.status === "AVAILABLE");
-          const scored = scoreLoadAgainstTrucks(load, available, s.parties, ownerParty).filter(
-            (m) => m.passed,
-          );
-          const generated: Match[] = scored.map((m) => ({
-            id: nextRef("MT"),
+      repostLoad: async (loadId) => {
+        const existing = state.loads.find((l) => l.id === loadId);
+        if (!existing) return;
+        const load: Load = {
+          ...existing,
+          status: "POSTED",
+          createdAt: new Date().toISOString(),
+        };
+        const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
+        const available = state.trucks.filter((t) => t.status === "AVAILABLE");
+        const scored = (await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)).filter(
+          (m) => m.passed,
+        );
+        const generated: Match[] = scored.map((m) => ({
+          id: nextRef("MT"),
+          loadId,
+          truckPostingId: m.truck.id,
+          score: m.score,
+          breakdown: m.breakdown,
+          hardFilterResults: m.hardFilterResults,
+          status: "SUGGESTED",
+          initiatedBy: "SYSTEM",
+          expiresAt: new Date(Date.now() + 864e5).toISOString(),
+          createdAt: new Date().toISOString(),
+        }));
+        setState((s) => ({
+          ...s,
+          loads: s.loads.map((l) => (l.id === loadId ? load : l)),
+          // Replace this load's stale SUGGESTED matches with the fresh ones.
+          matches: [
+            ...generated,
+            ...s.matches.filter((m) => !(m.loadId === loadId && m.status === "SUGGESTED")),
+          ],
+          audit: log(
+            s.audit,
+            "LOAD_POSTED",
+            load.ownerId,
+            "FREIGHT_OWNER",
+            "LOAD",
             loadId,
-            truckPostingId: m.truck.id,
-            score: m.score,
-            breakdown: m.breakdown,
-            hardFilterResults: m.hardFilterResults,
-            status: "SUGGESTED",
-            initiatedBy: "SYSTEM",
-            expiresAt: new Date(Date.now() + 864e5).toISOString(),
-            createdAt: new Date().toISOString(),
-          }));
-          return {
-            ...s,
-            loads: s.loads.map((l) => (l.id === loadId ? load : l)),
-            // Replace this load's stale SUGGESTED matches with the fresh ones.
-            matches: [
-              ...generated,
-              ...s.matches.filter((m) => !(m.loadId === loadId && m.status === "SUGGESTED")),
-            ],
-            audit: log(
-              s.audit,
-              "LOAD_POSTED",
-              load.ownerId,
-              "FREIGHT_OWNER",
-              "LOAD",
-              loadId,
-              `${ownerParty.companyName} re-posted ${loadId} (${load.origin.label} → ${load.destination.label}).`,
-            ),
-          };
-        }),
+            `${ownerParty.companyName} re-posted ${loadId} (${load.origin.label} → ${load.destination.label}).`,
+          ),
+        }));
+      },
 
-      addTruck: (input) =>
-        setState((s) => {
-          const id = nextRef("TR");
-          const truck: TruckPosting = {
-            id,
-            status: "AVAILABLE",
-            createdAt: new Date().toISOString(),
-            ...input,
-          };
-          const operator = s.parties.find((p) => p.id === truck.transporterId)!;
-          const openLoads = s.loads.filter((l) => l.status === "POSTED");
-          const generated: Match[] = [];
-          for (const load of openLoads) {
-            const ownerParty = s.parties.find((p) => p.id === load.ownerId)!;
-            const scored = scoreLoadAgainstTrucks(load, [truck], s.parties, ownerParty).filter(
-              (m) => m.passed,
-            );
+      addTruck: async (input) => {
+        const id = nextRef("TR");
+        const truck: TruckPosting = {
+          id,
+          status: "AVAILABLE",
+          createdAt: new Date().toISOString(),
+          ...input,
+        };
+        const operator = state.parties.find((p) => p.id === truck.transporterId)!;
+        const openLoads = state.loads.filter((l) => l.status === "POSTED");
+        const generated: Match[] = [];
+        await Promise.all(
+          openLoads.map(async (load) => {
+            const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
+            const scored = (
+              await scoreLoadAgainstTrucks(load, [truck], state.parties, ownerParty)
+            ).filter((m) => m.passed);
             for (const m of scored) {
               generated.push({
                 id: nextRef("MT"),
@@ -779,23 +781,24 @@ export function TampProvider({ children }: { children: ReactNode }) {
                 createdAt: new Date().toISOString(),
               });
             }
-          }
+          }),
+        );
 
-          return {
-            ...s,
-            trucks: [truck, ...s.trucks],
-            matches: [...generated, ...s.matches],
-            audit: log(
-              s.audit,
-              "TRUCK_POSTED",
-              truck.transporterId,
-              "TRANSPORTER",
-              "TRUCK",
-              id,
-              `${operator.companyName} posted ${id} (${truck.bodyType}, ${truck.payloadCapacityKg.toLocaleString("en-ZA")} kg).`,
-            ),
-          };
-        }),
+        setState((s) => ({
+          ...s,
+          trucks: [truck, ...s.trucks],
+          matches: [...generated, ...s.matches],
+          audit: log(
+            s.audit,
+            "TRUCK_POSTED",
+            truck.transporterId,
+            "TRANSPORTER",
+            "TRUCK",
+            id,
+            `${operator.companyName} posted ${id} (${truck.bodyType}, ${truck.payloadCapacityKg.toLocaleString("en-ZA")} kg).`,
+          ),
+        }));
+      },
 
       // Edit a persistent truck's availability details (status, location,
       // window, capacity, preferred lane) — no need to re-post a new truck.

@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { formatMoney } from "@/lib/tamp-data";
 import { maskRegistration } from "@/lib/tamp-mask";
-import type { Load, MatchScoreComponent, Party, TruckPosting } from "@/lib/tamp-types";
+import type { Load, MatchScoreComponent, Party, TruckPosting } from "tamp-backend/src/types";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "./BodyTypeIcon";
 import { LaneRail } from "./LaneRail";
 import { ScoreRail } from "./ScoreRail";

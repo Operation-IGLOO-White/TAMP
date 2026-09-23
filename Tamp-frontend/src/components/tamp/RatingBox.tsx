@@ -1,6 +1,6 @@
 import { Star } from "lucide-react";
 import { useState } from "react";
-import type { Rating } from "@/lib/tamp-types";
+import type { Rating } from "tamp-backend/src/types";
 
 const RATING_TAGS = [
   "On time",

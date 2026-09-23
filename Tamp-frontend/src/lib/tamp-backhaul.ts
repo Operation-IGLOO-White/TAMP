@@ -3,8 +3,8 @@
 // (O). This engine finds open loads it can pick up at/near D — reducing empty
 // (non-revenue) kilometres, fuel and emissions — and quantifies the saving.
 
-import { roadDistanceKm } from "./tamp-matching";
-import type { Load, Place, TruckPosting } from "./tamp-types";
+import { roadDistanceKm } from "@/fns/matching";
+import type { Load, Place, TruckPosting } from "tamp-backend/src/types";
 
 // Fuel/emissions model — ISO 14083 / GLEC-aligned placeholder for the MVP.
 export const EMPTY_L_PER_KM = 0.28; // diesel burn, empty heavy truck
@@ -44,19 +44,19 @@ export interface HaulParams {
 }
 
 /** Ranked next-load suggestions for a returning/finishing truck. */
-export function haulSuggestions(p: HaulParams): HaulSuggestion[] {
+export async function haulSuggestions(p: HaulParams): Promise<HaulSuggestion[]> {
   const radius = p.radiusKm ?? 200;
-  const emptyReturnKm = roadDistanceKm(p.fromPlace, p.basePlace);
+  const emptyReturnKm = await roadDistanceKm(p.fromPlace, p.basePlace);
 
-  return p.openLoads
-    .map((load): HaulSuggestion | null => {
-      const repositionKm = roadDistanceKm(p.fromPlace, load.origin);
+  const candidates = await Promise.all(
+    p.openLoads.map(async (load): Promise<HaulSuggestion | null> => {
+      const repositionKm = await roadDistanceKm(p.fromPlace, load.origin);
       if (repositionKm > radius) return null;
 
       // Backhaul must head back toward base (shrinking the empty return);
       // forward-haul pre-booking accepts any onward direction.
       if (p.mode === "backhaul") {
-        const towardBase = roadDistanceKm(load.destination, p.basePlace) < emptyReturnKm;
+        const towardBase = (await roadDistanceKm(load.destination, p.basePlace)) < emptyReturnKm;
         if (!towardBase) return null;
       }
 
@@ -75,7 +75,10 @@ export function haulSuggestions(p: HaulParams): HaulSuggestion[] {
         co2SavedKg,
         eligible: isEligible(load, p.truck, p.availableFrom),
       };
-    })
+    }),
+  );
+
+  return candidates
     .filter((x): x is HaulSuggestion => x !== null)
     .sort(
       (a, b) =>
@@ -87,19 +90,21 @@ export function haulSuggestions(p: HaulParams): HaulSuggestion[] {
 
 /** Compute the haul metrics for one specific load (e.g. an already-reserved
  *  backhaul), inferring backhaul vs forward from the load's direction. */
-export function haulMetrics(
+export async function haulMetrics(
   truck: TruckPosting,
   fromPlace: Place,
   basePlace: Place,
   availableFrom: string,
   load: Load,
-): HaulSuggestion {
-  const emptyReturnKm = roadDistanceKm(fromPlace, basePlace);
-  const repositionKm = roadDistanceKm(fromPlace, load.origin);
+): Promise<HaulSuggestion> {
+  const [emptyReturnKm, repositionKm, destToBaseKm] = await Promise.all([
+    roadDistanceKm(fromPlace, basePlace),
+    roadDistanceKm(fromPlace, load.origin),
+    roadDistanceKm(load.destination, basePlace),
+  ]);
   const emptyKmReduced = Math.max(0, emptyReturnKm - repositionKm);
   const fuelSavedL = emptyKmReduced * EMPTY_L_PER_KM;
-  const mode: HaulMode =
-    roadDistanceKm(load.destination, basePlace) < emptyReturnKm ? "backhaul" : "forward";
+  const mode: HaulMode = destToBaseKm < emptyReturnKm ? "backhaul" : "forward";
   return {
     load,
     mode,
@@ -115,8 +120,12 @@ export function haulMetrics(
 
 /** Best pre-bookable next load for a finishing trip: prefer a backhaul that
  *  reduces the empty return; fall back to the best forward-haul. */
-export function bestNextLoad(params: Omit<HaulParams, "mode">): HaulSuggestion | undefined {
-  const backhaul = haulSuggestions({ ...params, mode: "backhaul" }).find((s) => s.eligible);
+export async function bestNextLoad(
+  params: Omit<HaulParams, "mode">,
+): Promise<HaulSuggestion | undefined> {
+  const backhaul = (await haulSuggestions({ ...params, mode: "backhaul" })).find(
+    (s) => s.eligible,
+  );
   if (backhaul) return backhaul;
-  return haulSuggestions({ ...params, mode: "forward" }).find((s) => s.eligible);
+  return (await haulSuggestions({ ...params, mode: "forward" })).find((s) => s.eligible);
 }

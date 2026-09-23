@@ -1,8 +1,8 @@
 // Client wrappers over the tRPC `snapshot` router — one scoped read, and a
 // delta apply that persists only the rows that changed.
 import { trpc } from "@/lib/trpc";
-import type { DomainSnapshot } from "@/server/routers/snapshot";
-import type { Party } from "@/lib/tamp-types";
+import type { DomainSnapshot } from "tamp-backend/src/routers/snapshot";
+import type { Party } from "tamp-backend/src/types";
 
 export type LoadedSnapshot = DomainSnapshot & { parties: Party[] };
 export type SnapshotDelta = {
