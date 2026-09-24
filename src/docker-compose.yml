@@ -10,7 +10,7 @@ services:
       args:
         NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-dev}
     env_file:
-      - path: .env
+      - path: ../.env
         required: false
     environment:
       BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://host.docker.internal:4000}
