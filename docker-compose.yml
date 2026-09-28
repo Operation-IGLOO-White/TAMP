@@ -1,0 +1,12 @@
+services:
+  frontend:
+    image: tamp-frontend:${TAG:-latest}
+    build:
+      context: .
+    environment:
+      BACKEND_TARGET: ${VITE_API_TARGET:-http://host.docker.internal:5000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped

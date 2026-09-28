@@ -1,0 +1,167 @@
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@source "./";
+
+/*
+ * TAMP design system — industrial dispatch board.
+ * All colors are oklch semantic tokens. Never hardcode colors in components.
+ */
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-graphite: var(--graphite);
+  --color-steel: var(--steel);
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-paper: var(--paper);
+  --color-paper-foreground: var(--paper-foreground);
+  --color-positive: var(--positive);
+  --color-danger: var(--danger);
+  --color-card: var(--graphite);
+  --color-card-foreground: var(--foreground);
+  --color-primary: var(--signal);
+  --color-primary-foreground: var(--signal-foreground);
+  --color-accent: var(--steel);
+  --color-accent-foreground: var(--foreground);
+  --color-input: var(--steel);
+  --color-ring: var(--signal);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Light is the default theme. Industrial dispatch board, daylight edition. */
+:root {
+  --background: oklch(0.965 0.003 285);
+  --foreground: oklch(0.24 0.012 285);
+  --graphite: oklch(0.995 0.001 285);
+  --steel: oklch(0.915 0.004 285);
+  --signal: oklch(0.79 0.16 84);
+  --signal-foreground: oklch(0.24 0.03 84);
+  --muted: oklch(0.915 0.004 285);
+  --muted-foreground: oklch(0.52 0.011 285);
+  --border: oklch(0.24 0.012 285 / 0.13);
+  --paper: oklch(0.985 0.004 90);
+  --paper-foreground: oklch(0.2 0.008 285);
+  --positive: oklch(0.58 0.14 150);
+  --danger: oklch(0.57 0.21 27);
+}
+
+.dark {
+  --background: oklch(0.19 0.012 285);
+  --foreground: oklch(0.98 0 0);
+  --graphite: oklch(0.25 0.012 285);
+  --steel: oklch(0.36 0.011 285);
+  --signal: oklch(0.79 0.16 84);
+  --signal-foreground: oklch(0.12 0 0);
+  --muted: oklch(0.36 0.011 285);
+  --muted-foreground: oklch(0.71 0.012 286);
+  --border: oklch(0.87 0.01 286 / 0.12);
+  --paper: oklch(0.92 0.004 286);
+  --paper-foreground: oklch(0.15 0 0);
+  --positive: oklch(0.62 0.15 150);
+  --danger: oklch(0.62 0.2 27);
+}
+
+@keyframes flip-in {
+  from {
+    transform: rotateX(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@utility animate-flip {
+  animation: flip-in 0.4s var(--ease-out-expo) both;
+}
+
+@utility animate-slide {
+  animation: slide-up 0.5s var(--ease-out-expo) both;
+}
+
+@keyframes pulse-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@utility animate-skeleton {
+  animation: pulse-skeleton 1.5s ease-in-out infinite;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background-color: var(--signal);
+    color: var(--signal-foreground);
+  }
+
+  /* Keyboard focus — a visible ring on every interactive element. Mouse
+     clicks don't trigger :focus-visible, so this stays out of the way. */
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Respect users who ask for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Leaflet map: keep controls above app chrome and tint tiles in dark mode. */
+.leaflet-container {
+  background: var(--graphite);
+  font: inherit;
+}
+.dark .leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+}
+.dark .leaflet-container {
+  background: #0f1115;
+}

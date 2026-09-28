@@ -1,8 +1,7 @@
-**/node_modules
-**/.next
-**/dist
-**/.git
-**/.env
-**/.env.local
-**/*.tsbuildinfo
-Tamp-backend/prisma/dev.db
+node_modules
+dist
+.git
+.env
+.env.*
+playwright-report
+test-results
