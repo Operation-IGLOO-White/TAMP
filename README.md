@@ -61,8 +61,15 @@ npm test            # navigation URL and API transport checks
 
 `npm run build` produces `dist/`. `npm run preview` is for local inspection only. Production should serve `dist/` with a fallback to `index.html` for browser routes and proxy `/api` to the backend. See the [Vite deployment guide](https://vite.dev/guide/static-deploy) and [proxy configuration](https://vite.dev/config/server-options#server-proxy).
 
+Start the backend first so it creates the shared Docker network:
+
 ```sh
-docker compose up --build
+cd /home/hlaks/Documents/TAMP/tamp_backend
+docker compose up --build -d --wait
+cd /home/hlaks/Documents/TAMP/tamp_frontend/TAMP
+docker compose up --build -d --wait
 ```
 
-The supplied container serves static files using unprivileged nginx on port 3000, with `/healthz`, SPA deep-link fallback, and `/api` proxying. Set `VITE_API_TARGET` to an origin reachable from the container (the Docker default is `http://host.docker.internal:5000`); set `FRONTEND_PORT` to change the host port. If using the local `.env` example for Docker, replace `localhost` with `host.docker.internal` or the backend container hostname.
+The supplied container serves static files using unprivileged nginx on port 3000, with `/healthz`, SPA deep-link fallback, and `/api` proxying. nginx uses `BACKEND_TARGET=http://backend:5000` to reach the backend service on the shared `tamp-network`; `VITE_API_TARGET` is only for local Vite development. Set `FRONTEND_PORT` to change the host port. If overriding `TAMP_NETWORK`, use the same value in both repositories. PostgreSQL and the worker remain on the backend project’s private network. Stop the frontend before running `docker compose down` in the backend project so the shared network can be removed.
+
+Check the API through nginx with `curl --fail http://localhost:3000/api/v1/health` (adjust the port if needed).
