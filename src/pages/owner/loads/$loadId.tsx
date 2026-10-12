@@ -6,13 +6,14 @@ import { Link } from "@/lib/nav";
 import { useEffect, useMemo, useState } from "react";
 import { LaneRail } from "@/components/tamp/LaneRail";
 import { MatchTicket } from "@/components/tamp/MatchTicket";
+import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
 import { ShareTrackingLink } from "@/components/tamp/ShareTrackingLink";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { Waybill } from "@/components/tamp/Waybill";
 import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/fns/matching";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
-import type { MatchScoreComponent, Trip, TripStatus } from "@/types/domain";
+import type { MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
 
 // §6.2 weighted score rules — the matching-rules explainer, stated plainly
 // and never collapsed away (C2 obligation).
@@ -83,6 +84,7 @@ function LoadDetail() {
     useTamp();
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [showUnqualified, setShowUnqualified] = useState(false);
+  const [reviewTruck, setReviewTruck] = useState<TruckPosting | null>(null);
 
   const load = loads.find((l) => l.id === loadId);
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
@@ -327,7 +329,7 @@ function LoadDetail() {
                 score={m.score}
                 breakdown={m.breakdown}
                 variant="suggested"
-                onAccept={() => acceptMatch(load.id, m.truck.id)}
+                onAccept={() => setReviewTruck(m.truck)}
                 onReject={() => rejectMatch(load.id, m.truck.id)}
               />
             ))}
@@ -405,6 +407,15 @@ function LoadDetail() {
           </div>
         </aside>
       </div>
+      {reviewTruck && (
+        <MatchReviewDialog
+          load={load}
+          truck={reviewTruck}
+          actionLabel="Accept match"
+          onClose={() => setReviewTruck(null)}
+          onConfirm={() => acceptMatch(load.id, reviewTruck.id)}
+        />
+      )}
     </main>
   );
 }

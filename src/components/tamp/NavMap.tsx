@@ -10,10 +10,11 @@ import { useEffect, useRef, useState } from "react";
 import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { computeRoute } from "@/fns/routes";
-import { decodePolyline, pointAlong, type LatLng } from "@/lib/polyline";
+import { geoJsonLineToLatLng, pointAlong, type LatLng } from "@/lib/polyline";
 import type { Load, Trip } from "@/types/domain";
 
-const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const STYLE =
+  import.meta.env["VITE_MAP_STYLE_URL"] || "https://tiles.openfreemap.org/styles/liberty";
 
 // Forward bearing (degrees) from a → b, for pointing the camera down the road.
 function bearing(a: LatLng, b: LatLng): number {
@@ -46,7 +47,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
     computeRoute(load.origin, load.destination)
       .then((r) => {
         if (cancelled || !r) return;
-        setRoute(decodePolyline(r.encodedPolyline));
+        setRoute(geoJsonLineToLatLng(r.geometry.coordinates));
         setInfo({ km: r.distanceKm, min: r.durationMin });
       })
       .catch(() => {});

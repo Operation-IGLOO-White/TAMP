@@ -10,7 +10,7 @@ import type { Map as LeafletMap, LayerGroup } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { computeRoute } from "@/fns/routes";
 import { isActiveTrip } from "@/lib/tamp-dashboard";
-import { decodePolyline, pointAlong, type LatLng } from "@/lib/polyline";
+import { geoJsonLineToLatLng, pointAlong, type LatLng } from "@/lib/polyline";
 import { useTamp } from "@/context/TampContext";
 import type { Load, Trip } from "@/types/domain";
 
@@ -96,7 +96,11 @@ export function FleetMap({
       attempted.current.add(id);
       computeRoute(m.load.origin, m.load.destination)
         .then((r) => {
-          if (r) setRouteMap((prev) => ({ ...prev, [id]: decodePolyline(r.encodedPolyline) }));
+          if (r)
+            setRouteMap((prev) => ({
+              ...prev,
+              [id]: geoJsonLineToLatLng(r.geometry.coordinates),
+            }));
         })
         .catch(() => attempted.current.delete(id));
     }

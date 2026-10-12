@@ -4,6 +4,7 @@ import { Link } from "@/lib/nav";
 import { ChevronRight, Flag, Star, UserPlus } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
+import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
 import { RatingBox } from "@/components/tamp/RatingBox";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { TripProgress } from "@/components/tamp/TripProgress";
@@ -41,6 +42,7 @@ function EngagementsPage() {
     requestJob,
     withdrawRequest,
   } = useTamp();
+  const [review, setReview] = useState<{ opportunity: Opportunity; kind: "confirm" | "request" } | null>(null);
 
   const availableTrucks = trucks.filter((t) => t.status === "AVAILABLE");
   const activeLoads = loads.filter((l) => l.status !== "COMPLETED" && l.status !== "CLOSED");
@@ -164,7 +166,7 @@ function EngagementsPage() {
                   key={`${o.load.id}-${o.truck.id}`}
                   opp={o}
                   kind="confirm"
-                  onAct={() => confirmMatch(o.load.id, o.truck.id)}
+                  onAct={() => setReview({ opportunity: o, kind: "confirm" })}
                   onDecline={() => declineMatch(o.load.id, o.truck.id)}
                 />
               ))}
@@ -211,13 +213,30 @@ function EngagementsPage() {
                   key={`${o.load.id}-${o.truck.id}`}
                   opp={o}
                   kind="request"
-                  onAct={() => requestJob(o.load, o.truck.id, o.score)}
+                  onAct={() => setReview({ opportunity: o, kind: "request" })}
                 />
               ))}
             </div>
           )}
         </section>
       </div>
+      {review && (
+        <MatchReviewDialog
+          load={review.opportunity.load}
+          truck={review.opportunity.truck}
+          actionLabel={review.kind === "confirm" ? "Confirm engagement" : "Request job"}
+          onClose={() => setReview(null)}
+          onConfirm={() =>
+            review.kind === "confirm"
+              ? confirmMatch(review.opportunity.load.id, review.opportunity.truck.id)
+              : requestJob(
+                  review.opportunity.load,
+                  review.opportunity.truck.id,
+                  review.opportunity.score,
+                )
+          }
+        />
+      )}
     </AppShell>
   );
 }

@@ -1,6 +1,6 @@
 
 // In-app route map for a single trip (Uber/Bolt style): draws the real driving
-// route from the Google Routes API on a Leaflet/OpenStreetMap canvas, with
+// route from Valhalla on an OpenStreetMap canvas, with
 // pickup, drop-off and a live truck marker. No hand-off to an external maps app.
 
 import { Navigation } from "lucide-react";
@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { computeRoute } from "@/fns/routes";
-import { decodePolyline, pointAlong, type LatLng } from "@/lib/polyline";
+import { geoJsonLineToLatLng, pointAlong, type LatLng } from "@/lib/polyline";
 import type { Load, Trip } from "@/types/domain";
 
 // Before the cargo is loaded the driver heads to the pick-up; after that, to
@@ -53,7 +53,7 @@ export function TripRouteMap({
     computeRoute(load.origin, load.destination)
       .then((r) => {
         if (cancelled || !r) return;
-        setRoute(decodePolyline(r.encodedPolyline));
+        setRoute(geoJsonLineToLatLng(r.geometry.coordinates));
         setInfo({ km: r.distanceKm, min: r.durationMin });
       })
       .catch(() => {});

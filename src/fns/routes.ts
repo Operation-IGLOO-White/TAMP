@@ -1,4 +1,4 @@
-// Client wrapper over the tRPC `routes` router (server-side Google Routes API).
+// Client wrapper over the tRPC routes router (server-side Valhalla).
 import { trpc } from "@/lib/trpc";
 import type { RouteResult } from "@/types/api";
 import type { Place } from "@/types/domain";

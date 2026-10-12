@@ -9,6 +9,7 @@ import {
 import { useTamp } from "@/context/TampContext";
 import type { Acceptance, Load } from "@/types/domain";
 import { DisputeDialog } from "./DisputeDialog";
+import { MatchReviewDialog } from "./MatchReviewDialog";
 
 const RATING_TAGS = [
   "On time",
@@ -39,6 +40,7 @@ export function Waybill({ load }: { load: Load }) {
   const [note, setNote] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [disputeOpen, setDisputeOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const toggleTag = (t: string) =>
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
@@ -279,7 +281,7 @@ export function Waybill({ load }: { load: Load }) {
           <>
             <button
               disabled={!suggestion}
-              onClick={() => suggestion && acceptMatch(load.id, suggestion.truckPostingId)}
+              onClick={() => suggestion && truck && setReviewOpen(true)}
               className="flex-1 bg-signal text-signal-foreground font-black text-xs py-3 uppercase tracking-widest hover:brightness-110 active:translate-y-px transition-all disabled:opacity-40"
             >
               Accept Match
@@ -325,6 +327,15 @@ export function Waybill({ load }: { load: Load }) {
       </div>
 
       <DisputeDialog loadId={load.id} open={disputeOpen} onClose={() => setDisputeOpen(false)} />
+      {reviewOpen && truck && (
+        <MatchReviewDialog
+          load={load}
+          truck={truck}
+          actionLabel="Accept match"
+          onClose={() => setReviewOpen(false)}
+          onConfirm={() => acceptMatch(load.id, truck.id)}
+        />
+      )}
     </div>
   );
 }

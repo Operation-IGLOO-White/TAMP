@@ -30,9 +30,13 @@ export interface DomainSnapshot {
   proofs: Proof[];
 }
 export interface RouteResult {
-  encodedPolyline: string;
+  geometry: {
+    type: "LineString";
+    coordinates: [number, number][];
+  };
   distanceKm: number;
   durationMin: number;
+  provider: "valhalla" | string;
 }
 export interface Prediction {
   id: string;

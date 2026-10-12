@@ -1,5 +1,4 @@
-// Address field backed by a real map API (Google Places, proxied server-side
-// so the key never reaches the browser). Type any South African address; the
+// Address field backed by Photon/OpenStreetMap through the backend. Type any South African address; the
 // dropdown shows live predictions, and picking one resolves to a Place with
 // accurate coordinates + province used by matching, pricing and the map.
 
@@ -24,9 +23,6 @@ export function AddressInput({
   const [loading, setLoading] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // Google bills autocomplete + details as one session when they share a token.
-  const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
-
   // Keep the input text in sync when the selected value changes externally.
   useEffect(() => {
     setQuery(value?.label ?? "");
@@ -43,7 +39,7 @@ export function AddressInput({
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const preds = await geocodeAutocomplete(query, sessionToken);
+        const preds = await geocodeAutocomplete(query);
         if (cancelled) return;
         setResults(preds);
         setOpen(true);
@@ -57,7 +53,7 @@ export function AddressInput({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, value?.label, sessionToken]);
+  }, [query, value?.label]);
 
   // Close the dropdown on outside click.
   useEffect(() => {
@@ -72,16 +68,13 @@ export function AddressInput({
     setOpen(false);
     setQuery(p.primary);
     try {
-      // Nominatim predictions already carry the resolved place; Google needs a
-      // details lookup keyed by placeId (same session token to close billing).
-      const place = p.place ?? (await geocodeDetails(p.id, sessionToken));
+      const place = p.place ?? (await geocodeDetails(p.id));
       onSelect(place);
       setQuery(place.label);
     } catch {
       /* leave the typed text if details fail */
     } finally {
-      // A pick ends the Google session — rotate the token for the next one.
-      setSessionToken(crypto.randomUUID());
+      setLoading(false);
     }
   };
 

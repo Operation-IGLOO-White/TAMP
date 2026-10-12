@@ -1,8 +1,11 @@
-// Decode a Google-encoded polyline into [lat, lng] points, and find the point
-// at a given fraction along the path (for interpolating a truck's position on
-// the real road geometry).
+// Route geometry utilities. TAMP's routing boundary uses GeoJSON coordinates
+// ([lng, lat]); map components use [lat, lng].
 
 export type LatLng = [number, number];
+
+export function geoJsonLineToLatLng(coordinates: [number, number][]): LatLng[] {
+  return coordinates.map(([lng, lat]) => [lat, lng]);
+}
 
 export function decodePolyline(encoded: string): LatLng[] {
   const points: LatLng[] = [];

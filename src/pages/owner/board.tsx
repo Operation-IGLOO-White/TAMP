@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { BODY_TYPE_LABEL } from "@/components/tamp/BodyTypeIcon";
+import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
 import { PostLoadForm } from "@/components/tamp/PostLoadForm";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { formatMoney } from "@/lib/tamp-data";
@@ -52,6 +53,11 @@ function BoardPage() {
     (statusParam as DisplayStatus) ?? "ALL",
   );
   const [sort, setSort] = useState<SortKey>("newest");
+  const [review, setReview] = useState<{
+    load: Load;
+    truck: TruckPosting;
+    kind: "match" | "request";
+  } | null>(null);
 
   // Match scoring now happens server-side (src/fns/matching.ts): one call per
   // POSTED load, scoring it against every truck at once.
@@ -286,11 +292,29 @@ function BoardPage() {
           <LoadCard
             key={row.load.id}
             {...row}
-            onAccept={() => row.topMatch && acceptMatch(row.load.id, row.topMatch.truck.id)}
-            onAcceptRequest={(truckId) => acceptRequest(row.load.id, truckId)}
+            onAccept={() =>
+              row.topMatch && setReview({ load: row.load, truck: row.topMatch.truck, kind: "match" })
+            }
+            onAcceptRequest={(truckId) => {
+              const truck = trucks.find((item) => item.id === truckId);
+              if (truck) setReview({ load: row.load, truck, kind: "request" });
+            }}
           />
         ))}
       </div>
+      {review && (
+        <MatchReviewDialog
+          load={review.load}
+          truck={review.truck}
+          actionLabel={review.kind === "request" ? "Approve request" : "Accept match"}
+          onClose={() => setReview(null)}
+          onConfirm={() =>
+            review.kind === "request"
+              ? acceptRequest(review.load.id, review.truck.id)
+              : acceptMatch(review.load.id, review.truck.id)
+          }
+        />
+      )}
     </AppShell>
   );
 }
