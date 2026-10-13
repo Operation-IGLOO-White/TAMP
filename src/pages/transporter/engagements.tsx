@@ -226,9 +226,9 @@ function EngagementsPage() {
           truck={review.opportunity.truck}
           actionLabel={review.kind === "confirm" ? "Confirm engagement" : "Request job"}
           onClose={() => setReview(null)}
-          onConfirm={() =>
+          onConfirm={(proof) =>
             review.kind === "confirm"
-              ? confirmMatch(review.opportunity.load.id, review.opportunity.truck.id)
+              ? confirmMatch(review.opportunity.load.id, review.opportunity.truck.id, proof)
               : requestJob(
                   review.opportunity.load,
                   review.opportunity.truck.id,

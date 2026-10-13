@@ -1,5 +1,12 @@
 // Client wrappers over the authoritative `commands` router.
 import { trpc } from "@/lib/trpc";
+import type { MatchOffer } from "@/types/api";
+
+export interface OfferProof {
+  offerId: string;
+  revision: number;
+  termsHash: string;
+}
 
 export interface PodInput {
   recipientName: string;
@@ -15,17 +22,36 @@ export const advanceTripCmd = (
 ): Promise<{ ok: true; status: string; progressPct: number }> =>
   trpc.mutation("commands.advanceTrip", { loadId, proof });
 
-export const acceptMatchCmd = (loadId: string, truckId: string): Promise<{ ok: true }> =>
-  trpc.mutation("commands.acceptMatch", { loadId, truckId });
+export const prepareOfferCmd = (
+  loadId: string,
+  truckId: string,
+  journeyRouteToken: string,
+  deadheadRouteToken?: string,
+): Promise<MatchOffer> =>
+  trpc.mutation("commands.prepareOffer", {
+    loadId,
+    truckId,
+    journeyRouteToken,
+    ...(deadheadRouteToken ? { deadheadRouteToken } : {}),
+  });
+
+export const acceptMatchCmd = (
+  loadId: string,
+  truckId: string,
+  proof: OfferProof,
+): Promise<{ ok: true }> =>
+  trpc.mutation("commands.acceptMatch", { loadId, truckId, ...proof });
 
 export const confirmMatchCmd = (
   loadId: string,
-  truckId?: string,
+  truckId: string | undefined,
+  proof: OfferProof,
 ): Promise<{ ok: true; tripId: string }> =>
-  trpc.mutation("commands.confirmMatch", { loadId, truckId });
+  trpc.mutation("commands.confirmMatch", { loadId, truckId, ...proof });
 
 export const acceptRequestCmd = (
   loadId: string,
   truckId: string,
-): Promise<{ ok: true; tripId: string }> =>
-  trpc.mutation("commands.acceptRequest", { loadId, truckId });
+  proof: OfferProof,
+): Promise<{ ok: true }> =>
+  trpc.mutation("commands.acceptRequest", { loadId, truckId, ...proof });

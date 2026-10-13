@@ -61,10 +61,10 @@ without a Google key or another paid API account.
 
 ## Phase 1 - route quote before agreement
 
-- [ ] Add `route_quotes` with origin, destination, truck-to-pickup leg,
+- [x] Add `route_quotes` with origin, destination, truck-to-pickup leg,
       pickup-to-destination leg, distance, estimated duration, route geometry,
       vehicle constraints, provider, creation time and expiry time.
-- [ ] Add a backend command that recalculates the quote when pickup,
+- [x] Add a backend command that recalculates the quote when pickup,
       destination, truck, dimensions or departure time changes.
 - [x] Display a required match-review dialog before either party can accept.
 - [x] Show on the same screen:
@@ -86,15 +86,16 @@ commercial terms before giving consent.
 
 ## Phase 2 - two-party agreement
 
-- [ ] Add versioned `match_offers` containing the selected route quote,
+- [x] Add versioned `match_offers` containing the selected route quote,
       commercial terms, vehicle, cargo, time window and SHA-256 terms hash.
-- [ ] Add one consent record per party and offer revision.
-- [ ] Allow either party to accept first.
-- [ ] Confirm the match atomically only when both parties accept the same,
+- [x] Add one consent record per party and offer revision.
+- [ ] Allow either party to accept first. The current workflow intentionally
+      starts with owner approval and then carrier confirmation.
+- [x] Confirm the match atomically only when both parties accept the same,
       unexpired revision.
-- [ ] On a material change, create a new revision and clear prior consents.
-- [ ] Record actor, party, timestamp, IP/request metadata and acceptance receipt.
-- [ ] Make all state transitions backend-controlled and idempotent.
+- [x] On a material change, create a new revision and invalidate prior consents.
+- [x] Record actor, party, timestamp, IP/request metadata and acceptance receipt.
+- [x] Make agreement state transitions backend-controlled and transactionally serialized.
 - [ ] Notify the other party of acceptance, rejection, expiry and counteroffer.
 
 **Done when:** no route, vehicle, price or schedule can change after one party

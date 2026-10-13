@@ -53,10 +53,10 @@ export function Waybill({ load }: { load: Load }) {
   const operator = truck ? parties.find((p) => p.id === truck.transporterId) : undefined;
   const trip = tripForMatch(confirmed?.id, trips);
   const ownerSeal = acceptances.find(
-    (a) => a.matchId === confirmed?.id && a.party === "FREIGHT_OWNER",
+    (a) => a.matchId === engaged?.id && a.party === "FREIGHT_OWNER",
   );
   const carrierSeal = acceptances.find(
-    (a) => a.matchId === confirmed?.id && a.party === "TRANSPORTER",
+    (a) => a.matchId === engaged?.id && a.party === "TRANSPORTER",
   );
   const delivered = !!trip && (trip.status === "DELIVERED" || trip.status === "COMPLETED");
   // My rating of the carrier vs. the rating I received from the carrier.
@@ -135,21 +135,27 @@ export function Waybill({ load }: { load: Load }) {
                 </div>
               </div>
             )}
-            {confirmed && (
+            {engaged && (
               <div className="mt-3 border border-paper-foreground/20 bg-paper-foreground/5 p-3 font-mono text-[10px] leading-relaxed">
                 <div className="mb-1.5 font-bold uppercase tracking-widest">
-                  Digital Acceptance Receipt
+                  {confirmed ? "Digital Acceptance Receipt" : "Agreement Status"}
                 </div>
-                <Receipt k="Contract ref" v={confirmed.id} />
+                <Receipt k="Contract ref" v={engaged.id} />
                 <Receipt k="Load" v={load.id} />
+                {engaged.offerRevision && <Receipt k="Offer revision" v={String(engaged.offerRevision)} />}
                 <Receipt k="Route" v={`${load.origin.label} → ${load.destination.label}`} />
                 <Receipt k="Freight owner" v={owner?.companyName ?? "—"} />
                 <Receipt k="Carrier" v={operator?.companyName ?? "—"} />
-                {confirmed.agreedRate && (
-                  <Receipt k="Agreed rate" v={formatMoney(confirmed.agreedRate)} />
+                {engaged.agreedRate && (
+                  <Receipt k="Agreed rate" v={formatMoney(engaged.agreedRate)} />
                 )}
                 {ownerSeal && <Seal title="Accepted — freight owner" seal={ownerSeal} />}
                 {carrierSeal && <Seal title="Confirmed — carrier" seal={carrierSeal} />}
+                {ownerSeal && !carrierSeal && (
+                  <div className="mt-2 border-t border-paper-foreground/15 pt-2 font-bold uppercase text-signal-foreground">
+                    Awaiting carrier confirmation of this revision
+                  </div>
+                )}
                 <div className="mt-2 border-t border-paper-foreground/15 pt-2 opacity-70">
                   Digitally accepted under the Electronic Communications and Transactions Act 25 of
                   2002. Not an advanced electronic signature.
@@ -333,7 +339,7 @@ export function Waybill({ load }: { load: Load }) {
           truck={truck}
           actionLabel="Accept match"
           onClose={() => setReviewOpen(false)}
-          onConfirm={() => acceptMatch(load.id, truck.id)}
+          onConfirm={(proof) => acceptMatch(load.id, truck.id, proof)}
         />
       )}
     </div>

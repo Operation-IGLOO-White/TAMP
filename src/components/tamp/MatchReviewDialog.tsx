@@ -4,16 +4,17 @@ import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { computeRoute } from "@/fns/routes";
+import { prepareOfferCmd, type OfferProof } from "@/fns/commands";
 import { formatMoney } from "@/lib/tamp-data";
-import type { RouteResult } from "@/types/api";
+import type { MatchOffer, RouteSnapshot } from "@/types/api";
 import type { Load, TruckPosting } from "@/types/domain";
 
 const STYLE =
   import.meta.env["VITE_MAP_STYLE_URL"] || "https://tiles.openfreemap.org/styles/liberty";
 
 type RouteState = {
-  deadhead: RouteResult | null;
-  journey: RouteResult;
+  deadhead: RouteSnapshot | null;
+  journey: RouteSnapshot;
 };
 
 export function MatchReviewDialog({
@@ -27,12 +28,13 @@ export function MatchReviewDialog({
   truck: TruckPosting;
   actionLabel: string;
   onClose: () => void;
-  onConfirm: () => Promise<void> | void;
+  onConfirm: (proof: OfferProof) => Promise<void> | void;
 }) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
   const markersRef = useRef<MlMarker[]>([]);
   const [routes, setRoutes] = useState<RouteState | null>(null);
+  const [offer, setOffer] = useState<MatchOffer | null>(null);
   const [error, setError] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -46,15 +48,28 @@ export function MatchReviewDialog({
   useEffect(() => {
     let cancelled = false;
     setRoutes(null);
+    setOffer(null);
+    setAgreed(false);
     setError("");
     Promise.all([
       computeRoute(truck.currentLocation, load.origin),
       computeRoute(load.origin, load.destination),
     ])
-      .then(([deadhead, journey]) => {
+      .then(async ([deadhead, journey]) => {
         if (cancelled) return;
         if (!journey) throw new Error("No freight route was returned");
-        setRoutes({ deadhead, journey });
+        const prepared = await prepareOfferCmd(
+          load.id,
+          truck.id,
+          journey.routeToken,
+          deadhead?.routeToken,
+        );
+        if (cancelled) return;
+        setOffer(prepared);
+        setRoutes({
+          deadhead: prepared.routeQuote.deadhead,
+          journey: prepared.routeQuote.journey,
+        });
       })
       .catch(() => !cancelled && setError("The route could not be calculated. Try again shortly."));
     return () => {
@@ -80,7 +95,7 @@ export function MatchReviewDialog({
       map.addControl(new maplibregl.NavigationControl(), "top-right");
       map.on("load", () => {
         if (!map || disposed) return;
-        const addLine = (id: string, route: RouteResult, color: string, dash?: number[]) => {
+        const addLine = (id: string, route: RouteSnapshot, color: string, dash?: number[]) => {
           map!.addSource(id, { type: "geojson", data: route.geometry });
           map!.addLayer({
             id,
@@ -126,11 +141,13 @@ export function MatchReviewDialog({
   }, [routes, load, truck]);
 
   const confirm = async () => {
-    if (!routes || !agreed || submitting) return;
+    if (!routes || !offer || !agreed || submitting) return;
     setSubmitting(true);
     try {
-      await onConfirm();
+      await onConfirm({ offerId: offer.id, revision: offer.revision, termsHash: offer.termsHash });
       onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The offer could not be accepted.");
     } finally {
       setSubmitting(false);
     }
@@ -195,6 +212,13 @@ export function MatchReviewDialog({
               <Metric label="Rate" value={load.targetRate ? formatMoney(load.targetRate) : "On file"} />
             </div>
 
+            {offer && (
+              <div className="flex justify-between rounded-lg border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground">
+                <span>Offer revision {offer.revision}</span>
+                <span>Expires {new Date(offer.expiresAt).toLocaleTimeString("en-ZA")}</span>
+              </div>
+            )}
+
             <div className="rounded-lg border border-border bg-graphite/60 p-3 text-xs">
               <div className="font-bold">{truck.bodyType} · {truck.registration}</div>
               <div className="mt-1 text-muted-foreground">
@@ -228,7 +252,7 @@ export function MatchReviewDialog({
           </button>
           <button
             onClick={confirm}
-            disabled={!routes || !agreed || submitting}
+            disabled={!routes || !offer || !agreed || submitting}
             className="inline-flex items-center gap-2 rounded-md bg-signal px-5 py-2 text-xs font-black uppercase text-signal-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             {submitting && <Loader2 className="size-3.5 animate-spin" />}

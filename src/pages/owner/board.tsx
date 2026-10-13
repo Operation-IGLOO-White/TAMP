@@ -308,10 +308,10 @@ function BoardPage() {
           truck={review.truck}
           actionLabel={review.kind === "request" ? "Approve request" : "Accept match"}
           onClose={() => setReview(null)}
-          onConfirm={() =>
+          onConfirm={(proof) =>
             review.kind === "request"
-              ? acceptRequest(review.load.id, review.truck.id)
-              : acceptMatch(review.load.id, review.truck.id)
+              ? acceptRequest(review.load.id, review.truck.id, proof)
+              : acceptMatch(review.load.id, review.truck.id, proof)
           }
         />
       )}

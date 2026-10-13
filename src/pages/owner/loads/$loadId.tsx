@@ -413,7 +413,7 @@ function LoadDetail() {
           truck={reviewTruck}
           actionLabel="Accept match"
           onClose={() => setReviewTruck(null)}
-          onConfirm={() => acceptMatch(load.id, reviewTruck.id)}
+          onConfirm={(proof) => acceptMatch(load.id, reviewTruck.id, proof)}
         />
       )}
     </main>

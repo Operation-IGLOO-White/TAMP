@@ -102,6 +102,9 @@ export interface Match {
   status: MatchStatus;
   initiatedBy: "FREIGHT_OWNER" | "TRANSPORTER" | "SYSTEM";
   agreedRate?: Money;
+  activeOfferId?: string;
+  offerRevision?: number;
+  termsHash?: string;
   expiresAt: ISODate;
   createdAt: ISODate;
 }
@@ -223,6 +226,9 @@ export interface Acceptance {
   at: string;
   byUserId: string;
   ip: string;
+  offerId: string;
+  revision: number;
+  termsHash: string;
 }
 export interface Reservation {
   id: string;

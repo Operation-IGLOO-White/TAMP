@@ -22,6 +22,7 @@ import {
   confirmMatchCmd,
   type PodInput,
 } from "@/fns/commands";
+import type { OfferProof } from "@/fns/commands";
 import { applyDelta, loadState, type SnapshotDelta } from "@/fns/snapshot";
 import { bodyTypesForCargo, scoreLoadAgainstTrucks } from "@/fns/matching";
 import { priceLoadMoney } from "@/fns/pricing";
@@ -177,13 +178,13 @@ interface Store extends State {
   assignDriver: (truckId: string, driverId: string) => void;
   linkDriver: (truckId: string, driver: Party) => void;
   requestJob: (load: Load, truckId: string, score: number) => void;
-  acceptRequest: (loadId: string, truckId: string) => Promise<void>;
+  acceptRequest: (loadId: string, truckId: string, proof: OfferProof) => Promise<void>;
   withdrawRequest: (loadId: string, truckId: string) => void;
   reserveBackhaul: (truckId: string, loadId: string) => void;
   releaseReservation: (truckId: string, loadId: string) => void;
-  acceptMatch: (loadId: string, truckId: string) => Promise<void>;
+  acceptMatch: (loadId: string, truckId: string, proof: OfferProof) => Promise<void>;
   rejectMatch: (loadId: string, truckId: string) => void;
-  confirmMatch: (loadId: string, truckId?: string) => Promise<void>;
+  confirmMatch: (loadId: string, truckId: string | undefined, proof: OfferProof) => Promise<void>;
   declineMatch: (loadId: string, truckId?: string) => void;
   advanceTrip: (loadId: string, proof?: PodInput) => Promise<void>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
@@ -852,26 +853,26 @@ export function TampProvider({ children }: { children: ReactNode }) {
       // awaits the truck owner's confirmation.
       // Authoritative: the server accepts the match (validates ownership,
       // creates the acceptance receipt, advances the load).
-      acceptMatch: async (loadId, truckId) => {
+      acceptMatch: async (loadId, truckId, proof) => {
         try {
           await flushPending();
-          await acceptMatchCmd(loadId, truckId);
+          await acceptMatchCmd(loadId, truckId, proof);
         } catch (err) {
           reportSaveError(err);
-          return;
+          throw err;
         }
         await hydrateDomain();
       },
 
       // Step 2 (authoritative): the carrier confirms the owner's acceptance. The
       // server flips the match to CONFIRMED, reserves the truck and opens a trip.
-      confirmMatch: async (loadId, truckId) => {
+      confirmMatch: async (loadId, truckId, proof) => {
         try {
           await flushPending();
-          await confirmMatchCmd(loadId, truckId);
+          await confirmMatchCmd(loadId, truckId, proof);
         } catch (err) {
           reportSaveError(err);
-          return;
+          throw err;
         }
         await hydrateDomain();
       },
@@ -1023,15 +1024,15 @@ export function TampProvider({ children }: { children: ReactNode }) {
           };
         }),
 
-      // Authoritative: the owner awards a carrier's request. The server confirms
-      // the match, opens a trip, reserves the truck and closes other requests.
-      acceptRequest: async (loadId, truckId) => {
+      // Authoritative: the owner approves a carrier request against the reviewed
+      // offer. The carrier must confirm that exact revision before a trip opens.
+      acceptRequest: async (loadId, truckId, proof) => {
         try {
           await flushPending();
-          await acceptRequestCmd(loadId, truckId);
+          await acceptRequestCmd(loadId, truckId, proof);
         } catch (err) {
           reportSaveError(err);
-          return;
+          throw err;
         }
         await hydrateDomain();
       },

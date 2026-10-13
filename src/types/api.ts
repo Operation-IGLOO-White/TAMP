@@ -37,7 +37,32 @@ export interface RouteResult {
   distanceKm: number;
   durationMin: number;
   provider: "valhalla" | string;
+  routeToken: string;
+  expiresAt: string;
 }
+export interface MatchOffer {
+  id: string;
+  matchId: string;
+  routeQuoteId: string;
+  revision: number;
+  termsHash: string;
+  status: "OPEN" | "PARTIALLY_ACCEPTED" | "CONFIRMED" | "SUPERSEDED";
+  createdAt: string;
+  expiresAt: string;
+  ownerAcceptedAt?: string | null;
+  transporterAcceptedAt?: string | null;
+  routeQuote: {
+    id: string;
+    matchId: string;
+    loadId: string;
+    truckId: string;
+    deadhead: RouteSnapshot | null;
+    journey: RouteSnapshot;
+    provider: string;
+    createdAt: string;
+  };
+}
+export type RouteSnapshot = Omit<RouteResult, "routeToken" | "expiresAt">;
 export interface Prediction {
   id: string;
   primary: string;
