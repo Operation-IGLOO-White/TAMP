@@ -14,6 +14,7 @@ import { ROLE_SHORT } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
 import type { Party } from "@/types/domain";
 import { Avatar } from "./Avatar";
+import { PasswordInput } from "./PasswordInput";
 
 const PROVINCES = ["GP", "WC", "KZN", "EC", "FS", "NW", "LP", "MP", "NC"];
 
@@ -489,27 +490,27 @@ function SecurityTab({ me }: { me: Party }) {
         {editing && (
           <div className="mt-5 max-w-md space-y-4 rounded-xl border border-border bg-background/40 p-4">
             <Field label="Current password">
-              <input
-                type="password"
+              <PasswordInput
                 value={current}
                 onChange={(e) => setCurrent(e.target.value)}
                 className={inputCls}
+                autoComplete="current-password"
               />
             </Field>
             <Field label="New password">
-              <input
-                type="password"
+              <PasswordInput
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
                 className={inputCls}
+                autoComplete="new-password"
               />
             </Field>
             <Field label="Confirm new password">
-              <input
-                type="password"
+              <PasswordInput
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 className={inputCls}
+                autoComplete="new-password"
               />
             </Field>
             {error && <p className="text-xs font-medium text-danger">{error}</p>}

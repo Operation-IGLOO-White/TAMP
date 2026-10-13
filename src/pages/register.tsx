@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AddressInput } from "@/components/tamp/AddressInput";
+import { PasswordInput } from "@/components/tamp/PasswordInput";
 import { sendVerificationCode } from "@/fns/email";
 import { registerParty } from "@/fns/parties";
 import { checkSaMobile } from "@/fns/phone";
@@ -582,21 +583,21 @@ function Register() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Password">
-                <input
-                  type="password"
+                <PasswordInput
                   value={you.password}
                   onChange={(e) => setYou({ ...you, password: e.target.value })}
                   className={inputCls}
+                  autoComplete="new-password"
                   required
                 />
                 <PasswordMeter password={you.password} />
               </Field>
               <Field label="Confirm password">
-                <input
-                  type="password"
+                <PasswordInput
                   value={you.confirm}
                   onChange={(e) => setYou({ ...you, confirm: e.target.value })}
                   className={inputCls}
+                  autoComplete="new-password"
                   required
                 />
               </Field>

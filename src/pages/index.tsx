@@ -4,6 +4,7 @@ import { Clock, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
+import { PasswordInput } from "@/components/tamp/PasswordInput";
 import type { Party } from "@/types/domain";
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -148,11 +149,11 @@ function Landing() {
                 Forgot password?
               </Link>
             </span>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={inputCls}
+              autoComplete="current-password"
             />
           </label>
 

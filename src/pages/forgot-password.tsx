@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@/lib/nav";
 import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 import { useState } from "react";
 import { requestPasswordReset, resetPassword } from "@/fns/auth";
+import { PasswordInput } from "@/components/tamp/PasswordInput";
 
 function ForgotPassword() {
   const navigate = useNavigate();
@@ -114,20 +115,20 @@ function ForgotPassword() {
               />
             </Field>
             <Field label="New password">
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={inputCls}
+                autoComplete="new-password"
                 required
               />
             </Field>
             <Field label="Confirm new password">
-              <input
-                type="password"
+              <PasswordInput
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 className={inputCls}
+                autoComplete="new-password"
                 required
               />
             </Field>
