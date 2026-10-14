@@ -7,6 +7,7 @@ import {
   ChevronRight,
   LogOut,
   Moon,
+  Menu,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -26,6 +27,8 @@ import {
 } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import { Avatar } from "./Avatar";
+import { BrandLogo } from "./BrandLogo";
+import { MobileNavigation } from "./Sidebar";
 
 // Owner-driver merge: DRIVER folds into TRANSPORTER, so it isn't a separate
 // switchable workspace.
@@ -51,24 +54,35 @@ function useClickAway(onAway: () => void) {
 
 export function TopNav() {
   const { role, authParty } = useTamp();
+  const [mobileMenu, setMobileMenu] = useState(false);
 
   // No chrome until an account is signed in.
   if (!authParty) return null;
 
   return (
-    <nav className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-graphite px-4">
-      <Link to={HOME_BY_ROLE[role]} className="flex items-center gap-2">
-        <span className="grid size-7 place-items-center rounded-md bg-signal font-extrabold text-signal-foreground">
-          T
-        </span>
-        <span className="text-lg font-extrabold tracking-tight">TAMP</span>
-      </Link>
+    <>
+      <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-graphite/95 px-4 shadow-sm backdrop-blur-xl md:px-5">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setMobileMenu((open) => !open)}
+            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-steel/50 hover:text-foreground md:hidden"
+            aria-label="Open navigation"
+            aria-expanded={mobileMenu}
+          >
+            <Menu className="size-5" />
+          </button>
+          <Link to={HOME_BY_ROLE[role]} className="rounded-xl transition-transform hover:scale-[1.02]">
+            <BrandLogo className="h-9" priority />
+          </Link>
+        </div>
 
-      <div className="flex items-center gap-1.5">
-        <NotificationsMenu />
-        <ProfileMenu />
-      </div>
-    </nav>
+        <div className="flex items-center gap-1.5">
+          <NotificationsMenu />
+          <ProfileMenu />
+        </div>
+      </nav>
+      <MobileNavigation open={mobileMenu} onClose={() => setMobileMenu(false)} />
+    </>
   );
 }
 

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
+import { BrandLogo } from "@/components/tamp/BrandLogo";
 import type { Party } from "@/types/domain";
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -81,9 +82,7 @@ function Landing() {
           also covers the first-navigation compile so it never looks stuck. */}
       {redirecting && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <span className="grid size-12 place-items-center rounded-xl bg-signal font-extrabold text-signal-foreground shadow-lg animate-in zoom-in-50 duration-300">
-            T
-          </span>
+          <BrandLogo className="h-12 animate-in zoom-in-50 duration-300" priority />
           <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Signing you in…
           </div>
@@ -91,12 +90,7 @@ function Landing() {
       )}
 
       <section className="flex flex-col justify-center border-b border-border bg-graphite p-8 md:border-b-0 md:border-r md:p-14">
-        <div className="mb-8 flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-md bg-signal font-extrabold text-signal-foreground">
-            T
-          </span>
-          <span className="text-xl font-extrabold tracking-tight">TAMP</span>
-        </div>
+        <BrandLogo className="mb-8 h-12 self-start" priority />
         <h1 className="max-w-md text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
           Loads and trucks, matched by rules you can see.
         </h1>

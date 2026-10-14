@@ -15,6 +15,7 @@ import {
 import { useEffect, useState } from "react";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
+import { BrandLogo } from "@/components/tamp/BrandLogo";
 import { sendVerificationCode } from "@/fns/email";
 import { registerParty } from "@/fns/parties";
 import { checkSaMobile } from "@/fns/phone";
@@ -463,12 +464,7 @@ function Register() {
   return (
     <main className="grid min-h-screen md:grid-cols-2">
       <section className="flex flex-col justify-center border-b border-border bg-graphite p-8 md:border-b-0 md:border-r md:p-14">
-        <div className="mb-8 flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-md bg-signal font-extrabold text-signal-foreground">
-            T
-          </span>
-          <span className="text-xl font-extrabold tracking-tight">TAMP</span>
-        </div>
+        <BrandLogo className="mb-8 h-12 self-start" priority />
         <h1 className="max-w-md text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
           Join the network.
         </h1>

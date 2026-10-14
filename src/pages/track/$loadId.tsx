@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 
 import { CheckCircle2, Circle, PackageCheck, Truck } from "lucide-react";
 import { LaneRail } from "@/components/tamp/LaneRail";
+import { BrandLogo } from "@/components/tamp/BrandLogo";
 import { estimateEta } from "@/lib/tamp-dashboard";
 import { activeMatchForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useQuery } from "@tanstack/react-query";
@@ -55,10 +56,7 @@ function TrackPage() {
     <main className="min-h-screen bg-background">
       <header className="border-b border-border bg-graphite">
         <div className="mx-auto flex max-w-xl items-center gap-2 px-5 py-4">
-          <span className="grid size-7 place-items-center rounded-md bg-signal font-extrabold text-signal-foreground">
-            T
-          </span>
-          <span className="text-lg font-extrabold tracking-tight">TAMP</span>
+          <BrandLogo className="h-9" priority />
           <span className="ml-auto text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Delivery tracking
           </span>

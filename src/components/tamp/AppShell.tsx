@@ -7,7 +7,7 @@ import { Sidebar } from "./Sidebar";
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
+    <div className="flex h-[calc(100vh-4rem)] bg-background">
       <Sidebar />
       <section className="flex-1 min-w-0 overflow-y-auto">{children}</section>
     </div>

@@ -4,6 +4,7 @@ import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 import { useState } from "react";
 import { requestPasswordReset, resetPassword } from "@/fns/auth";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
+import { BrandLogo } from "@/components/tamp/BrandLogo";
 
 function ForgotPassword() {
   const navigate = useNavigate();
@@ -50,12 +51,7 @@ function ForgotPassword() {
   return (
     <main className="grid min-h-screen place-items-center bg-background p-6">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-md bg-signal font-extrabold text-signal-foreground">
-            T
-          </span>
-          <span className="text-xl font-extrabold tracking-tight">TAMP</span>
-        </div>
+        <BrandLogo className="mb-8 h-12" priority />
 
         {step === "email" && (
           <form onSubmit={sendCode} className="space-y-4">
