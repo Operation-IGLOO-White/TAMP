@@ -395,7 +395,8 @@ function OpportunityCard({
 }
 
 const NEXT_STATUS_LABEL: Record<string, string> = {
-  SCHEDULED: "Arrive at pickup",
+  SCHEDULED: "Start trip",
+  EN_ROUTE_PICKUP: "Confirm pickup arrival",
   AT_PICKUP: "Mark loaded",
   LOADED: "Depart — in transit",
   IN_TRANSIT: "Arrive at drop-off",

@@ -126,10 +126,10 @@ tell whether its location is current.
 
 ## Phase 4 - trip operations and safety
 
-- [ ] Add geofences for pickup and destination arrival/departure.
-- [ ] Enforce the lifecycle: scheduled -> en route -> at pickup -> loaded -> in
+- [x] Add geofences for pickup and destination arrival/departure.
+- [x] Enforce the lifecycle: scheduled -> en route -> at pickup -> loaded -> in
       transit -> at destination -> delivered/completed.
-- [ ] Add proof of pickup and delivery with photos, signatures, timestamps and
+- [x] Add proof of pickup and delivery with photos, signatures, timestamps and
       location verification.
 - [ ] Add cancellations, no-shows, breakdowns, delays and route-deviation events.
 - [ ] Add in-app trip messaging, notification preferences and masked contact

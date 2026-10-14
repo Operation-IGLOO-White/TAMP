@@ -6,7 +6,7 @@ import { displayStatusForLoad, openDisputeForTrip, ratingByRater } from "@/lib/t
 import { useTamp } from "@/context/TampContext";
 import { EngagementCard, type Engagement } from "./engagements";
 
-const ACTIVE_STATUSES = ["SCHEDULED", "AT_PICKUP", "LOADED", "IN_TRANSIT", "AT_DROPOFF"];
+const ACTIVE_STATUSES = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP", "LOADED", "IN_TRANSIT", "AT_DROPOFF"];
 
 function HistoryPage() {
   const { loads, trucks, parties, matches, trips, disputes, ratings, me, rateLoad } = useTamp();

@@ -172,17 +172,20 @@ function LoadDetail() {
 
             {trip &&
               (() => {
-                const pod = proofs.find((p) => p.tripId === trip.id);
-                if (!pod) return null;
+                const tripProofs = proofs.filter((p) => p.tripId === trip.id);
+                if (!tripProofs.length) return null;
                 return (
-                  <div className="border border-border">
-                    <h3 className="flex items-center gap-1.5 border-b border-border bg-graphite/50 p-3 text-[10px] font-bold uppercase tracking-widest">
-                      <BadgeCheck className="size-3.5 text-positive" /> Proof of delivery
-                    </h3>
-                    <div className="space-y-3 p-3 text-xs">
+                  <div className="space-y-3">
+                    {tripProofs.map((pod) => {
+                      const kind = pod.kind ?? "DELIVERY";
+                      return <div key={pod.id} className="border border-border">
+                      <h3 className="flex items-center gap-1.5 border-b border-border bg-graphite/50 p-3 text-[10px] font-bold uppercase tracking-widest">
+                        <BadgeCheck className="size-3.5 text-positive" /> Proof of {kind.toLowerCase()}
+                      </h3>
+                      <div className="space-y-3 p-3 text-xs">
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                          Received by
+                          {kind === "PICKUP" ? "Released by" : "Received by"}
                         </span>
                         <div className="font-semibold">{pod.recipientName}</div>
                       </div>
@@ -201,7 +204,7 @@ function LoadDetail() {
                       {pod.photoUrl ? (
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                            Delivery photo
+                            {kind === "PICKUP" ? "Pickup photo" : "Delivery photo"}
                           </span>
                           <a href={pod.photoUrl} target="_blank" rel="noreferrer">
                             <img
@@ -220,7 +223,14 @@ function LoadDetail() {
                       <div className="font-mono text-[10px] text-muted-foreground">
                         Captured {new Date(pod.capturedAt).toLocaleString("en-ZA")}
                       </div>
-                    </div>
+                      {pod.location?.verified && (
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-positive">
+                          <BadgeCheck className="size-3.5" /> GPS location verified
+                        </div>
+                      )}
+                      </div>
+                    </div>;
+                    })}
                   </div>
                 );
               })()}
@@ -422,6 +432,7 @@ function LoadDetail() {
 
 const TRIP_STEPS: { status: TripStatus; label: string }[] = [
   { status: "SCHEDULED", label: "Scheduled" },
+  { status: "EN_ROUTE_PICKUP", label: "Heading to pickup" },
   { status: "AT_PICKUP", label: "At pickup" },
   { status: "LOADED", label: "Loaded" },
   { status: "IN_TRANSIT", label: "In transit" },

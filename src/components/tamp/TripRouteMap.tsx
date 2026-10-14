@@ -15,7 +15,7 @@ import { useLiveTripPosition } from "@/hooks/useLiveTracking";
 // Before the cargo is loaded the driver heads to the pick-up; after that, to
 // the drop-off. Navigation targets whichever stop is next.
 function nextStopFor(load: Load, trip: Trip) {
-  const toPickup = trip.status === "SCHEDULED" || trip.status === "AT_PICKUP";
+  const toPickup = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP"].includes(trip.status);
   return toPickup
     ? { pos: [load.origin.lat, load.origin.lng] as LatLng, label: load.origin.label, kind: "Pick-up", toPickup }
     : {

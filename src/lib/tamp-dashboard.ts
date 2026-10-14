@@ -5,6 +5,7 @@ import type { Dispute, Load, Match, Party, Trip, TruckPosting } from "@/types/do
 
 export const ACTIVE_TRIP_STATUSES = [
   "SCHEDULED",
+  "EN_ROUTE_PICKUP",
   "AT_PICKUP",
   "LOADED",
   "IN_TRANSIT",

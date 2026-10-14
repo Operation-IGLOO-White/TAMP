@@ -8,6 +8,7 @@ import {
   MapPin,
   Maximize2,
   Minus,
+  Navigation,
   Package,
   PackageCheck,
   Phone,
@@ -41,6 +42,7 @@ interface Job {
 
 const NEXT_STEP: Record<string, string> = {
   SCHEDULED: "Start trip",
+  EN_ROUTE_PICKUP: "Confirm pickup arrival",
   AT_PICKUP: "Loaded",
   LOADED: "In transit",
   IN_TRANSIT: "Arrived at drop-off",
@@ -49,12 +51,13 @@ const NEXT_STEP: Record<string, string> = {
 
 const STATUS_ORDER: Record<string, number> = {
   SCHEDULED: -1,
-  AT_PICKUP: 0,
-  LOADED: 1,
-  IN_TRANSIT: 2,
-  AT_DROPOFF: 3,
-  DELIVERED: 4,
-  COMPLETED: 4,
+  EN_ROUTE_PICKUP: 0,
+  AT_PICKUP: 1,
+  LOADED: 2,
+  IN_TRANSIT: 3,
+  AT_DROPOFF: 4,
+  DELIVERED: 5,
+  COMPLETED: 5,
 };
 
 // Colour-coded status pill matching the tracking design.
@@ -87,7 +90,7 @@ function DriverJobs() {
   // Advance the trip a step. Starting it (from scheduled) also activates the
   // in-app destination navigation; delivering first captures proof of delivery.
   const advance = (job: Job) => {
-    if (job.trip.status === "AT_DROPOFF") {
+    if (job.trip.status === "AT_PICKUP" || job.trip.status === "AT_DROPOFF") {
       setPodJob(job);
       return;
     }
@@ -324,6 +327,7 @@ function DriverJobs() {
       {podJob && (
         <PodCapture
           route={`${podJob.load.origin.label} → ${podJob.load.destination.label}`}
+          kind={podJob.trip.status === "AT_PICKUP" ? "pickup" : "delivery"}
           onCancel={() => setPodJob(null)}
           onConfirm={(pod) => {
             // POD + delivery are one authoritative, atomic server command.
@@ -520,7 +524,30 @@ function TrackingPanel({
 
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {tab === "tracking" && <StageTimeline job={job} />}
+        {tab === "tracking" && (
+          <>
+            <StageTimeline job={job} />
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
+              {(["PICKUP", "DESTINATION"] as const).map((zone) => {
+                const fence = trip.geofences?.[zone];
+                return (
+                  <div key={zone} className="rounded-lg bg-steel/35 px-3 py-2">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      {zone === "PICKUP" ? "Pickup zone" : "Drop-off zone"}
+                    </div>
+                    <div className={`mt-0.5 text-xs font-bold ${fence?.inside ? "text-positive" : "text-foreground"}`}>
+                      {fence?.inside
+                        ? "Inside geofence"
+                        : fence?.distanceM != null
+                          ? `${fence.distanceM.toLocaleString("en-ZA")} m away`
+                          : "Awaiting GPS"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {tab === "info" && (
           <dl className="space-y-2.5 text-sm">
@@ -560,6 +587,11 @@ function TrackingPanel({
       {/* Action footer */}
       {!delivered && (
         <div className="space-y-2 border-t border-border p-3">
+          {trip.suggestedAction && (
+            <div className="rounded-lg border border-positive/25 bg-positive/10 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-positive">
+              GPS verified · {trip.suggestedAction.replaceAll("_", " ")} available
+            </div>
+          )}
           {nextStep && (
             <button
               onClick={onAdvance}
@@ -618,6 +650,7 @@ function StageTimeline({ job }: { job: Job }) {
   const currentIdx = STATUS_ORDER[trip.status] ?? -1;
 
   const stages = [
+    { key: "EN_ROUTE_PICKUP", title: "To pickup", desc: `Heading to ${load.origin.label}`, Icon: Navigation },
     { key: "AT_PICKUP", title: "At pickup", desc: `Collect at ${load.origin.label}`, Icon: ShoppingBag },
     { key: "LOADED", title: "Loaded", desc: "Cargo loaded & secured", Icon: Package },
     { key: "IN_TRANSIT", title: "In transit", desc: "On the road", Icon: Truck },

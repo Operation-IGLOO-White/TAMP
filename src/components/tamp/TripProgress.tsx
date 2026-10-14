@@ -4,21 +4,23 @@
 // derives everything from the trip status so it advances on its own as the
 // driver moves the trip through its lifecycle.
 
-const TRIP_STAGES = ["Pickup", "Loaded", "In transit", "Drop-off", "Delivered"] as const;
+const TRIP_STAGES = ["To pickup", "Pickup", "Loaded", "In transit", "Drop-off", "Delivered"] as const;
 
 function stageIndexFor(status: string): number {
   switch (status) {
-    case "AT_PICKUP":
+    case "EN_ROUTE_PICKUP":
       return 0;
-    case "LOADED":
+    case "AT_PICKUP":
       return 1;
-    case "IN_TRANSIT":
+    case "LOADED":
       return 2;
-    case "AT_DROPOFF":
+    case "IN_TRANSIT":
       return 3;
+    case "AT_DROPOFF":
+      return 4;
     case "DELIVERED":
     case "COMPLETED":
-      return 4;
+      return 5;
     default:
       return 0;
   }

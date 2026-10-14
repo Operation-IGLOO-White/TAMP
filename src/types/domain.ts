@@ -133,6 +133,19 @@ export interface Trip {
   simulatedPosition: { lat: number; lng: number; updatedAt: ISODate } | null;
   progressPct: number;
   etaAt: ISODate | null; // computed from simulation, chipped "Simulated"
+  geofences?: Partial<Record<"PICKUP" | "DESTINATION", { inside: boolean; distanceM?: number; enteredAt?: ISODate; exitedAt?: ISODate }>>;
+  geofenceEvents?: GeofenceEvent[];
+  suggestedAction?: TripStatus | null;
+}
+
+export interface GeofenceEvent {
+  id: UUID;
+  zone: "PICKUP" | "DESTINATION";
+  type: "ENTERED" | "EXITED";
+  at: ISODate;
+  lat: number;
+  lng: number;
+  distanceM: number;
 }
 
 export interface TripEvent {
@@ -185,6 +198,7 @@ export type MatchStatus =
   "SUGGESTED" | "OFFERED" | "ACCEPTED" | "CONFIRMED" | "REJECTED" | "WITHDRAWN" | "EXPIRED";
 export type TripStatus =
   | "SCHEDULED"
+  | "EN_ROUTE_PICKUP"
   | "AT_PICKUP"
   | "LOADED"
   | "IN_TRANSIT"
@@ -248,6 +262,14 @@ export interface Proof {
   photoName?: string | undefined;
   photoUrl?: string | undefined;
   note?: string | undefined;
+  kind?: "PICKUP" | "DELIVERY";
+  location?: {
+    lat: number;
+    lng: number;
+    accuracyM?: number | null;
+    recordedAt: string;
+    verified: boolean;
+  };
 }
 export interface FuelLog {
   id: string;

@@ -16,6 +16,7 @@ import type { Load, Trip, TripStatus } from "@/types/domain";
 // the consignee. No account, no commercials (no rates), no app chrome.
 const STEPS: { status: TripStatus; label: string }[] = [
   { status: "SCHEDULED", label: "Scheduled" },
+  { status: "EN_ROUTE_PICKUP", label: "Heading to pickup" },
   { status: "AT_PICKUP", label: "At pickup" },
   { status: "LOADED", label: "Loaded" },
   { status: "IN_TRANSIT", label: "In transit" },
@@ -25,6 +26,7 @@ const STEPS: { status: TripStatus; label: string }[] = [
 
 const STATUS_HEADLINE: Record<string, string> = {
   SCHEDULED: "Pickup scheduled",
+  EN_ROUTE_PICKUP: "Truck heading to pickup",
   AT_PICKUP: "At the pickup point",
   LOADED: "Cargo loaded",
   IN_TRANSIT: "On the way to you",

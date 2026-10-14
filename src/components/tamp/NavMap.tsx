@@ -29,7 +29,7 @@ function bearing(a: LatLng, b: LatLng): number {
 }
 
 function nextStopFor(load: Load, trip: Trip) {
-  const toPickup = trip.status === "SCHEDULED" || trip.status === "AT_PICKUP";
+  const toPickup = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP"].includes(trip.status);
   return toPickup
     ? { pos: [load.origin.lat, load.origin.lng] as LatLng, label: load.origin.label, toPickup }
     : { pos: [load.destination.lat, load.destination.lng] as LatLng, label: load.destination.label, toPickup };

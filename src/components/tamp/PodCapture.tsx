@@ -15,10 +15,12 @@ export interface PodResult {
 // photo, and a note. Shown when the driver marks a trip Delivered.
 export function PodCapture({
   route,
+  kind = "delivery",
   onConfirm,
   onCancel,
 }: {
   route: string;
+  kind?: "pickup" | "delivery";
   onConfirm: (pod: PodResult) => void;
   onCancel: () => void;
 }) {
@@ -66,7 +68,7 @@ export function PodCapture({
 
   const confirm = () => {
     if (!name.trim()) {
-      setError("Enter the name of who received the delivery.");
+      setError(kind === "pickup" ? "Enter the pickup contact's name." : "Enter the name of who received the delivery.");
       return;
     }
     if (uploadingPhoto) {
@@ -88,7 +90,7 @@ export function PodCapture({
       <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-border bg-graphite shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <div className="text-sm font-bold uppercase">Proof of delivery</div>
+            <div className="text-sm font-bold uppercase">Proof of {kind}</div>
             <div className="truncate text-[11px] text-muted-foreground">{route}</div>
           </div>
           <button onClick={onCancel} aria-label="Close" className="rounded-md p-1.5 text-muted-foreground hover:bg-steel/50 hover:text-foreground">
@@ -99,7 +101,7 @@ export function PodCapture({
         <div className="space-y-4 overflow-y-auto p-4">
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Received by
+              {kind === "pickup" ? "Released by" : "Received by"}
             </span>
             <input
               value={name}
@@ -107,7 +109,7 @@ export function PodCapture({
                 setName(e.target.value);
                 setError("");
               }}
-              placeholder="Full name of recipient"
+              placeholder={kind === "pickup" ? "Full name of pickup contact" : "Full name of recipient"}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-signal"
               autoFocus
             />
@@ -142,7 +144,7 @@ export function PodCapture({
             ) : (
               <>
                 <Camera className="size-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Add a delivery photo (optional)</span>
+                <span className="text-muted-foreground">Add a {kind} photo (optional)</span>
               </>
             )}
             <input
@@ -193,7 +195,7 @@ export function PodCapture({
             onClick={confirm}
             className="w-full rounded-lg bg-signal py-3 text-sm font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
           >
-            Confirm delivery
+            Confirm {kind}
           </button>
         </div>
       </div>
