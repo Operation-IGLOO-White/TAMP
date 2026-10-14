@@ -103,21 +103,23 @@ accepts without requiring both parties to agree again.
 
 ## Phase 3 - real driver tracking
 
-- [ ] Add driver location permission and clear foreground/background tracking
-      states in the driver PWA.
-- [ ] Send latitude, longitude, accuracy, heading, speed and captured time every
-      5-10 seconds during an active trip, with slower updates while stationary.
-- [ ] Authenticate every location update against the assigned driver and trip.
-- [ ] Store the latest position in Redis and durable samples in PostGIS.
-- [ ] Add authenticated WebSocket channels scoped to the trip's parties and
+- [x] Add driver location permission and foreground tracking while the driver workspace is open.
+      Background tracking still requires the planned installable driver PWA.
+- [x] Send latitude, longitude, accuracy, heading, speed and captured time, throttled
+      to at most one update every five seconds during an active trip.
+- [x] Authenticate every location update against the assigned driver and trip.
+- [x] Store the latest position in the trip snapshot and durable samples in PostgreSQL.
+      Add PostGIS when spatial querying/geofences are introduced; Redis is deferred
+      until the monolith runs with multiple workers.
+- [x] Add authenticated WebSocket channels scoped to the trip's parties and
       authorized administrators.
-- [ ] Replace `simulatedPosition` and progress interpolation with real GPS data;
+- [x] Prefer real GPS data over `simulatedPosition` and progress interpolation;
       retain an explicit demo mode only for development.
-- [ ] Detect stale, impossible and out-of-order positions.
+- [x] Detect stale, impossible and out-of-order positions.
 - [ ] Recalculate remaining distance and ETA after meaningful movement or route
       deviation.
-- [ ] Show last-updated time and degraded/offline tracking states.
-- [ ] Add location-history retention and deletion rules.
+- [x] Show last-updated time and degraded/offline tracking states.
+- [x] Retain location history for 30 days by default and delete older samples during ingestion.
 
 **Done when:** both parties can follow the assigned vehicle on the road and can
 tell whether its location is current.

@@ -12,6 +12,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { computeRoute } from "@/fns/routes";
 import { geoJsonLineToLatLng, pointAlong, type LatLng } from "@/lib/polyline";
 import type { Load, Trip } from "@/types/domain";
+import { useLiveTripPosition } from "@/hooks/useLiveTracking";
 
 const STYLE =
   import.meta.env["VITE_MAP_STYLE_URL"] || "https://tiles.openfreemap.org/styles/liberty";
@@ -41,6 +42,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
   const flownRef = useRef(false);
   const [route, setRoute] = useState<LatLng[] | null>(null);
   const [info, setInfo] = useState<{ km: number; min: number } | null>(null);
+  const livePosition = useLiveTripPosition(trip.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,7 +125,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
       drawAndFly(maplibregl, map);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route, trip.progressPct, trip.status]);
+  }, [route, trip.progressPct, trip.status, livePosition]);
 
   // Draw the route line + pick-up/drop-off/truck markers, then sweep the camera
   // from the flat overview into the tilted road view.
@@ -164,8 +166,9 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
 
     // Truck position: live GPS fix, else interpolated along the road by progress.
     const pct = Math.min(100, Math.max(0, trip.progressPct));
-    const truck: LatLng = trip.simulatedPosition
-      ? [trip.simulatedPosition.lat, trip.simulatedPosition.lng]
+    const currentPosition = livePosition ?? trip.simulatedPosition;
+    const truck: LatLng = currentPosition
+      ? [currentPosition.lat, currentPosition.lng]
       : route && route.length > 1
         ? pointAlong(route, pct / 100)
         : [o[0] + (d[0] - o[0]) * (pct / 100), o[1] + (d[1] - o[1]) * (pct / 100)];

@@ -10,6 +10,7 @@ import "leaflet/dist/leaflet.css";
 import { computeRoute } from "@/fns/routes";
 import { geoJsonLineToLatLng, pointAlong, type LatLng } from "@/lib/polyline";
 import type { Load, Trip } from "@/types/domain";
+import { useLiveTripPosition } from "@/hooks/useLiveTracking";
 
 // Before the cargo is loaded the driver heads to the pick-up; after that, to
 // the drop-off. Navigation targets whichever stop is next.
@@ -46,6 +47,7 @@ export function TripRouteMap({
   const boundsRef = useRef<LatLng[] | null>(null);
   const [route, setRoute] = useState<LatLng[] | null>(null);
   const [info, setInfo] = useState<{ km: number; min: number } | null>(null);
+  const livePosition = useLiveTripPosition(trip.id);
 
   // Fetch the real road geometry once.
   useEffect(() => {
@@ -117,8 +119,9 @@ export function TripRouteMap({
 
       // Truck: live GPS fix, else interpolated along the real road by progress.
       const pct = Math.min(100, Math.max(0, trip.progressPct));
-      const truckPos: LatLng = trip.simulatedPosition
-        ? [trip.simulatedPosition.lat, trip.simulatedPosition.lng]
+      const currentPosition = livePosition ?? trip.simulatedPosition;
+      const truckPos: LatLng = currentPosition
+        ? [currentPosition.lat, currentPosition.lng]
         : route && route.length > 1
           ? pointAlong(route, pct / 100)
           : [o[0] + (d[0] - o[0]) * (pct / 100), o[1] + (d[1] - o[1]) * (pct / 100)];
@@ -139,7 +142,7 @@ export function TripRouteMap({
     return () => {
       cancelled = true;
     };
-  }, [route, load, trip.id, trip.status, trip.progressPct, trip.simulatedPosition, nav]);
+  }, [route, load, trip.id, trip.status, trip.progressPct, trip.simulatedPosition, livePosition, nav]);
 
   // Leaflet mismeasures if its container is still sizing (flex/modal). Remeasure
   // and re-fit the route whenever the container resizes, plus a few times on mount.
@@ -181,6 +184,9 @@ export function TripRouteMap({
     info && !stop.toPickup ? Math.max(0, Math.round(info.km * (1 - pctDone / 100))) : null;
   const remMin =
     info && !stop.toPickup ? Math.max(0, Math.round(info.min * (1 - pctDone / 100))) : null;
+  const liveAgeSeconds = livePosition
+    ? Math.max(0, Math.round((Date.now() - new Date(livePosition.recordedAt).getTime()) / 1000))
+    : null;
 
   return (
     <div className={`flex flex-col overflow-hidden ${className ?? ""}`}>
@@ -217,7 +223,13 @@ export function TripRouteMap({
           </span>
         </span>
         <span className="font-mono text-muted-foreground">
-          {info ? `${info.km} km · ${Math.floor(info.min / 60)}h ${info.min % 60}m` : "Routing…"}
+          {liveAgeSeconds != null
+            ? liveAgeSeconds < 30
+              ? `GPS live · ${liveAgeSeconds}s ago`
+              : `GPS stale · ${Math.floor(liveAgeSeconds / 60)}m ago`
+            : info
+              ? `${info.km} km · ${Math.floor(info.min / 60)}h ${info.min % 60}m`
+              : "Routing…"}
         </span>
       </div>
     </div>

@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   SlidersHorizontal,
   Truck,
+  Radio,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -29,6 +30,7 @@ import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { openDisputeForTrip } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import type { Load, Party, Trip, TruckPosting } from "@/types/domain";
+import { useDriverLocationSharing } from "@/hooks/useLiveTracking";
 
 interface Job {
   trip: Trip;
@@ -110,6 +112,11 @@ function DriverJobs() {
         .sort((a, b) => Number(isActiveTrip(b.trip.status)) - Number(isActiveTrip(a.trip.status))),
     [trips, matches, trucks, loads, parties],
   );
+  const activeTripIds = useMemo(
+    () => jobs.filter((job) => isActiveTrip(job.trip.status)).map((job) => job.trip.id),
+    [jobs],
+  );
+  const locationSharing = useDriverLocationSharing(activeTripIds);
 
   const counts = {
     all: jobs.length,
@@ -140,7 +147,30 @@ function DriverJobs() {
         {/* ── Loads list ─────────────────────────────────────────── */}
         <div className="flex w-full shrink-0 flex-col border-b border-border lg:w-[400px] lg:border-b-0 lg:border-r">
           <div className="border-b border-border p-4 sm:p-5">
-            <h1 className="mb-3 text-xl font-extrabold tracking-tight">My jobs</h1>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h1 className="text-xl font-extrabold tracking-tight">My jobs</h1>
+              {activeTripIds.length > 0 && (
+                <span
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
+                    locationSharing === "sharing"
+                      ? "bg-positive/15 text-positive"
+                      : locationSharing === "denied" || locationSharing === "error"
+                        ? "bg-danger/15 text-danger"
+                        : "bg-signal/15 text-signal"
+                  }`}
+                  title="Location is shared only for your active assigned trip"
+                >
+                  <Radio className="size-3" />
+                  {locationSharing === "sharing"
+                    ? "GPS live"
+                    : locationSharing === "denied"
+                      ? "GPS blocked"
+                      : locationSharing === "error"
+                        ? "GPS error"
+                        : "Starting GPS"}
+                </span>
+              )}
+            </div>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input

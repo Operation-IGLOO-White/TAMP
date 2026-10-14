@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     .map((host) => host.trim())
     .filter(Boolean);
   const proxy = {
-    "/api": { target: env["VITE_API_TARGET"] || "http://localhost:5000", changeOrigin: true },
+    "/api": { target: env["VITE_API_TARGET"] || "http://localhost:5000", changeOrigin: true, ws: true },
   };
   return {
     plugins: [react()],
