@@ -22,13 +22,12 @@ import {
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
-import { DisputeDialog } from "@/components/tamp/DisputeDialog";
+import { IncidentDialog } from "@/components/tamp/IncidentDialog";
 import { PodCapture } from "@/components/tamp/PodCapture";
 import { NavMap } from "@/components/tamp/NavMap";
 import { TripRouteMap } from "@/components/tamp/TripRouteMap";
 import { zar } from "@/lib/tamp-data";
 import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
-import { openDisputeForTrip } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import type { Load, Party, Trip, TruckPosting } from "@/types/domain";
 import { useDriverLocationSharing } from "@/hooks/useLiveTracking";
@@ -72,12 +71,12 @@ function statusMeta(status: string): { label: string; cls: string } {
 type FilterKey = "all" | "in-transit" | "delivered";
 
 function DriverJobs() {
-  const { trucks, matches, loads, trips, parties, disputes, advanceTrip } = useTamp();
+  const { trucks, matches, loads, trips, parties, incidents, advanceTrip } = useTamp();
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [disputeLoadId, setDisputeLoadId] = useState<string | null>(null);
+  const [incidentLoadId, setIncidentLoadId] = useState<string | null>(null);
   const [mapJob, setMapJob] = useState<Job | null>(null);
   const [mapNav, setMapNav] = useState(false);
   const [podJob, setPodJob] = useState<Job | null>(null);
@@ -259,9 +258,9 @@ function DriverJobs() {
               />
               <TrackingPanel
                 job={selected}
-                disputed={!!openDisputeForTrip(selected.trip.id, disputes)}
+                disputed={incidents.some((item) => item.tripId === selected.trip.id && item.status === "OPEN")}
                 onAdvance={() => advance(selected)}
-                onFlag={() => setDisputeLoadId(selected.load.id)}
+                onFlag={() => setIncidentLoadId(selected.load.id)}
                 onFullscreen={() => openMap(selected, true)}
               />
             </>
@@ -276,10 +275,10 @@ function DriverJobs() {
         </div>
       </div>
 
-      <DisputeDialog
-        loadId={disputeLoadId ?? ""}
-        open={disputeLoadId !== null}
-        onClose={() => setDisputeLoadId(null)}
+      <IncidentDialog
+        loadId={incidentLoadId ?? ""}
+        open={incidentLoadId !== null}
+        onClose={() => setIncidentLoadId(null)}
       />
 
       {/* Fullscreen route map / in-app navigation (mobile + "expand" + Start trip). */}

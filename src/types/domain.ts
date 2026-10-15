@@ -126,6 +126,8 @@ export interface RuleResult {
 
 export interface Trip {
   disputed?: boolean;
+  operationalStatus?: "DELAYED" | "ACTION_REQUIRED" | "CANCELLED";
+  activeIncidentIds?: UUID[];
   id: UUID; // display ref: TP-0058
   matchId: UUID;
   status: TripStatus;
@@ -136,6 +138,23 @@ export interface Trip {
   geofences?: Partial<Record<"PICKUP" | "DESTINATION", { inside: boolean; distanceM?: number; enteredAt?: ISODate; exitedAt?: ISODate }>>;
   geofenceEvents?: GeofenceEvent[];
   suggestedAction?: TripStatus | null;
+}
+
+export type IncidentKind = "DELAY" | "BREAKDOWN" | "ACCIDENT" | "NO_SHOW" | "CARGO_ISSUE" | "ROUTE_OBSTRUCTION" | "CANCELLATION";
+
+export interface TripIncident {
+  id: UUID;
+  tripId: UUID;
+  loadId: UUID;
+  truckId: UUID;
+  kind: IncidentKind;
+  description: string;
+  status: "OPEN" | "RESOLVED";
+  delayMinutes?: number;
+  reportedById: UUID;
+  reportedByRole: Role;
+  reportedAt: ISODate;
+  location?: { lat: number; lng: number; recordedAt: ISODate } | null;
 }
 
 export interface GeofenceEvent {

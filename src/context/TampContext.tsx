@@ -19,8 +19,11 @@ import {
   acceptMatchCmd,
   acceptRequestCmd,
   advanceTripCmd,
+  cancelTripCmd,
   confirmMatchCmd,
+  reportIncidentCmd,
   type PodInput,
+  type OperationalIncidentKind,
 } from "@/fns/commands";
 import type { OfferProof } from "@/fns/commands";
 import { applyDelta, loadState, type SnapshotDelta } from "@/fns/snapshot";
@@ -45,6 +48,7 @@ import type {
   Reservation,
   Role,
   Trip,
+  TripIncident,
   TripStatus,
   TruckPosting,
   VerificationStatus,
@@ -70,6 +74,7 @@ interface State {
   fuelLogs: FuelLog[];
   maintenance: MaintenanceTask[];
   proofs: Proof[];
+  incidents: TripIncident[];
   sidebarCollapsed: boolean;
   notificationsReadAt: Record<Role, string>;
 }
@@ -187,6 +192,8 @@ interface Store extends State {
   confirmMatch: (loadId: string, truckId: string | undefined, proof: OfferProof) => Promise<void>;
   declineMatch: (loadId: string, truckId?: string) => void;
   advanceTrip: (loadId: string, proof?: PodInput) => Promise<void>;
+  reportIncident: (loadId: string, kind: OperationalIncidentKind, description: string, delayMinutes?: number) => Promise<boolean>;
+  cancelTrip: (loadId: string, reason: string) => Promise<boolean>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
   flagDispute: (loadId: string, category: DisputeCategory, description: string) => void;
   resolveDispute: (loadId: string) => void;
@@ -241,6 +248,7 @@ function initial(): State {
     fuelLogs: [],
     maintenance: [],
     proofs: [],
+    incidents: [],
     sidebarCollapsed: false,
     notificationsReadAt: {
       FREIGHT_OWNER: new Date(0).toISOString(),
@@ -266,6 +274,7 @@ const DOMAIN_KEYS = [
   "fuelLogs",
   "maintenance",
   "proofs",
+  "incidents",
 ] as const;
 type DomainKey = (typeof DOMAIN_KEYS)[number];
 type EntityMaps = Record<DomainKey, Map<string, string>>;
@@ -392,6 +401,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
         fuelLogs: snap.fuelLogs,
         maintenance: snap.maintenance,
         proofs: snap.proofs,
+        incidents: snap.incidents,
       }));
       persistedRef.current = mapsFrom(snap);
     } catch {
@@ -420,6 +430,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
       fuelLogs: [],
       maintenance: [],
       proofs: [],
+      incidents: [],
     }));
   }, []);
 
@@ -1135,6 +1146,30 @@ export function TampProvider({ children }: { children: ReactNode }) {
           return;
         }
         await hydrateDomain();
+      },
+
+      reportIncident: async (loadId, kind, description, delayMinutes) => {
+        try {
+          await flushPending();
+          await reportIncidentCmd(loadId, kind, description, delayMinutes);
+          await hydrateDomain();
+          return true;
+        } catch (err) {
+          reportSaveError(err);
+          return false;
+        }
+      },
+
+      cancelTrip: async (loadId, reason) => {
+        try {
+          await flushPending();
+          await cancelTripCmd(loadId, reason);
+          await hydrateDomain();
+          return true;
+        } catch (err) {
+          reportSaveError(err);
+          return false;
+        }
       },
 
       // Two-way rating. The ratee is the *other* side of the engagement: a

@@ -80,7 +80,7 @@ function ruleEarned(breakdown: MatchScoreComponent[], ruleId: string): number {
 
 function LoadDetail() {
   const { loadId } = useParams<{ loadId: string }>();
-  const { loads, trucks, parties, matches, trips, disputes, audit, proofs, acceptMatch, rejectMatch } =
+  const { loads, trucks, parties, matches, trips, disputes, incidents, audit, proofs, acceptMatch, rejectMatch } =
     useTamp();
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [showUnqualified, setShowUnqualified] = useState(false);
@@ -167,6 +167,26 @@ function LoadDetail() {
                   Trip timeline
                 </h3>
                 <TripTimeline trip={trip} />
+              </div>
+            )}
+
+            {trip && incidents.some((item) => item.tripId === trip.id) && (
+              <div className="overflow-hidden rounded-xl border border-danger/30 bg-danger/5">
+                <h3 className="border-b border-danger/20 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-danger">
+                  Operational updates
+                </h3>
+                <div className="divide-y divide-danger/15">
+                  {incidents.filter((item) => item.tripId === trip.id).map((item) => (
+                    <div key={item.id} className="p-4 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <strong>{item.kind.replaceAll("_", " ")}</strong>
+                        <span className="font-mono text-[10px] text-muted-foreground">{new Date(item.reportedAt).toLocaleString("en-ZA")}</span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{item.description}</p>
+                      {item.delayMinutes && <p className="mt-2 font-bold text-danger">ETA delayed by {item.delayMinutes} minutes</p>}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

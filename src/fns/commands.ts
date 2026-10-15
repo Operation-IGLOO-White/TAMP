@@ -55,3 +55,16 @@ export const acceptRequestCmd = (
   proof: OfferProof,
 ): Promise<{ ok: true }> =>
   trpc.mutation("commands.acceptRequest", { loadId, truckId, ...proof });
+
+export type OperationalIncidentKind = "DELAY" | "BREAKDOWN" | "ACCIDENT" | "NO_SHOW" | "CARGO_ISSUE" | "ROUTE_OBSTRUCTION";
+
+export const reportIncidentCmd = (loadId: string, kind: OperationalIncidentKind, description: string, delayMinutes?: number) =>
+  trpc.mutation<{ ok: true; incidentId: string }>("commands.reportIncident", {
+    loadId,
+    kind,
+    description,
+    ...(delayMinutes ? { delayMinutes } : {}),
+  });
+
+export const cancelTripCmd = (loadId: string, reason: string) =>
+  trpc.mutation<{ ok: true; incidentId: string }>("commands.cancelTrip", { loadId, reason });
