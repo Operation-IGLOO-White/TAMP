@@ -36,6 +36,9 @@ const Page29 = lazy(() => import("@/pages/transporter/profile"));
 const Page30 = lazy(() => import("@/pages/trucks/$truckId"));
 const Page31 = lazy(() => import("@/pages/welcome"));
 const Page32 = lazy(() => import("@/pages/admin/logs"));
+const Page33 = lazy(() => import("@/pages/owner/billing"));
+const Page34 = lazy(() => import("@/pages/transporter/earnings"));
+const Page35 = lazy(() => import("@/pages/admin/finance"));
 
 export default function App() {
   return (
@@ -257,6 +260,9 @@ export default function App() {
                 </RequireRole>
               }
             />
+            <Route path="/owner/billing" element={<RequireRole role={"FREIGHT_OWNER"}><Page33 /></RequireRole>} />
+            <Route path="/transporter/earnings" element={<RequireRole role={["TRANSPORTER", "DRIVER"]}><Page34 /></RequireRole>} />
+            <Route path="/admin/finance" element={<RequireRole role={"ADMIN"}><Page35 /></RequireRole>} />
             <Route
               path="*"
               element={

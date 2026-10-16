@@ -12,6 +12,8 @@ import type {
   Reservation,
   Trip,
   TripIncident,
+  Invoice,
+  FinancialTransaction,
   TruckPosting,
 } from "./domain";
 
@@ -30,6 +32,8 @@ export interface DomainSnapshot {
   maintenance: MaintenanceTask[];
   proofs: Proof[];
   incidents: TripIncident[];
+  invoices: Invoice[];
+  transactions: FinancialTransaction[];
 }
 export interface RouteResult {
   geometry: {

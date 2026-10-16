@@ -29,6 +29,7 @@ import type { OfferProof } from "@/fns/commands";
 import { applyDelta, loadState, type SnapshotDelta } from "@/fns/snapshot";
 import { bodyTypesForCargo, scoreLoadAgainstTrucks } from "@/fns/matching";
 import { runIncidentAction, type IncidentAction } from "@/fns/operations";
+import { runInvoiceAction, type InvoiceAction } from "@/fns/finance";
 import { priceLoadMoney } from "@/fns/pricing";
 import { activeMatchForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import type {
@@ -39,6 +40,8 @@ import type {
   Dispute,
   DisputeCategory,
   FuelLog,
+  FinancialTransaction,
+  Invoice,
   Load,
   MaintenanceKind,
   MaintenanceTask,
@@ -76,6 +79,8 @@ interface State {
   maintenance: MaintenanceTask[];
   proofs: Proof[];
   incidents: TripIncident[];
+  invoices: Invoice[];
+  transactions: FinancialTransaction[];
   sidebarCollapsed: boolean;
   notificationsReadAt: Record<Role, string>;
 }
@@ -196,6 +201,7 @@ interface Store extends State {
   reportIncident: (loadId: string, kind: OperationalIncidentKind, description: string, delayMinutes?: number) => Promise<boolean>;
   cancelTrip: (loadId: string, reason: string) => Promise<boolean>;
   updateIncident: (incidentId: string, action: IncidentAction, options?: { assigneeId?: string; note?: string; etaMinutes?: number }) => Promise<boolean>;
+  updateInvoice: (invoiceId: string, action: InvoiceAction, reference: string, note?: string) => Promise<boolean>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
   flagDispute: (loadId: string, category: DisputeCategory, description: string) => void;
   resolveDispute: (loadId: string) => void;
@@ -251,6 +257,8 @@ function initial(): State {
     maintenance: [],
     proofs: [],
     incidents: [],
+    invoices: [],
+    transactions: [],
     sidebarCollapsed: false,
     notificationsReadAt: {
       FREIGHT_OWNER: new Date(0).toISOString(),
@@ -277,6 +285,8 @@ const DOMAIN_KEYS = [
   "maintenance",
   "proofs",
   "incidents",
+  "invoices",
+  "transactions",
 ] as const;
 type DomainKey = (typeof DOMAIN_KEYS)[number];
 type EntityMaps = Record<DomainKey, Map<string, string>>;
@@ -404,6 +414,8 @@ export function TampProvider({ children }: { children: ReactNode }) {
         maintenance: snap.maintenance,
         proofs: snap.proofs,
         incidents: snap.incidents,
+        invoices: snap.invoices,
+        transactions: snap.transactions,
       }));
       persistedRef.current = mapsFrom(snap);
     } catch {
@@ -433,6 +445,8 @@ export function TampProvider({ children }: { children: ReactNode }) {
       maintenance: [],
       proofs: [],
       incidents: [],
+      invoices: [],
+      transactions: [],
     }));
   }, []);
 
@@ -1178,6 +1192,18 @@ export function TampProvider({ children }: { children: ReactNode }) {
         try {
           await flushPending();
           await runIncidentAction(incidentId, action, options);
+          await hydrateDomain();
+          return true;
+        } catch (err) {
+          reportSaveError(err);
+          return false;
+        }
+      },
+
+      updateInvoice: async (invoiceId, action, reference, note) => {
+        try {
+          await flushPending();
+          await runInvoiceAction(invoiceId, action, reference, note);
           await hydrateDomain();
           return true;
         } catch (err) {

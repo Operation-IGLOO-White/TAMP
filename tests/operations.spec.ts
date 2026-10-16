@@ -44,7 +44,7 @@ const trip = {
 async function mockOperationalApi(page: Page) {
   const snapshot = {
     parties: [driver, owner, carrier], loads: [load], trucks: [truck], matches: [match], trips: [trip],
-    ratings: [], disputes: [], acceptances: [], reservations: [], audit: [], fuelLogs: [], maintenance: [], proofs: [], incidents: [],
+    ratings: [], disputes: [], acceptances: [], reservations: [], audit: [], fuelLogs: [], maintenance: [], proofs: [], incidents: [], invoices: [], transactions: [],
   };
   await page.route("**/api/trpc/**", async (route) => {
     const names = new URL(route.request().url()).pathname.split("/api/trpc/")[1]!.split(",");

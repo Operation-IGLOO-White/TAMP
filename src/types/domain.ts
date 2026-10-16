@@ -201,12 +201,53 @@ export interface AuditEvent {
   eventType: string;
   actorId: UUID;
   actorRole: Role | "SYSTEM";
-  subjectType: "LOAD" | "TRUCK" | "MATCH" | "TRIP" | "USER" | "DISPUTE";
+  subjectType: "LOAD" | "TRUCK" | "MATCH" | "TRIP" | "USER" | "DISPUTE" | "INVOICE";
   subjectId: UUID;
   summary: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
   at: ISODate;
+}
+
+export type InvoiceStatus = "ISSUED" | "PAID" | "SETTLED" | "VOID";
+export interface Invoice {
+  id: UUID;
+  invoiceNumber: string;
+  tripId: UUID;
+  loadId: UUID;
+  matchId: UUID;
+  ownerId: UUID;
+  carrierId: UUID;
+  currency: "ZAR";
+  subtotal: number;
+  vatRate: number;
+  vatAmount: number;
+  total: number;
+  platformFeeRate: number;
+  platformFee: number;
+  carrierPayout: number;
+  status: InvoiceStatus;
+  payoutStatus: "PENDING" | "PAID";
+  issuedAt: ISODate;
+  dueAt: ISODate;
+  paidAt?: ISODate | null;
+  paidOutAt?: ISODate | null;
+  paymentReference?: string;
+  payoutReference?: string;
+  lineItems: { description: string; quantity: number; unitAmount: number; amount: number }[];
+}
+
+export interface FinancialTransaction {
+  id: UUID;
+  invoiceId: UUID;
+  type: "PAYMENT" | "PAYOUT" | "VOID";
+  amount: number;
+  currency: "ZAR";
+  status: "SUCCEEDED";
+  reference: string;
+  note?: string;
+  createdAt: ISODate;
+  recordedById: UUID;
 }
 
 export interface Dispute {
