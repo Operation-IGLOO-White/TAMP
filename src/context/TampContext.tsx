@@ -28,6 +28,7 @@ import {
 import type { OfferProof } from "@/fns/commands";
 import { applyDelta, loadState, type SnapshotDelta } from "@/fns/snapshot";
 import { bodyTypesForCargo, scoreLoadAgainstTrucks } from "@/fns/matching";
+import { runIncidentAction, type IncidentAction } from "@/fns/operations";
 import { priceLoadMoney } from "@/fns/pricing";
 import { activeMatchForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import type {
@@ -194,6 +195,7 @@ interface Store extends State {
   advanceTrip: (loadId: string, proof?: PodInput) => Promise<void>;
   reportIncident: (loadId: string, kind: OperationalIncidentKind, description: string, delayMinutes?: number) => Promise<boolean>;
   cancelTrip: (loadId: string, reason: string) => Promise<boolean>;
+  updateIncident: (incidentId: string, action: IncidentAction, options?: { assigneeId?: string; note?: string; etaMinutes?: number }) => Promise<boolean>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
   flagDispute: (loadId: string, category: DisputeCategory, description: string) => void;
   resolveDispute: (loadId: string) => void;
@@ -1164,6 +1166,18 @@ export function TampProvider({ children }: { children: ReactNode }) {
         try {
           await flushPending();
           await cancelTripCmd(loadId, reason);
+          await hydrateDomain();
+          return true;
+        } catch (err) {
+          reportSaveError(err);
+          return false;
+        }
+      },
+
+      updateIncident: async (incidentId, action, options = {}) => {
+        try {
+          await flushPending();
+          await runIncidentAction(incidentId, action, options);
           await hydrateDomain();
           return true;
         } catch (err) {

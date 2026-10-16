@@ -149,12 +149,22 @@ export interface TripIncident {
   truckId: UUID;
   kind: IncidentKind;
   description: string;
-  status: "OPEN" | "RESOLVED";
+  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVING" | "RESOLVED";
   delayMinutes?: number;
   reportedById: UUID;
   reportedByRole: Role;
   reportedAt: ISODate;
   location?: { lat: number; lng: number; recordedAt: ISODate } | null;
+  acknowledgedAt?: ISODate;
+  acknowledgedById?: UUID;
+  assignedToId?: UUID;
+  assignedAt?: ISODate;
+  resolutionStartedAt?: ISODate;
+  resolutionNote?: string;
+  resolvedAt?: ISODate;
+  resolvedById?: UUID;
+  lastNote?: string;
+  updates?: { action: string; at: ISODate; byUserId: UUID; note?: string }[];
 }
 
 export interface GeofenceEvent {

@@ -34,6 +34,9 @@ async function mockApi(page: Page, role?: string) {
     proofs: [],
     incidents: [],
   };
+  await page.route("**/api/v1/system-logs**", (route) =>
+    route.fulfill({ json: { groups: [{ name: "modules", files: [] }, { name: "services", files: [] }] } }),
+  );
   await page.route("**/api/trpc/**", async (route) => {
     const paths = new URL(route.request().url()).pathname.split("/api/trpc/")[1]!.split(",");
     const result = paths.map((path) => ({
