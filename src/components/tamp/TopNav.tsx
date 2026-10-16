@@ -71,8 +71,8 @@ export function TopNav() {
           >
             <Menu className="size-5" />
           </button>
-          <Link to={HOME_BY_ROLE[role]} className="rounded-xl transition-transform hover:scale-[1.02]">
-            <BrandLogo className="h-9" priority />
+          <Link to={HOME_BY_ROLE[role]} className="transition-transform hover:scale-[1.02]">
+            <BrandLogo className="h-12" priority />
           </Link>
         </div>
 

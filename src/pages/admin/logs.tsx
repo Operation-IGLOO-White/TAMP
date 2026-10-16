@@ -1,149 +1,105 @@
-
-import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Download, FileText, Folder, RefreshCw, Search, Server } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
-import { Panel } from "@/components/tamp/StatCard";
-import type { AuditEvent } from "@/types/domain";
-import { useTamp } from "@/context/TampContext";
+import { listSystemLogs, readSystemLog, systemLogDownloadUrl, type SystemLogFile, type SystemLogGroup } from "@/fns/system-logs";
 
-// The audit trail IS the system log — every domain event, incl. SYSTEM-actor
-// events written by the background scheduler (e.g. MATCH_EXPIRED).
-type ActorFilter = "ALL" | AuditEvent["actorRole"];
-
-const ROLE_FILTERS: ActorFilter[] = [
-  "ALL",
-  "SYSTEM",
-  "ADMIN",
-  "FREIGHT_OWNER",
-  "TRANSPORTER",
-  "DRIVER",
-];
-
-const ROLE_LABEL: Record<string, string> = {
-  ALL: "All",
-  SYSTEM: "System",
-  ADMIN: "Admin",
-  FREIGHT_OWNER: "Cargo owners",
-  TRANSPORTER: "Carriers",
-  DRIVER: "Drivers",
-};
-
-const roleTone = (role: string) =>
-  role === "SYSTEM"
-    ? "bg-steel/60 text-muted-foreground"
-    : role === "ADMIN"
-      ? "bg-signal/20 text-signal"
-      : "bg-steel/40 text-foreground";
+const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
 
 function SystemLogsPage() {
-  const { audit } = useTamp();
-  const [role, setRole] = useState<ActorFilter>("ALL");
+  const [groups, setGroups] = useState<SystemLogGroup[]>([]);
+  const [activeGroup, setActiveGroup] = useState("modules");
+  const [selected, setSelected] = useState<SystemLogFile | null>(null);
+  const [content, setContent] = useState("");
+  const [truncated, setTruncated] = useState(false);
   const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return [...audit]
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .filter((e) => (role === "ALL" ? true : e.actorRole === role))
-      .filter((e) =>
-        !q
-          ? true
-          : [e.eventType, e.summary, e.subjectId, e.actorId, e.eventId]
-              .join(" ")
-              .toLowerCase()
-              .includes(q),
-      );
-  }, [audit, role, query]);
+  const loadIndex = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await listSystemLogs();
+      setGroups(result.groups);
+      const files = result.groups.find((group) => group.name === activeGroup)?.files ?? [];
+      setSelected((previous) => files.find((file) => file.path === previous?.path) ?? files[0] ?? null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "System logs could not be loaded");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeGroup]);
+
+  useEffect(() => { void loadIndex(); }, [loadIndex]);
+  useEffect(() => {
+    if (!selected) { setContent(""); return; }
+    let active = true;
+    readSystemLog(activeGroup, selected.name)
+      .then((result) => { if (active) { setContent(result.content); setTruncated(result.truncated); } })
+      .catch((cause) => active && setError(cause instanceof Error ? cause.message : "Log could not be read"));
+    return () => { active = false; };
+  }, [activeGroup, selected]);
+
+  const files = useMemo(
+    () => groups.find((group) => group.name === activeGroup)?.files ?? [],
+    [activeGroup, groups],
+  );
+  const visibleFiles = useMemo(() => {
+    const value = query.trim().toLowerCase();
+    return value ? files.filter((file) => file.name.toLowerCase().includes(value)) : files;
+  }, [files, query]);
+
+  const chooseGroup = (name: string) => {
+    setActiveGroup(name);
+    setQuery("");
+    setSelected(groups.find((group) => group.name === name)?.files[0] ?? null);
+  };
 
   return (
     <AppShell>
-      <PageHeader title="System Logs" />
-
-      <div className="space-y-4 p-6">
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap gap-1.5">
-            {ROLE_FILTERS.map((r) => {
-              const on = role === r;
-              return (
-                <button
-                  key={r}
-                  onClick={() => setRole(r)}
-                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
-                    on
-                      ? "border-signal bg-signal/15 text-foreground"
-                      : "border-border text-muted-foreground hover:bg-steel/40"
-                  }`}
-                >
-                  {ROLE_LABEL[r] ?? r}
-                </button>
-              );
-            })}
-          </div>
-          <label className="ml-auto flex min-w-56 flex-1 items-center gap-2 rounded-md border border-border bg-graphite px-3 py-1.5 sm:flex-none">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search events, IDs, summaries…"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </label>
+      <PageHeader title="System Logs" actions={
+        <button onClick={() => void loadIndex()} className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs font-semibold hover:bg-steel/30">
+          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </button>
+      } />
+      <div className="flex min-h-full flex-col bg-[#f7f9fb] p-4 sm:p-6">
+        <p className="mb-5 text-sm text-muted-foreground">Browse backend module and service log files directly from the server.</p>
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm">
+          <Server className="size-4 text-muted-foreground" /><span className="text-muted-foreground">logs</span><span>›</span><strong>{activeGroup}</strong>
         </div>
-
-        <Panel title={`Event log (${rows.length})`}>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-xs">
-              <thead>
-                <tr className="border-b border-border text-left text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  <th className="w-44 p-2.5 font-bold">Time</th>
-                  <th className="w-24 p-2.5 font-bold">Actor</th>
-                  <th className="w-48 p-2.5 font-bold">Event</th>
-                  <th className="p-2.5 font-bold">Detail</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-6 text-center text-muted-foreground">
-                      No log entries match your filters.
-                    </td>
-                  </tr>
-                )}
-                {rows.map((e) => (
-                  <tr key={e.id} className="align-top hover:bg-steel/20">
-                    <td className="p-2.5 font-mono text-muted-foreground">
-                      {new Date(e.at).toLocaleString("en-ZA", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </td>
-                    <td className="p-2.5">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${roleTone(e.actorRole)}`}
-                      >
-                        {ROLE_LABEL[e.actorRole] ?? e.actorRole}
-                      </span>
-                    </td>
-                    <td className="p-2.5">
-                      <div className="font-semibold text-foreground">{e.eventType}</div>
-                      <div className="font-mono text-[10px] text-muted-foreground">{e.eventId}</div>
-                    </td>
-                    <td className="p-2.5">
-                      <div className="text-foreground">{e.summary}</div>
-                      <div className="font-mono text-[10px] text-muted-foreground">
-                        {e.subjectType} · {e.subjectId}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
+        {error && <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">{error}</div>}
+        <div className="grid min-h-[620px] flex-1 overflow-hidden rounded-xl border border-border bg-white lg:grid-cols-[minmax(280px,40%)_1fr]">
+          <section className="flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r">
+            <div className="grid grid-cols-2 border-b border-border bg-[#f8fafc]">
+              {groups.map((group) => (
+                <button key={group.name} onClick={() => chooseGroup(group.name)} className={`flex items-center justify-center gap-2 px-3 py-3 text-xs font-bold capitalize ${activeGroup === group.name ? "bg-white text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  <Folder className="size-4" />{group.name}<span className="rounded-full bg-steel/50 px-1.5 text-[10px]">{group.files.length}</span>
+                </button>
+              ))}
+            </div>
+            <label className="m-3 flex items-center gap-2 rounded-md border border-border px-3 py-2">
+              <Search className="size-4 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter this folder…" className="w-full bg-transparent text-sm outline-none" />
+            </label>
+            <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
+              {visibleFiles.map((file) => (
+                <button key={file.path} onClick={() => setSelected(file)} className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left text-sm hover:bg-[#f4f7f9] ${selected?.path === file.path ? "bg-[#edf3f7]" : ""}`}>
+                  <FileText className="size-4 shrink-0 text-slate-500" /><span className="min-w-0 flex-1 truncate">{file.name}</span><span className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</span>
+                </button>
+              ))}
+              {!loading && visibleFiles.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">No log files found.</p>}
+            </div>
+          </section>
+          <section className="flex min-h-0 flex-col">
+            {selected ? <>
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div><div className="flex items-center gap-2 text-sm font-bold"><Folder className="size-4" />{activeGroup}/{selected.name}</div><p className="mt-0.5 text-[11px] text-muted-foreground">{formatBytes(selected.size)} · modified {new Date(selected.modifiedAt * 1000).toLocaleString("en-ZA")}</p></div>
+                <a href={systemLogDownloadUrl(activeGroup, selected.name)} download className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-semibold hover:bg-steel/30"><Download className="size-3.5" /> Download</a>
+              </header>
+              {truncated && <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-xs text-muted-foreground">Showing the latest 512 KB of this log.</div>}
+              <pre className="min-h-0 flex-1 overflow-auto bg-[#fbfcfd] p-4 font-mono text-[12px] leading-5 text-slate-800">{content || "This log file is currently empty."}</pre>
+            </> : <div className="grid flex-1 place-items-center text-center text-sm text-muted-foreground"><div><FileText className="mx-auto mb-2 size-8" />Select a log file to inspect it.</div></div>}
+          </section>
+        </div>
       </div>
     </AppShell>
   );
