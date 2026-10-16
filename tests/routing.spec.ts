@@ -32,6 +32,7 @@ async function mockApi(page: Page, role?: string) {
     fuelLogs: [],
     maintenance: [],
     proofs: [],
+    incidents: [],
   };
   await page.route("**/api/trpc/**", async (route) => {
     const paths = new URL(route.request().url()).pathname.split("/api/trpc/")[1]!.split(",");
