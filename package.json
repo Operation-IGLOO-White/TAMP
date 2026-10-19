@@ -12,6 +12,8 @@
     "typecheck": "tsc -b",
     "test:e2e": "playwright test",
     "test:e2e:browser": "PLAYWRIGHT_DEMO=1 playwright test tests/marketplace-journey.spec.ts --project=chromium --headed --workers=1"
+    ,"test:e2e:fullstack": "bash scripts/run-fullstack-e2e.sh"
+    ,"test:e2e:fullstack:browser": "PLAYWRIGHT_DEMO=1 bash scripts/run-fullstack-e2e.sh --headed"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

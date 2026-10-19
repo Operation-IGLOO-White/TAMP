@@ -46,6 +46,7 @@ const NEXT_STEP: Record<string, string> = {
   LOADED: "In transit",
   IN_TRANSIT: "Arrived at drop-off",
   AT_DROPOFF: "Delivered",
+  DELIVERED: "Complete trip",
 };
 
 const STATUS_ORDER: Record<string, number> = {

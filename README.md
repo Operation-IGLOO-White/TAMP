@@ -73,3 +73,27 @@ docker compose up --build -d --wait
 The supplied container serves static files using unprivileged nginx on port 3000, with `/healthz`, SPA deep-link fallback, and `/api` proxying. nginx uses `BACKEND_TARGET=http://backend:5000` to reach the backend service on the shared `tamp-network`; `VITE_API_TARGET` is only for local Vite development. Set `FRONTEND_PORT` to change the host port. If overriding `TAMP_NETWORK`, use the same value in both repositories. PostgreSQL and the worker remain on the backend project’s private network. Stop the frontend before running `docker compose down` in the backend project so the shared network can be removed.
 
 Check the API through nginx with `curl --fail http://localhost:3000/api/v1/health` (adjust the port if needed).
+## Real full-stack browser test
+
+The full-stack Playwright suite uses the actual Vite application, FastAPI server, PostgreSQL
+database, session cookies, tracking endpoint and finance procedures. It refuses to reset any
+database whose name does not contain `test`.
+
+Create a dedicated PostgreSQL database, then run:
+
+```bash
+export TEST_DATABASE_URL='postgresql+asyncpg://tamp:your-password@localhost:5432/tamp_test'
+npm run test:e2e:fullstack
+```
+
+To watch Chromium perform the journey:
+
+```bash
+export TEST_DATABASE_URL='postgresql+asyncpg://tamp:your-password@localhost:5432/tamp_test'
+npm run test:e2e:fullstack:browser
+```
+
+`scripts/run-fullstack-e2e.sh` migrates and resets only that test database, seeds four verified
+accounts, starts the backend on port 5001, builds the frontend, runs the browser test, and stops the
+backend on exit. Set `TAMP_BACKEND_DIR` if the backend is not at `../../tamp_backend` relative to
+this project.
