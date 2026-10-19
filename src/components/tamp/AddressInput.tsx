@@ -3,7 +3,7 @@
 // accurate coordinates + province used by matching, pricing and the map.
 
 
-import { Loader2, MapPin } from "lucide-react";
+import { Loader2, MapPin, SearchX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { geocodeAutocomplete, geocodeDetails, type Prediction } from "@/fns/geocode";
 import type { Place } from "@/types/domain";
@@ -21,6 +21,8 @@ export function AddressInput({
   const [results, setResults] = useState<Prediction[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
 
   // Keep the input text in sync when the selected value changes externally.
@@ -30,9 +32,10 @@ export function AddressInput({
 
   // Debounced predictions from the server geocoder.
   useEffect(() => {
-    if (query.trim().length < 3 || query === value?.label) {
+    if (query.trim().length < 2 || query === value?.label) {
       setResults([]);
       setLoading(false);
+      setSearched(false);
       return;
     }
     let cancelled = false;
@@ -43,12 +46,18 @@ export function AddressInput({
         if (cancelled) return;
         setResults(preds);
         setOpen(true);
+        setSearched(true);
+        setActiveIndex(-1);
       } catch {
-        if (!cancelled) setResults([]);
+        if (!cancelled) {
+          setResults([]);
+          setSearched(true);
+          setOpen(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }, 300);
+    }, 160);
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -88,6 +97,21 @@ export function AddressInput({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
+          onKeyDown={(event) => {
+            if (!open || results.length === 0) return;
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setActiveIndex((index) => Math.min(results.length - 1, index + 1));
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveIndex((index) => Math.max(0, index - 1));
+            } else if (event.key === "Enter" && activeIndex >= 0) {
+              event.preventDefault();
+              void pick(results[activeIndex]!);
+            } else if (event.key === "Escape") {
+              setOpen(false);
+            }
+          }}
           placeholder={hint}
           className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-8 text-sm text-foreground outline-none focus:border-signal"
           autoComplete="off"
@@ -96,18 +120,24 @@ export function AddressInput({
           <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
       </div>
-      {open && results.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-border bg-graphite shadow-lg">
+      {open && (results.length > 0 || (searched && !loading)) && (
+        <ul className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border border-border bg-background py-1 shadow-xl">
+          {results.length === 0 && (
+            <li className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+              <SearchX className="size-4" /> No South African address found. Try a street and suburb.
+            </li>
+          )}
           {results.map((p) => (
             <li key={p.id}>
               <button
                 type="button"
                 onClick={() => pick(p)}
-                className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-steel/40"
+                onMouseEnter={() => setActiveIndex(results.indexOf(p))}
+                className={`flex w-full items-start gap-2 px-3 py-2.5 text-left ${activeIndex === results.indexOf(p) ? "bg-signal/10" : "hover:bg-steel/40"}`}
               >
                 <MapPin className="mt-0.5 size-3.5 shrink-0 text-signal" />
                 <span className="min-w-0">
-                  <span className="block truncate text-xs font-semibold">{p.primary}</span>
+                  <span className="block text-xs font-semibold leading-snug">{p.primary}</span>
                   {p.secondary && (
                     <span className="block truncate text-[10px] text-muted-foreground">
                       {p.secondary}
