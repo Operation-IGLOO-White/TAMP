@@ -383,7 +383,23 @@ function AddTruckForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.registration.trim()) return setErr("Enter the truck's registration.");
+    const registration = form.registration.trim().toUpperCase();
+    if (!registration) return setErr("Enter the truck's registration.");
+    if (registration.length > 40) return setErr("Registration must be 40 characters or fewer.");
+    if (!Number.isFinite(form.capacityKg) || form.capacityKg <= 0 || form.capacityKg > 200000) {
+      return setErr("Payload capacity must be between 1 and 200,000 kg.");
+    }
+    if (
+      !form.location.label.trim() ||
+      !Number.isFinite(form.location.lat) ||
+      !Number.isFinite(form.location.lng) ||
+      form.location.lat < -90 ||
+      form.location.lat > 90 ||
+      form.location.lng < -180 ||
+      form.location.lng > 180
+    ) {
+      return setErr("Select a valid current location from the address suggestions.");
+    }
     const missingPhotos = TRUCK_PHOTOS.filter((p) => !photos[p]);
     if (missingPhotos.length) return setErr(`Add truck photos: ${missingPhotos.join(", ")}.`);
     const missingDocs = TRUCK_DOCS.filter((d) => !docs[d]);
@@ -399,7 +415,7 @@ function AddTruckForm({
       await onAdd({
         transporterId: me.id,
         ...(me.role === "DRIVER" ? { driverId: me.id } : {}),
-        registration: form.registration.trim().toUpperCase(),
+        registration,
         bodyType: form.bodyType,
         payloadCapacityKg: form.capacityKg,
         currentLocation: form.location,
@@ -409,7 +425,7 @@ function AddTruckForm({
         photos: uploadedPhotos.map((upload) => upload.url),
         documents: uploadedDocs.map((upload) => upload.url),
       });
-      toast.success("Truck registered", { id: toastId, description: `${form.registration.trim().toUpperCase()} was added to your fleet.` });
+      toast.success("Truck registered", { id: toastId, description: `${registration} was added to your fleet.` });
       onDone();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "The truck could not be registered.";
