@@ -35,6 +35,7 @@ async function mockApi(page: Page, role?: string) {
     incidents: [],
     invoices: [],
     transactions: [],
+    dispatches: [],
   };
   await page.route("**/api/v1/system-logs**", (route) =>
     route.fulfill({ json: { groups: [{ name: "modules", files: [] }, { name: "services", files: [] }] } }),
@@ -105,6 +106,7 @@ const roleRoutes: Record<string, string[]> = {
     "/transporter/history",
     "/transporter/earnings",
     "/transporter/engagements",
+    "/transporter/dispatch",
     "/transporter/profile",
     "/driver",
   ],
@@ -116,6 +118,7 @@ const roleRoutes: Record<string, string[]> = {
     "/driver/history",
     "/transporter/earnings",
     "/driver/engagements",
+    "/driver/dispatch",
     "/driver/profile",
   ],
   ADMIN: [

@@ -125,6 +125,8 @@ export interface RuleResult {
 }
 
 export interface Trip {
+  dispatchStatus?: "AWAITING_DRIVER" | "ASSIGNED" | "NEEDS_DRIVER";
+  assignedDriverId?: UUID | null;
   disputed?: boolean;
   operationalStatus?: "DELAYED" | "ACTION_REQUIRED" | "CANCELLED";
   activeIncidentIds?: UUID[];
@@ -248,6 +250,20 @@ export interface FinancialTransaction {
   note?: string;
   createdAt: ISODate;
   recordedById: UUID;
+}
+
+export interface DispatchAssignment {
+  id: UUID;
+  tripId: UUID;
+  loadId: UUID;
+  truckId: UUID;
+  carrierId: UUID;
+  driverId: UUID;
+  status: "OFFERED" | "ACCEPTED" | "DECLINED" | "CANCELLED";
+  offeredAt: ISODate;
+  respondedAt?: ISODate | null;
+  note?: string;
+  timeline: { status: string; at: ISODate; byUserId: UUID; note?: string }[];
 }
 
 export interface Dispute {

@@ -14,6 +14,7 @@ import type {
   TripIncident,
   Invoice,
   FinancialTransaction,
+  DispatchAssignment,
   TruckPosting,
 } from "./domain";
 
@@ -34,6 +35,7 @@ export interface DomainSnapshot {
   incidents: TripIncident[];
   invoices: Invoice[];
   transactions: FinancialTransaction[];
+  dispatches: DispatchAssignment[];
 }
 export interface RouteResult {
   geometry: {

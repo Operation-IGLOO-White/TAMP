@@ -30,6 +30,7 @@ import { applyDelta, loadState, type SnapshotDelta } from "@/fns/snapshot";
 import { bodyTypesForCargo, scoreLoadAgainstTrucks } from "@/fns/matching";
 import { runIncidentAction, type IncidentAction } from "@/fns/operations";
 import { runInvoiceAction, type InvoiceAction } from "@/fns/finance";
+import { runDispatchAction, type DispatchAction } from "@/fns/dispatch";
 import { priceLoadMoney } from "@/fns/pricing";
 import { activeMatchForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import type {
@@ -38,6 +39,7 @@ import type {
   BodyType,
   CargoType,
   Dispute,
+  DispatchAssignment,
   DisputeCategory,
   FuelLog,
   FinancialTransaction,
@@ -81,6 +83,7 @@ interface State {
   incidents: TripIncident[];
   invoices: Invoice[];
   transactions: FinancialTransaction[];
+  dispatches: DispatchAssignment[];
   sidebarCollapsed: boolean;
   notificationsReadAt: Record<Role, string>;
 }
@@ -202,6 +205,7 @@ interface Store extends State {
   cancelTrip: (loadId: string, reason: string) => Promise<boolean>;
   updateIncident: (incidentId: string, action: IncidentAction, options?: { assigneeId?: string; note?: string; etaMinutes?: number }) => Promise<boolean>;
   updateInvoice: (invoiceId: string, action: InvoiceAction, reference: string, note?: string) => Promise<boolean>;
+  updateDispatch: (tripId: string, action: DispatchAction, options?: { driverEmail?: string; note?: string }) => Promise<boolean>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
   flagDispute: (loadId: string, category: DisputeCategory, description: string) => void;
   resolveDispute: (loadId: string) => void;
@@ -259,6 +263,7 @@ function initial(): State {
     incidents: [],
     invoices: [],
     transactions: [],
+    dispatches: [],
     sidebarCollapsed: false,
     notificationsReadAt: {
       FREIGHT_OWNER: new Date(0).toISOString(),
@@ -287,6 +292,7 @@ const DOMAIN_KEYS = [
   "incidents",
   "invoices",
   "transactions",
+  "dispatches",
 ] as const;
 type DomainKey = (typeof DOMAIN_KEYS)[number];
 type EntityMaps = Record<DomainKey, Map<string, string>>;
@@ -416,6 +422,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
         incidents: snap.incidents,
         invoices: snap.invoices,
         transactions: snap.transactions,
+        dispatches: snap.dispatches,
       }));
       persistedRef.current = mapsFrom(snap);
     } catch {
@@ -447,6 +454,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
       incidents: [],
       invoices: [],
       transactions: [],
+      dispatches: [],
     }));
   }, []);
 
@@ -1204,6 +1212,18 @@ export function TampProvider({ children }: { children: ReactNode }) {
         try {
           await flushPending();
           await runInvoiceAction(invoiceId, action, reference, note);
+          await hydrateDomain();
+          return true;
+        } catch (err) {
+          reportSaveError(err);
+          return false;
+        }
+      },
+
+      updateDispatch: async (tripId, action, options = {}) => {
+        try {
+          await flushPending();
+          await runDispatchAction(tripId, action, options);
           await hydrateDomain();
           return true;
         } catch (err) {

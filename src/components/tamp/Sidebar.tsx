@@ -15,6 +15,7 @@ import {
   Users,
   Wrench,
   WalletCards,
+  Send,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
@@ -41,6 +42,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/transporter/fleet", label: "Fleet Register", icon: Truck },
     { to: "/transporter/fleet-ops", label: "Fleet Costs", icon: Wrench },
     { to: "/transporter/engagements", label: "Engagements", icon: RouteIcon },
+    { to: "/transporter/dispatch", label: "Dispatch", icon: Send },
     { to: "/driver", label: "My Jobs", icon: PackageCheck },
     { to: "/transporter/history", label: "History", icon: History },
     { to: "/transporter/earnings", label: "Earnings", icon: WalletCards },
@@ -54,6 +56,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/driver/fleet", label: "My Trucks", icon: Truck },
     { to: "/driver/fleet-ops", label: "Fleet Costs", icon: Wrench },
     { to: "/driver/engagements", label: "Engagements", icon: RouteIcon },
+    { to: "/driver/dispatch", label: "Job Offers", icon: Send },
     { to: "/driver/history", label: "History", icon: History },
     { to: "/transporter/earnings", label: "Earnings", icon: WalletCards },
     { to: "/driver/profile", label: "Profile", icon: User },
