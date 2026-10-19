@@ -421,7 +421,7 @@ function AddTruckForm({
         currentLocation: form.location,
         availableFrom: new Date(Date.now() + form.availableInDays * 864e5).toISOString(),
         availableTo: new Date(Date.now() + (form.availableInDays + 7) * 864e5).toISOString(),
-        preferredLanes: undefined,
+        preferredLanes: [],
         photos: uploadedPhotos.map((upload) => upload.url),
         documents: uploadedDocs.map((upload) => upload.url),
       });

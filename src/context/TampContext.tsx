@@ -820,6 +820,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
           status: "AVAILABLE",
           createdAt: new Date().toISOString(),
           ...input,
+          preferredLanes: input.preferredLanes ?? [],
         };
         const operator = current.parties.find((p) => p.id === truck.transporterId)!;
         const openLoads = current.loads.filter((l) => l.status === "POSTED");
