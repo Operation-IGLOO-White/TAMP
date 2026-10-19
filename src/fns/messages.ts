@@ -8,5 +8,8 @@ export const markConversationRead = (conversationId: string) => trpc.mutation<{ 
 
 export function messageSocket(conversationId: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return new WebSocket(`${protocol}//${window.location.host}/api/v1/messages/conversations/${conversationId}/live`);
+  const apiPath = (import.meta.env["VITE_API_URL"] || "/api/v1").replace(/\/$/, "");
+  return new WebSocket(
+    `${protocol}//${window.location.host}${apiPath}/messages/conversations/${encodeURIComponent(conversationId)}/live`,
+  );
 }
