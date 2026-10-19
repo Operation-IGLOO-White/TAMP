@@ -18,7 +18,7 @@ import type { Party } from "@/types/domain";
 function TruckDetail() {
   const { truckId } = useParams<{ truckId: string }>();
   const navigateBack = useNavigate();
-  const { trucks, parties, matches, loads, trips, disputes, role, assignDriver, linkDriver } =
+  const { trucks, parties, matches, loads, trips, disputes, role, me, assignDriver, linkDriver } =
     useTamp();
 
   const truck = trucks.find((t) => t.id === truckId);
@@ -36,6 +36,9 @@ function TruckDetail() {
   const operator = parties.find((p) => p.id === truck.transporterId);
   const driver = truck.driverId ? parties.find((p) => p.id === truck.driverId) : undefined;
   const isAdmin = role === "ADMIN";
+  const canManageDriver = isAdmin || me.id === truck.transporterId;
+  const canDriveOwnTruck =
+    me.id === truck.transporterId && me.role === "TRANSPORTER" && me.verification === "VERIFIED";
 
   const truckTrips = trips
     .map((trip) => {
@@ -185,11 +188,16 @@ function TruckDetail() {
                 <MapPin className="size-4" /> No driver assigned — trips can't start.
               </p>
             )}
-            <AssignDriver
-              assigned={!!driver}
-              onLink={(d) => linkDriver(truck.id, d)}
-              onUnassign={() => assignDriver(truck.id, "")}
-            />
+            {canManageDriver && (
+              <AssignDriver
+                assigned={!!driver}
+                selfAssigned={truck.driverId === me.id}
+                canAssignSelf={canDriveOwnTruck}
+                onAssignSelf={() => assignDriver(truck.id, me.id)}
+                onLink={(d) => linkDriver(truck.id, d)}
+                onUnassign={() => assignDriver(truck.id, "")}
+              />
+            )}
           </Panel>
         </aside>
       </div>
@@ -249,10 +257,16 @@ function Spec({ label, value }: { label: string; value: string }) {
 // doesn't hold the driver directory, so we resolve the account server-side.
 function AssignDriver({
   assigned,
+  selfAssigned,
+  canAssignSelf,
+  onAssignSelf,
   onLink,
   onUnassign,
 }: {
   assigned: boolean;
+  selfAssigned: boolean;
+  canAssignSelf: boolean;
+  onAssignSelf: () => void;
   onLink: (driver: Party) => void;
   onUnassign: () => void;
 }) {
@@ -291,6 +305,20 @@ function AssignDriver({
 
   return (
     <div className="space-y-2 border-t border-border p-4">
+      {canAssignSelf && !selfAssigned && (
+        <button
+          type="button"
+          onClick={onAssignSelf}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-signal bg-signal/10 px-3 py-2 text-xs font-bold uppercase tracking-wide text-foreground hover:bg-signal/20"
+        >
+          <UserPlus className="size-3.5" /> Assign myself as driver
+        </button>
+      )}
+      {selfAssigned && (
+        <p className="rounded-md bg-positive/10 px-3 py-2 text-xs font-semibold text-positive">
+          You are assigned as this truck's driver.
+        </p>
+      )}
       <label className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         {assigned ? "Reassign driver by email" : "Assign a driver by email"}
       </label>
