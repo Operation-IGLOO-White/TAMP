@@ -247,7 +247,7 @@ function DriverJobs() {
         </div>
 
         {/* ── Map + tracking panel (desktop) ─────────────────────── */}
-        <div className="relative hidden min-w-0 flex-1 lg:block">
+        <div className="relative isolate hidden min-w-0 flex-1 lg:block">
           {selected ? (
             <>
               <TripRouteMap
@@ -290,6 +290,9 @@ function DriverJobs() {
           return (
             <div
               className="fixed inset-0 z-50 flex flex-col bg-black/60 p-3 sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-label={mapNav ? "Driver navigation" : "Trip route map"}
               onClick={() => setMapJob(null)}
             >
               <div
