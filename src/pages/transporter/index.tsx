@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/lib/nav";
 import { AlertTriangle, BookmarkCheck, Leaf, Plus, Repeat, TrendingUp, UserX } from "lucide-react";
 import type { ReactNode } from "react";
@@ -29,16 +29,19 @@ function TransporterDashboard() {
     reserveBackhaul,
     releaseReservation,
   } = useTamp();
-  const data = { matches, loads, trucks, parties };
+  const data = useMemo(() => ({ matches, loads, trucks, parties }), [matches, loads, trucks, parties]);
   const recent = audit.filter((e) => e.eventType !== "LOAD_POSTED").slice(0, 6);
 
-  const activeTrips = trips.filter((t) => isActiveTrip(t.status)).map((t) => enrichTrip(t, data));
-  const openLoads = loads.filter((l) => l.status === "POSTED");
+  const activeTrips = useMemo(
+    () => trips.filter((t) => isActiveTrip(t.status)).map((t) => enrichTrip(t, data)),
+    [trips, data],
+  );
+  const openLoads = useMemo(() => loads.filter((l) => l.status === "POSTED"), [loads]);
 
   // ① Needs you
   const noDriver = activeTrips.filter((e) => e.truck && !e.truck.driverId);
   const idleTrucks = trucks.filter((t) => t.status === "AVAILABLE" && daysSince(t.createdAt) >= 3);
-  const available = trucks.filter((t) => t.status === "AVAILABLE");
+  const available = useMemo(() => trucks.filter((t) => t.status === "AVAILABLE"), [trucks]);
 
   // ①③ Match scoring now happens server-side (src/fns/matching.ts). One call
   // per open load, scoring it against every available truck at once, rather
@@ -79,16 +82,23 @@ function TransporterDashboard() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openLoads, available, parties]);
 
   // Backhaul optimisation & forward-haul pre-booking: for each truck on a trip,
   // either its reserved backhaul, or the best open load to pre-book at its
   // destination — turning the empty return into revenue and cutting fuel/CO₂.
-  const activeReservations = reservations.filter((r) => r.status === "RESERVED");
-  const reservedByTruck = new Map(activeReservations.map((r) => [r.truckId, r]));
-  const reservedLoadIds = new Set(activeReservations.map((r) => r.loadId));
-  const openForBackhaul = openLoads.filter((l) => !reservedLoadIds.has(l.id));
+  const activeReservations = useMemo(
+    () => reservations.filter((r) => r.status === "RESERVED"),
+    [reservations],
+  );
+  const reservedByTruck = useMemo(
+    () => new Map(activeReservations.map((r) => [r.truckId, r])),
+    [activeReservations],
+  );
+  const openForBackhaul = useMemo(() => {
+    const reservedLoadIds = new Set(activeReservations.map((r) => r.loadId));
+    return openLoads.filter((l) => !reservedLoadIds.has(l.id));
+  }, [activeReservations, openLoads]);
 
   type BackhaulEntry = {
     truck: TruckPosting;
@@ -139,7 +149,6 @@ function TransporterDashboard() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTrips, openForBackhaul, reservedByTruck, loads]);
 
   const reservedCount = backhaul.filter((b) => b.reserved).length;

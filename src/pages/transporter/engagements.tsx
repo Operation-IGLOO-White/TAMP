@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/lib/nav";
 import { ChevronRight, Flag, Star, UserPlus } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -44,57 +44,60 @@ function EngagementsPage() {
   } = useTamp();
   const [review, setReview] = useState<{ opportunity: Opportunity; kind: "confirm" | "request" } | null>(null);
 
-  const availableTrucks = trucks.filter((t) => t.status === "AVAILABLE");
-  const activeLoads = loads.filter((l) => l.status !== "COMPLETED" && l.status !== "CLOSED");
+  const availableTrucks = useMemo(
+    () => trucks.filter((t) => t.status === "AVAILABLE"),
+    [trucks],
+  );
+  const activeLoads = useMemo(
+    () => loads.filter((l) => l.status !== "COMPLETED" && l.status !== "CLOSED"),
+    [loads],
+  );
 
   // Pending requests this carrier has made — awaiting the cargo owner's approval.
-  const requested: Opportunity[] = matches
-    .filter((m) => m.status === "OFFERED")
-    .map((m) => {
-      const load = loads.find((l) => l.id === m.loadId);
-      const truck = trucks.find((t) => t.id === m.truckPostingId);
-      return load && truck
-        ? {
+  const requested: Opportunity[] = useMemo(
+    () => matches
+      .filter((m) => m.status === "OFFERED")
+      .map((m) => {
+        const load = loads.find((l) => l.id === m.loadId);
+        const truck = trucks.find((t) => t.id === m.truckPostingId);
+        return load && truck
+          ? { load, truck, operator: parties.find((p) => p.id === truck.transporterId), score: m.score }
+          : null;
+      })
+      .filter((x): x is Opportunity => x !== null),
+    [matches, loads, trucks, parties],
+  );
+
+  const { confirmable, postedLoads } = useMemo(() => {
+    const requestedLoadIds = new Set(requested.map((r) => r.load.id));
+    const nextConfirmable: Opportunity[] = [];
+    const nextPosted: { load: Load; owner: Party }[] = [];
+    for (const load of activeLoads) {
+      if (requestedLoadIds.has(load.id)) continue;
+      const status = displayStatusForLoad(load, matches, trips, disputes);
+      const owner = parties.find((p) => p.id === load.ownerId);
+      if (status === "MATCHED") {
+        const accepted = matches.find((m) => m.loadId === load.id && m.status === "ACCEPTED");
+        const truck = accepted ? trucks.find((t) => t.id === accepted.truckPostingId) : undefined;
+        if (accepted && truck) {
+          nextConfirmable.push({
             load,
             truck,
             operator: parties.find((p) => p.id === truck.transporterId),
-            score: m.score,
-          }
-        : null;
-    })
-    .filter((x): x is Opportunity => x !== null);
-  const requestedLoadIds = new Set(requested.map((r) => r.load.id));
-
-  const confirmable: Opportunity[] = [];
-  const postedLoads: { load: Load; owner: Party }[] = [];
-
-  for (const load of activeLoads) {
-    if (requestedLoadIds.has(load.id)) continue; // already requested — shown below
-    const ds = displayStatusForLoad(load, matches, trips, disputes);
-    const owner = parties.find((p) => p.id === load.ownerId);
-    if (ds === "MATCHED") {
-      // The cargo owner accepted a specific truck — confirm to engage.
-      const accepted = matches.find((m) => m.loadId === load.id && m.status === "ACCEPTED");
-      const truck = accepted ? trucks.find((t) => t.id === accepted.truckPostingId) : undefined;
-      if (accepted && truck) {
-        confirmable.push({
-          load,
-          truck,
-          operator: parties.find((p) => p.id === truck.transporterId),
-          score: accepted.score,
-        });
+            score: accepted.score,
+          });
+        }
+      } else if (status === "POSTED" && owner) {
+        nextPosted.push({ load, owner });
       }
-    } else if (ds === "POSTED" && owner) {
-      postedLoads.push({ load, owner });
     }
-  }
+    return { confirmable: nextConfirmable, postedLoads: nextPosted };
+  }, [activeLoads, requested, matches, trips, disputes, parties, trucks]);
 
   // Open jobs surfaced only if a truck matches 70+ — scored server-side
   // (src/fns/matching.ts), one call per posted load against every available
   // truck at once.
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const postedLoadIds = postedLoads.map((p) => p.load.id).join(",");
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -125,8 +128,7 @@ function EngagementsPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postedLoadIds, availableTrucks, parties]);
+  }, [postedLoads, availableTrucks, parties]);
 
   const totalOpen = confirmable.length + requested.length + opportunities.length;
 
