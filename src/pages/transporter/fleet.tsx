@@ -2,12 +2,14 @@
 
 import { Camera, CheckCircle2, FileUp, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { formatMoney, PLACES } from "@/lib/tamp-data";
 import { scoreLoadAgainstTrucks } from "@/fns/matching";
+import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
 import type { BodyType, Load, Place, TruckPosting } from "@/types/domain";
 
@@ -374,11 +376,12 @@ function AddTruckForm({
     location: PLACES.germiston as Place,
     availableInDays: 2,
   });
-  const [photos, setPhotos] = useState<Record<string, { name: string; url: string }>>({});
-  const [docs, setDocs] = useState<Record<string, string>>({});
+  const [photos, setPhotos] = useState<Record<string, { file: File; url: string }>>({});
+  const [docs, setDocs] = useState<Record<string, File>>({});
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.registration.trim()) return setErr("Enter the truck's registration.");
     const missingPhotos = TRUCK_PHOTOS.filter((p) => !photos[p]);
@@ -386,22 +389,35 @@ function AddTruckForm({
     const missingDocs = TRUCK_DOCS.filter((d) => !docs[d]);
     if (missingDocs.length) return setErr(`Upload documents: ${missingDocs.join(", ")}.`);
     setErr("");
-    onAdd({
-      // The current user owns the truck. An owner-operator driver is also its
-      // driver (subject to driver verification before they can be assigned).
-      transporterId: me.id,
-      ...(me.role === "DRIVER" ? { driverId: me.id } : {}),
-      registration: form.registration.trim(),
-      bodyType: form.bodyType,
-      payloadCapacityKg: form.capacityKg,
-      currentLocation: form.location,
-      availableFrom: new Date(Date.now() + form.availableInDays * 864e5).toISOString(),
-      availableTo: new Date(Date.now() + (form.availableInDays + 7) * 864e5).toISOString(),
-      preferredLanes: undefined,
-      photos: TRUCK_PHOTOS.map((p) => photos[p]!.name),
-      documents: TRUCK_DOCS,
-    });
-    onDone();
+    setBusy(true);
+    const toastId = toast.loading("Registering truck", { description: "Uploading vehicle photos and documents…" });
+    try {
+      const [uploadedPhotos, uploadedDocs] = await Promise.all([
+        Promise.all(TRUCK_PHOTOS.map((label) => uploadFile(photos[label]!.file, "TRUCK_PHOTO"))),
+        Promise.all(TRUCK_DOCS.map((label) => uploadFile(docs[label]!, "TRUCK_DOCUMENT"))),
+      ]);
+      await onAdd({
+        transporterId: me.id,
+        ...(me.role === "DRIVER" ? { driverId: me.id } : {}),
+        registration: form.registration.trim().toUpperCase(),
+        bodyType: form.bodyType,
+        payloadCapacityKg: form.capacityKg,
+        currentLocation: form.location,
+        availableFrom: new Date(Date.now() + form.availableInDays * 864e5).toISOString(),
+        availableTo: new Date(Date.now() + (form.availableInDays + 7) * 864e5).toISOString(),
+        preferredLanes: undefined,
+        photos: uploadedPhotos.map((upload) => upload.url),
+        documents: uploadedDocs.map((upload) => upload.url),
+      });
+      toast.success("Truck registered", { id: toastId, description: `${form.registration.trim().toUpperCase()} was added to your fleet.` });
+      onDone();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "The truck could not be registered.";
+      setErr(message);
+      toast.error("Truck registration failed", { id: toastId, description: message });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -470,7 +486,7 @@ function AddTruckForm({
               key={label}
               label={label}
               photo={photos[label]}
-              onChange={(name, url) => setPhotos((p) => ({ ...p, [label]: { name, url } }))}
+              onChange={(file, url) => setPhotos((p) => ({ ...p, [label]: { file, url } }))}
             />
           ))}
         </div>
@@ -487,7 +503,7 @@ function AddTruckForm({
               key={label}
               label={label}
               value={docs[label]}
-              onChange={(name) => setDocs((d) => ({ ...d, [label]: name }))}
+              onChange={(file) => setDocs((d) => ({ ...d, [label]: file }))}
             />
           ))}
         </div>
@@ -497,9 +513,10 @@ function AddTruckForm({
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          className="rounded-md bg-signal px-6 py-2 text-xs font-bold uppercase tracking-widest text-signal-foreground hover:brightness-105"
+          disabled={busy}
+          className="rounded-md bg-signal px-6 py-2 text-xs font-bold uppercase tracking-widest text-signal-foreground hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Register truck
+          {busy ? "Registering…" : "Register truck"}
         </button>
         <span className="text-[10px] text-muted-foreground">
           Submitted for verification — photos &amp; documents are checked before the truck goes live.
@@ -515,8 +532,8 @@ function PhotoTile({
   onChange,
 }: {
   label: string;
-  photo: { name: string; url: string } | undefined;
-  onChange: (name: string, url: string) => void;
+  photo: { file: File; url: string } | undefined;
+  onChange: (file: File, url: string) => void;
 }) {
   return (
     <label
@@ -544,7 +561,7 @@ function PhotoTile({
         capture="environment"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) onChange(f.name, URL.createObjectURL(f));
+          if (f) onChange(f, URL.createObjectURL(f));
         }}
         className="hidden"
       />
@@ -558,8 +575,8 @@ function DocRow({
   onChange,
 }: {
   label: string;
-  value: string | undefined;
-  onChange: (name: string) => void;
+  value: File | undefined;
+  onChange: (file: File) => void;
 }) {
   return (
     <label
@@ -574,12 +591,12 @@ function DocRow({
       )}
       <span className="min-w-0 flex-1">
         <span className="block font-semibold leading-tight">{label}</span>
-        {value && <span className="block truncate text-[10px] text-muted-foreground">{value}</span>}
+        {value && <span className="block truncate text-[10px] text-muted-foreground">{value.name}</span>}
       </span>
       <input
         type="file"
         accept=".pdf,.png,.jpg,.jpeg"
-        onChange={(e) => onChange(e.target.files?.[0]?.name ?? "")}
+        onChange={(e) => { const file = e.target.files?.[0]; if (file) onChange(file); }}
         className="hidden"
       />
     </label>

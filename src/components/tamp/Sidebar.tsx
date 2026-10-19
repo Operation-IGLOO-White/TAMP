@@ -16,6 +16,7 @@ import {
   Wrench,
   WalletCards,
   Send,
+  MessageCircle,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
@@ -35,6 +36,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/owner/board", label: "Freight Board", icon: ClipboardList },
     { to: "/owner/history", label: "History", icon: History },
     { to: "/owner/billing", label: "Billing", icon: WalletCards },
+    { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: "/owner/profile", label: "Profile", icon: User },
   ],
   TRANSPORTER: [
@@ -46,6 +48,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/driver", label: "My Jobs", icon: PackageCheck },
     { to: "/transporter/history", label: "History", icon: History },
     { to: "/transporter/earnings", label: "Earnings", icon: WalletCards },
+    { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: "/transporter/profile", label: "Profile", icon: User },
   ],
   // Owner-driver merge: DRIVER is no longer a separate workspace; its job
@@ -59,6 +62,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/driver/dispatch", label: "Job Offers", icon: Send },
     { to: "/driver/history", label: "History", icon: History },
     { to: "/transporter/earnings", label: "Earnings", icon: WalletCards },
+    { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: "/driver/profile", label: "Profile", icon: User },
   ],
   ADMIN: [
@@ -68,6 +72,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck },
     { to: "/admin/finance", label: "Finance", icon: WalletCards },
     { to: "/admin/logs", label: "System Logs", icon: ScrollText },
+    { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: "/admin/profile", label: "Profile", icon: User },
   ],
 };

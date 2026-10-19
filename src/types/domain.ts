@@ -266,6 +266,33 @@ export interface DispatchAssignment {
   timeline: { status: string; at: ISODate; byUserId: UUID; note?: string }[];
 }
 
+export interface TripConversation {
+  id: UUID;
+  tripId: UUID;
+  loadId: UUID;
+  ownerId: UUID;
+  carrierId: UUID;
+  driverId?: UUID | null;
+  createdAt: ISODate;
+  lastMessageAt: ISODate;
+  lastMessage?: string;
+  unreadCount: number;
+}
+
+export interface TripMessage {
+  id: UUID;
+  conversationId: UUID;
+  senderId?: UUID | null;
+  senderRole: Role | "SYSTEM";
+  kind: "USER" | "SYSTEM";
+  text: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  event?: string;
+  createdAt: ISODate;
+  readBy: UUID[];
+}
+
 export interface Dispute {
   id: UUID;
   tripId: UUID;

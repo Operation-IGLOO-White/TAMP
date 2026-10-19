@@ -813,6 +813,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
       },
 
       addTruck: async (input) => {
+        const current = stateRef.current;
         const id = nextRef("TR");
         const truck: TruckPosting = {
           id,
@@ -820,14 +821,14 @@ export function TampProvider({ children }: { children: ReactNode }) {
           createdAt: new Date().toISOString(),
           ...input,
         };
-        const operator = state.parties.find((p) => p.id === truck.transporterId)!;
-        const openLoads = state.loads.filter((l) => l.status === "POSTED");
+        const operator = current.parties.find((p) => p.id === truck.transporterId)!;
+        const openLoads = current.loads.filter((l) => l.status === "POSTED");
         const generated: Match[] = [];
         await Promise.all(
           openLoads.map(async (load) => {
-            const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
+            const ownerParty = current.parties.find((p) => p.id === load.ownerId)!;
             const scored = (
-              await scoreLoadAgainstTrucks(load, [truck], state.parties, ownerParty)
+              await scoreLoadAgainstTrucks(load, [truck], current.parties, ownerParty)
             ).filter((m) => m.passed);
             for (const m of scored) {
               generated.push({
@@ -846,12 +847,12 @@ export function TampProvider({ children }: { children: ReactNode }) {
           }),
         );
 
-        setState((s) => ({
-          ...s,
-          trucks: [truck, ...s.trucks],
-          matches: [...generated, ...s.matches],
+        const nextState: State = {
+          ...current,
+          trucks: [truck, ...current.trucks],
+          matches: [...generated, ...current.matches],
           audit: log(
-            s.audit,
+            current.audit,
             "TRUCK_POSTED",
             truck.transporterId,
             "TRANSPORTER",
@@ -859,7 +860,15 @@ export function TampProvider({ children }: { children: ReactNode }) {
             id,
             `${operator.companyName} posted ${id} (${truck.bodyType}, ${truck.payloadCapacityKg.toLocaleString("en-ZA")} kg).`,
           ),
-        }));
+        };
+        stateRef.current = nextState;
+        setState(nextState);
+        try {
+          await flushPending();
+        } catch (error) {
+          await hydrateDomain();
+          throw error;
+        }
       },
 
       // Edit a persistent truck's availability details (status, location,

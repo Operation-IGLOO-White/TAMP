@@ -97,6 +97,7 @@ const roleRoutes: Record<string, string[]> = {
     "/owner/history",
     "/owner/billing",
     "/owner/profile",
+    "/messages",
     "/owner/loads/LD-123",
   ],
   TRANSPORTER: [
@@ -108,6 +109,7 @@ const roleRoutes: Record<string, string[]> = {
     "/transporter/engagements",
     "/transporter/dispatch",
     "/transporter/profile",
+    "/messages",
     "/driver",
   ],
   DRIVER: [
@@ -120,6 +122,7 @@ const roleRoutes: Record<string, string[]> = {
     "/driver/engagements",
     "/driver/dispatch",
     "/driver/profile",
+    "/messages",
   ],
   ADMIN: [
     "/admin",
@@ -131,6 +134,7 @@ const roleRoutes: Record<string, string[]> = {
     "/admin/logs",
     "/admin/profile",
     "/notifications",
+    "/messages",
     "/trucks/TR-123",
   ],
 };

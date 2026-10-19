@@ -1,6 +1,6 @@
 // Client helper for the multipart upload endpoint. Returns the stored file's
 // served URL, which the caller persists on the relevant record.
-export type FileKind = "AVATAR" | "KYC" | "POD" | "TRUCK_PHOTO";
+export type FileKind = "AVATAR" | "KYC" | "POD" | "TRUCK_PHOTO" | "TRUCK_DOCUMENT" | "MESSAGE";
 
 export interface UploadedFile {
   id: string;
