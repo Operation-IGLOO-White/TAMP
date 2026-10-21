@@ -10,6 +10,7 @@ import {
   Menu,
   Sun,
   UserRound,
+  Building2,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -29,6 +30,7 @@ import { useTamp } from "@/context/TampContext";
 import { Avatar } from "./Avatar";
 import { BrandLogo } from "./BrandLogo";
 import { MobileNavigation } from "./Sidebar";
+import { switchOrganisation } from "@/fns/organisations";
 
 // Owner-driver merge: DRIVER folds into TRANSPORTER, so it isn't a separate
 // switchable workspace.
@@ -77,6 +79,7 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <OrganisationSwitcher />
           <NotificationsMenu />
           <ProfileMenu />
         </div>
@@ -84,6 +87,16 @@ export function TopNav() {
       <MobileNavigation open={mobileMenu} onClose={() => setMobileMenu(false)} />
     </>
   );
+}
+
+function OrganisationSwitcher() {
+  const { authParty } = useTamp();
+  const [open, setOpen] = useState(false);
+  const ref = useClickAway(() => setOpen(false));
+  const organisations = authParty?.organisations ?? [];
+  const active = organisations.find((item) => item.id === authParty?.activeOrganisationId) ?? organisations[0];
+  if (!active) return null;
+  return <div className="relative" ref={ref}><button onClick={() => setOpen((value) => !value)} className="hidden max-w-48 items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-steel/50 sm:flex"><Building2 className="size-4 text-signal" /><span className="truncate">{active.name}</span>{organisations.length > 1 && <ChevronDown className="size-3.5" />}</button>{open && organisations.length > 1 && <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-white p-1 shadow-xl">{organisations.map((organisation) => <button key={organisation.id} onClick={() => { setOpen(false); if (organisation.id !== active.id) void switchOrganisation(organisation.id).then(() => window.location.reload()); }} className={`w-full rounded-md px-3 py-2 text-left hover:bg-steel/40 ${organisation.id === active.id ? "bg-signal/10" : ""}`}><div className="truncate text-xs font-bold">{organisation.name}</div><div className="text-[10px] uppercase text-muted-foreground">{organisation.type.replaceAll("_", " ")}</div></button>)}</div>}</div>;
 }
 
 function NotificationsMenu() {

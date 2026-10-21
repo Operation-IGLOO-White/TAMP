@@ -1,4 +1,3 @@
-
 // In-app turn-by-stop navigation view. Uses MapLibre GL (free OpenFreeMap
 // vector tiles, no key) so the camera can TILT: it opens in a top-down
 // bird's-eye view, then automatically eases into a pitched, heading-up "road
@@ -29,10 +28,23 @@ function bearing(a: LatLng, b: LatLng): number {
 }
 
 function nextStopFor(load: Load, trip: Trip) {
+  const stops = load.stops;
+  if (stops?.length) {
+    const stop = stops[Math.min(trip.currentStopIndex ?? 0, stops.length - 1)]!;
+    return {
+      pos: [stop.place.lat, stop.place.lng] as LatLng,
+      label: stop.place.label,
+      toPickup: stop.kind === "PICKUP",
+    };
+  }
   const toPickup = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP"].includes(trip.status);
   return toPickup
     ? { pos: [load.origin.lat, load.origin.lng] as LatLng, label: load.origin.label, toPickup }
-    : { pos: [load.destination.lat, load.destination.lng] as LatLng, label: load.destination.label, toPickup };
+    : {
+        pos: [load.destination.lat, load.destination.lng] as LatLng,
+        label: load.destination.label,
+        toPickup,
+      };
 }
 
 export function NavMap({ load, trip, className }: { load: Load; trip: Trip; className?: string }) {
@@ -46,17 +58,25 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
 
   useEffect(() => {
     let cancelled = false;
-    computeRoute(load.origin, load.destination)
-      .then((r) => {
-        if (cancelled || !r) return;
-        setRoute(geoJsonLineToLatLng(r.geometry.coordinates));
-        setInfo({ km: r.distanceKm, min: r.durationMin });
+    const places = load.stops?.map((stop) => stop.place) ?? [load.origin, load.destination];
+    Promise.all(places.slice(0, -1).map((place, index) => computeRoute(place, places[index + 1]!)))
+      .then((legs) => {
+        if (cancelled || legs.some((leg) => !leg)) return;
+        setRoute(
+          legs.flatMap((leg, index) =>
+            geoJsonLineToLatLng(leg!.geometry.coordinates).slice(index ? 1 : 0),
+          ),
+        );
+        setInfo({
+          km: legs.reduce((sum, leg) => sum + leg!.distanceKm, 0),
+          min: legs.reduce((sum, leg) => sum + leg!.durationMin, 0),
+        });
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [load.origin, load.destination]);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,9 +113,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
         if (++n >= 6) window.clearInterval(sizer);
       }, 200);
       const ro =
-        typeof ResizeObserver !== "undefined"
-          ? new ResizeObserver(() => map.resize())
-          : null;
+        typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => map.resize()) : null;
       if (ro && containerRef.current) ro.observe(containerRef.current);
 
       cleanup = () => {
@@ -129,10 +147,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
 
   // Draw the route line + pick-up/drop-off/truck markers, then sweep the camera
   // from the flat overview into the tilted road view.
-  function drawAndFly(
-    maplibregl: typeof import("maplibre-gl"),
-    map: MlMap,
-  ) {
+  function drawAndFly(maplibregl: typeof import("maplibre-gl"), map: MlMap) {
     const o: LatLng = [load.origin.lat, load.origin.lng];
     const d: LatLng = [load.destination.lat, load.destination.lng];
     const line: LatLng[] = route && route.length > 1 ? route : [o, d];
@@ -181,9 +196,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
     const addMarker = (pos: LatLng, color: string, el?: HTMLElement) => {
-      const m = el
-        ? new maplibregl.Marker({ element: el })
-        : new maplibregl.Marker({ color });
+      const m = el ? new maplibregl.Marker({ element: el }) : new maplibregl.Marker({ color });
       m.setLngLat([pos[1], pos[0]]).addTo(map);
       markersRef.current.push(m);
     };
@@ -220,8 +233,10 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
 
   const stop = nextStopFor(load, trip);
   const pctDone = Math.min(100, Math.max(0, trip.progressPct));
-  const remKm = info && !stop.toPickup ? Math.max(0, Math.round(info.km * (1 - pctDone / 100))) : null;
-  const remMin = info && !stop.toPickup ? Math.max(0, Math.round(info.min * (1 - pctDone / 100))) : null;
+  const remKm =
+    info && !stop.toPickup ? Math.max(0, Math.round(info.km * (1 - pctDone / 100))) : null;
+  const remMin =
+    info && !stop.toPickup ? Math.max(0, Math.round(info.min * (1 - pctDone / 100))) : null;
 
   return (
     <div className={`flex flex-col overflow-hidden ${className ?? ""}`}>

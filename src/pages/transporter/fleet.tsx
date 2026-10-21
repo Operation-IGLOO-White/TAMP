@@ -1,5 +1,3 @@
-
-
 import { Camera, CheckCircle2, FileUp, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -11,7 +9,7 @@ import { formatMoney, PLACES } from "@/lib/tamp-data";
 import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
-import type { BodyType, Load, Place, TruckPosting } from "@/types/domain";
+import type { BodyType, Load, Place, TruckPosting, Vehicle } from "@/types/domain";
 
 const bodyTypes: BodyType[] = [
   "TAUTLINER",
@@ -37,7 +35,7 @@ const daysFromNow = (iso: string) =>
   Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 864e5));
 
 function FleetPage() {
-  const { me, loads, trucks, parties, addTruck, updateTruck } = useTamp();
+  const { me, loads, trucks, vehicles, parties, addTruck, updateTruck } = useTamp();
   const isDriver = me.role === "DRIVER";
   const openLoads = useMemo(() => loads.filter((l) => l.status === "POSTED"), [loads]);
   const [adding, setAdding] = useState(false);
@@ -163,6 +161,7 @@ function FleetPage() {
                 <TruckCard
                   key={t.id}
                   truck={t}
+                  vehicle={vehicles.find((vehicle) => vehicle.id === t.vehicleId)}
                   operatorName={parties.find((p) => p.id === t.transporterId)?.companyName ?? "—"}
                   best={t.status === "AVAILABLE" ? bestLoadFor(t) : undefined}
                   onSave={(patch) => updateTruck(t.id, patch)}
@@ -178,11 +177,13 @@ function FleetPage() {
 
 function TruckCard({
   truck,
+  vehicle,
   operatorName,
   best,
   onSave,
 }: {
   truck: TruckPosting;
+  vehicle: Vehicle | undefined;
   operatorName: string;
   best: { load: Load; score: number } | undefined;
   onSave: (patch: Partial<TruckPosting>) => void;
@@ -228,6 +229,14 @@ function TruckCard({
               {BODY_TYPE_LABEL[truck.bodyType]} · {(truck.payloadCapacityKg / 1000).toFixed(0)}t ·{" "}
               {operatorName}
             </div>
+            {vehicle && (
+              <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") ||
+                  "Fleet asset"}
+                {vehicle.vin ? ` · VIN •••${vehicle.vin.slice(-6)}` : ""} ·{" "}
+                {vehicle.verification.toLowerCase()}
+              </div>
+            )}
           </div>
         </div>
         <StatusChip status={truck.status === "AVAILABLE" ? "POSTED" : "IN_TRANSIT"} />
@@ -375,6 +384,11 @@ function AddTruckForm({
     capacityKg: 30000,
     location: PLACES.germiston as Place,
     availableInDays: 2,
+    vin: "",
+    make: "",
+    model: "",
+    year: new Date().getFullYear(),
+    licenceExpiry: "",
   });
   const [photos, setPhotos] = useState<Record<string, { file: File; url: string }>>({});
   const [docs, setDocs] = useState<Record<string, File>>({});
@@ -386,6 +400,9 @@ function AddTruckForm({
     const registration = form.registration.trim().toUpperCase();
     if (!registration) return setErr("Enter the truck's registration.");
     if (registration.length > 40) return setErr("Registration must be 40 characters or fewer.");
+    if (form.vin.trim() && !/^[A-HJ-NPR-Z0-9]{17}$/i.test(form.vin.trim())) {
+      return setErr("VIN must contain 17 letters and numbers (excluding I, O and Q).");
+    }
     if (!Number.isFinite(form.capacityKg) || form.capacityKg <= 0 || form.capacityKg > 200000) {
       return setErr("Payload capacity must be between 1 and 200,000 kg.");
     }
@@ -406,7 +423,9 @@ function AddTruckForm({
     if (missingDocs.length) return setErr(`Upload documents: ${missingDocs.join(", ")}.`);
     setErr("");
     setBusy(true);
-    const toastId = toast.loading("Registering truck", { description: "Uploading vehicle photos and documents…" });
+    const toastId = toast.loading("Registering truck", {
+      description: "Uploading vehicle photos and documents…",
+    });
     try {
       const [uploadedPhotos, uploadedDocs] = await Promise.all([
         Promise.all(TRUCK_PHOTOS.map((label) => uploadFile(photos[label]!.file, "TRUCK_PHOTO"))),
@@ -424,8 +443,16 @@ function AddTruckForm({
         preferredLanes: [],
         photos: uploadedPhotos.map((upload) => upload.url),
         documents: uploadedDocs.map((upload) => upload.url),
+        ...(form.vin.trim() ? { vin: form.vin.trim().toUpperCase() } : {}),
+        ...(form.make.trim() ? { make: form.make.trim() } : {}),
+        ...(form.model.trim() ? { model: form.model.trim() } : {}),
+        year: form.year,
+        ...(form.licenceExpiry ? { licenceExpiry: form.licenceExpiry } : {}),
       });
-      toast.success("Truck registered", { id: toastId, description: `${registration} was added to your fleet.` });
+      toast.success("Truck registered", {
+        id: toastId,
+        description: `${registration} was added to your fleet.`,
+      });
       onDone();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "The truck could not be registered.";
@@ -444,6 +471,49 @@ function AddTruckForm({
             value={form.registration}
             onChange={(e) => setForm({ ...form, registration: e.target.value })}
             placeholder="JH 41 SG GP"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="VIN (optional)">
+          <input
+            value={form.vin}
+            onChange={(e) => setForm({ ...form, vin: e.target.value })}
+            placeholder="17-character VIN"
+            maxLength={17}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Make">
+          <input
+            value={form.make}
+            onChange={(e) => setForm({ ...form, make: e.target.value })}
+            placeholder="Volvo"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Model">
+          <input
+            value={form.model}
+            onChange={(e) => setForm({ ...form, model: e.target.value })}
+            placeholder="FH16"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Year">
+          <input
+            type="number"
+            min={1950}
+            max={new Date().getFullYear() + 1}
+            value={form.year}
+            onChange={(e) => setForm({ ...form, year: Number(e.target.value) })}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Licence expiry">
+          <input
+            type="date"
+            value={form.licenceExpiry}
+            onChange={(e) => setForm({ ...form, licenceExpiry: e.target.value })}
             className={inputCls}
           />
         </Field>
@@ -535,7 +605,8 @@ function AddTruckForm({
           {busy ? "Registering…" : "Register truck"}
         </button>
         <span className="text-[10px] text-muted-foreground">
-          Submitted for verification — photos &amp; documents are checked before the truck goes live.
+          Submitted for verification — photos &amp; documents are checked before the truck goes
+          live.
         </span>
       </div>
     </form>
@@ -564,9 +635,7 @@ function PhotoTile({
       )}
       <span
         className={`relative z-10 px-1 text-[10px] font-semibold ${
-          photo
-            ? "rounded bg-background/80 text-foreground"
-            : "text-muted-foreground"
+          photo ? "rounded bg-background/80 text-foreground" : "text-muted-foreground"
         }`}
       >
         {photo ? `✓ ${label}` : label}
@@ -607,12 +676,17 @@ function DocRow({
       )}
       <span className="min-w-0 flex-1">
         <span className="block font-semibold leading-tight">{label}</span>
-        {value && <span className="block truncate text-[10px] text-muted-foreground">{value.name}</span>}
+        {value && (
+          <span className="block truncate text-[10px] text-muted-foreground">{value.name}</span>
+        )}
       </span>
       <input
         type="file"
         accept=".pdf,.png,.jpg,.jpeg"
-        onChange={(e) => { const file = e.target.files?.[0]; if (file) onChange(file); }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onChange(file);
+        }}
         className="hidden"
       />
     </label>

@@ -1,9 +1,9 @@
-// Client wrappers over the tRPC `parties` router. Signatures match the previous
-// TanStack server functions so existing call sites are unchanged.
+// User-account API. Export names remain compatible while UI call sites migrate
+// from the former Party terminology.
 import { trpc } from "@/lib/trpc";
 import type { OnboardingData, OnboardingUserType, Party, VerificationStatus } from "@/types/domain";
 
-export const listParties = (): Promise<Party[]> => trpc.query("parties.list");
+export const listParties = (): Promise<Party[]> => trpc.query("users.list");
 
 export interface RegisterInput {
   userType: OnboardingUserType;
@@ -20,13 +20,13 @@ export interface RegisterInput {
 }
 
 export const registerParty = ({ data }: { data: RegisterInput }): Promise<{ id: string }> =>
-  trpc.mutation("parties.register", data);
+  trpc.mutation("users.register", data);
 
 export const setPartyVerification = ({
   data,
 }: {
   data: { partyId: string; status: VerificationStatus };
-}): Promise<{ ok: true }> => trpc.mutation("parties.setVerification", data);
+}): Promise<{ ok: true }> => trpc.mutation("users.setVerification", data);
 
 export interface CompleteOnboardingInput {
   userType: OnboardingUserType;
@@ -36,13 +36,13 @@ export interface CompleteOnboardingInput {
 }
 
 export const completeOnboarding = (data: CompleteOnboardingInput): Promise<Party> =>
-  trpc.mutation("parties.completeOnboarding", data);
+  trpc.mutation("users.completeOnboarding", data);
 
 export const findDriver = (email: string): Promise<Party | null> =>
-  trpc.query("parties.findDriver", { email });
+  trpc.query("users.findDriver", { email });
 
 export const getOnboarding = (partyId: string): Promise<OnboardingData | null> =>
-  trpc.query("parties.onboarding", { partyId });
+  trpc.query("users.onboarding", { partyId });
 
 export const uploadKycDocument = (name: string, url: string): Promise<Party> =>
-  trpc.mutation("parties.uploadKyc", { name, url });
+  trpc.mutation("users.uploadKyc", { name, url });

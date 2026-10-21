@@ -16,10 +16,14 @@ import type {
   FinancialTransaction,
   DispatchAssignment,
   TruckPosting,
+  Vehicle,
+  VehicleDriverAssignment,
 } from "./domain";
 
 // These describe the responses consumed by the existing frontend, not backend implementations.
 export interface DomainSnapshot {
+  vehicles?: Vehicle[];
+  vehicleDriverAssignments?: VehicleDriverAssignment[];
   loads: Load[];
   trucks: TruckPosting[];
   matches: Match[];

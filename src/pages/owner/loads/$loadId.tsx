@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { BadgeCheck } from "lucide-react";
 
@@ -13,7 +12,7 @@ import { Waybill } from "@/components/tamp/Waybill";
 import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/fns/matching";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
-import type { MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
+import type { Load, MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
 
 // §6.2 weighted score rules — the matching-rules explainer, stated plainly
 // and never collapsed away (C2 obligation).
@@ -80,8 +79,19 @@ function ruleEarned(breakdown: MatchScoreComponent[], ruleId: string): number {
 
 function LoadDetail() {
   const { loadId } = useParams<{ loadId: string }>();
-  const { loads, trucks, parties, matches, trips, disputes, incidents, audit, proofs, acceptMatch, rejectMatch } =
-    useTamp();
+  const {
+    loads,
+    trucks,
+    parties,
+    matches,
+    trips,
+    disputes,
+    incidents,
+    audit,
+    proofs,
+    acceptMatch,
+    rejectMatch,
+  } = useTamp();
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [showUnqualified, setShowUnqualified] = useState(false);
   const [reviewTruck, setReviewTruck] = useState<TruckPosting | null>(null);
@@ -159,6 +169,7 @@ function LoadDetail() {
           <Waybill load={load} />
 
           <aside className="space-y-6">
+            {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={trip} />}
             {trip && <ShareTrackingLink loadId={load.id} />}
 
             {trip && (
@@ -176,16 +187,24 @@ function LoadDetail() {
                   Operational updates
                 </h3>
                 <div className="divide-y divide-danger/15">
-                  {incidents.filter((item) => item.tripId === trip.id).map((item) => (
-                    <div key={item.id} className="p-4 text-xs">
-                      <div className="flex items-center justify-between gap-3">
-                        <strong>{item.kind.replaceAll("_", " ")}</strong>
-                        <span className="font-mono text-[10px] text-muted-foreground">{new Date(item.reportedAt).toLocaleString("en-ZA")}</span>
+                  {incidents
+                    .filter((item) => item.tripId === trip.id)
+                    .map((item) => (
+                      <div key={item.id} className="p-4 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong>{item.kind.replaceAll("_", " ")}</strong>
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {new Date(item.reportedAt).toLocaleString("en-ZA")}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">{item.description}</p>
+                        {item.delayMinutes && (
+                          <p className="mt-2 font-bold text-danger">
+                            ETA delayed by {item.delayMinutes} minutes
+                          </p>
+                        )}
                       </div>
-                      <p className="mt-1 text-muted-foreground">{item.description}</p>
-                      {item.delayMinutes && <p className="mt-2 font-bold text-danger">ETA delayed by {item.delayMinutes} minutes</p>}
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             )}
@@ -198,58 +217,63 @@ function LoadDetail() {
                   <div className="space-y-3">
                     {tripProofs.map((pod) => {
                       const kind = pod.kind ?? "DELIVERY";
-                      return <div key={pod.id} className="border border-border">
-                      <h3 className="flex items-center gap-1.5 border-b border-border bg-graphite/50 p-3 text-[10px] font-bold uppercase tracking-widest">
-                        <BadgeCheck className="size-3.5 text-positive" /> Proof of {kind.toLowerCase()}
-                      </h3>
-                      <div className="space-y-3 p-3 text-xs">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                          {kind === "PICKUP" ? "Released by" : "Received by"}
-                        </span>
-                        <div className="font-semibold">{pod.recipientName}</div>
-                      </div>
-                      {pod.signature && (
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                            Signature
-                          </span>
-                          <img
-                            src={pod.signature}
-                            alt="Recipient signature"
-                            className="mt-1 h-20 w-full rounded border border-border bg-white object-contain"
-                          />
+                      return (
+                        <div key={pod.id} className="border border-border">
+                          <h3 className="flex items-center gap-1.5 border-b border-border bg-graphite/50 p-3 text-[10px] font-bold uppercase tracking-widest">
+                            <BadgeCheck className="size-3.5 text-positive" /> Proof of{" "}
+                            {kind.toLowerCase()}
+                          </h3>
+                          <div className="space-y-3 p-3 text-xs">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                {kind === "PICKUP" ? "Released by" : "Received by"}
+                              </span>
+                              <div className="font-semibold">{pod.recipientName}</div>
+                            </div>
+                            {pod.signature && (
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                  Signature
+                                </span>
+                                <img
+                                  src={pod.signature}
+                                  alt="Recipient signature"
+                                  className="mt-1 h-20 w-full rounded border border-border bg-white object-contain"
+                                />
+                              </div>
+                            )}
+                            {pod.photoUrl ? (
+                              <div>
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                  {kind === "PICKUP" ? "Pickup photo" : "Delivery photo"}
+                                </span>
+                                <a href={pod.photoUrl} target="_blank" rel="noreferrer">
+                                  <img
+                                    src={pod.photoUrl}
+                                    alt={pod.photoName ?? "Delivery photo"}
+                                    className="mt-1 max-h-40 w-full rounded border border-border object-cover"
+                                  />
+                                </a>
+                              </div>
+                            ) : (
+                              pod.photoName && (
+                                <div className="text-muted-foreground">
+                                  📷 Photo: {pod.photoName}
+                                </div>
+                              )
+                            )}
+                            {pod.note && <div className="text-muted-foreground">“{pod.note}”</div>}
+                            <div className="font-mono text-[10px] text-muted-foreground">
+                              Captured {new Date(pod.capturedAt).toLocaleString("en-ZA")}
+                            </div>
+                            {pod.location?.verified && (
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-positive">
+                                <BadgeCheck className="size-3.5" /> GPS location verified
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      {pod.photoUrl ? (
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                            {kind === "PICKUP" ? "Pickup photo" : "Delivery photo"}
-                          </span>
-                          <a href={pod.photoUrl} target="_blank" rel="noreferrer">
-                            <img
-                              src={pod.photoUrl}
-                              alt={pod.photoName ?? "Delivery photo"}
-                              className="mt-1 max-h-40 w-full rounded border border-border object-cover"
-                            />
-                          </a>
-                        </div>
-                      ) : (
-                        pod.photoName && (
-                          <div className="text-muted-foreground">📷 Photo: {pod.photoName}</div>
-                        )
-                      )}
-                      {pod.note && <div className="text-muted-foreground">“{pod.note}”</div>}
-                      <div className="font-mono text-[10px] text-muted-foreground">
-                        Captured {new Date(pod.capturedAt).toLocaleString("en-ZA")}
-                      </div>
-                      {pod.location?.verified && (
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-positive">
-                          <BadgeCheck className="size-3.5" /> GPS location verified
-                        </div>
-                      )}
-                      </div>
-                    </div>;
+                      );
                     })}
                   </div>
                 );
@@ -319,6 +343,7 @@ function LoadDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 p-6">
         <section className="space-y-4">
+          {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={undefined} />}
           <div className="flex items-center justify-between">
             <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Suggested trucks ({suggestions.length})
@@ -447,6 +472,39 @@ function LoadDetail() {
         />
       )}
     </main>
+  );
+}
+
+function ConsignmentStops({ load, trip }: { load: Load; trip: Trip | undefined }) {
+  const current = trip?.currentStopIndex ?? 0;
+  return (
+    <div className="overflow-hidden rounded-xl border border-border">
+      <h3 className="border-b border-border bg-graphite/50 px-4 py-3 text-[10px] font-bold uppercase tracking-widest">
+        Consignment stops · {load.stops?.length}
+      </h3>
+      <div className="divide-y divide-border">
+        {load.stops?.map((stop, index) => (
+          <div
+            key={stop.id}
+            className={`px-4 py-3 ${index === current && trip ? "bg-signal/5" : ""}`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <strong className="text-xs uppercase">
+                {index + 1}. {stop.kind.replace("DROPOFF", "Drop-off")}
+              </strong>
+              <span className="text-[9px] font-bold uppercase text-muted-foreground">
+                {stop.status}
+              </span>
+            </div>
+            <p className="mt-1 text-sm font-semibold">{stop.place.label}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {new Date(stop.window.from).toLocaleString("en-ZA")}
+              {stop.contactName ? ` · ${stop.contactName}` : ""}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

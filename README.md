@@ -42,6 +42,10 @@ TAMP/
 
 The former `src/src` nesting and Next.js `app` wrappers have been removed. Configuration and the specification now live at the repository root. All previous URLs are retained; `/admin/logs` now exposes the existing system logs page. Unknown URLs show a not-found page.
 
+## Documentation
+
+- [TAMP entity relationship diagram](docs/TAMP-ERD.md) — current PostgreSQL tables, JSONB domain records, relationships, and integrity constraints.
+
 ## Backend contract
 
 Requests use same-origin `/api/trpc` with tRPC batching, SuperJSON, cookie credentials, and the `X-TAMP-Request` CSRF header; uploads use `/api/uploads`. The former Node backend package dependency remains removed. `src/types/domain.ts` and `src/types/api.ts` describe the wire shapes consumed by the UI, while `src/fns` retains the existing operation signatures.

@@ -6,7 +6,16 @@ export type Money = { amount: number; currency: "ZAR"; vat: "incl" | "excl" };
 export type Role = "FREIGHT_OWNER" | "TRANSPORTER" | "DRIVER" | "ADMIN";
 export type VerificationStatus = "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
 
-export interface Party {
+export interface OrganisationSummary {
+  id: UUID;
+  name: string;
+  type: string;
+  verification: VerificationStatus;
+  isPrimary: boolean;
+  createdAt?: ISODate;
+}
+
+export interface User {
   avatarUrl?: string | undefined;
   onboardingComplete?: boolean;
   onboardingUserType?: OnboardingUserType;
@@ -23,7 +32,13 @@ export interface Party {
   ratingCount: number;
   suspended: boolean;
   createdAt: ISODate;
+  permissions?: string[];
+  organisations?: OrganisationSummary[];
+  activeOrganisationId?: UUID | null;
 }
+
+/** @deprecated Use User. Kept while legacy domain fields named ownerId/partyId are migrated. */
+export type Party = User;
 
 export type CargoType =
   | "GENERAL_PALLETISED"
@@ -69,9 +84,30 @@ export interface Load {
   specialRequirements?: string | undefined;
   status: LoadStatus;
   createdAt: ISODate;
+  stops?: LoadStop[];
+}
+
+export type LoadStopKind = "PICKUP" | "DROPOFF";
+export type LoadStopStatus = "PENDING" | "ARRIVED" | "COMPLETED" | "FAILED" | "SKIPPED";
+
+export interface LoadStop {
+  id: UUID;
+  sequence: number;
+  kind: LoadStopKind;
+  place: Place;
+  window: { from: ISODate; to: ISODate };
+  contactName?: string;
+  contactPhone?: string;
+  instructions?: string;
+  cargoWeightKg?: number;
+  status: LoadStopStatus;
+  arrivedAt?: ISODate;
+  completedAt?: ISODate;
+  proofId?: UUID;
 }
 
 export interface TruckPosting {
+  vehicleId?: UUID;
   licenceExpiry?: string | undefined;
   driverId?: string | undefined;
   photos?: string[];
@@ -87,6 +123,41 @@ export interface TruckPosting {
   availableTo: ISODate;
   preferredLanes?: { origin: string; destination: string }[] | undefined;
   status: TruckStatus;
+  createdAt: ISODate;
+}
+
+export type VehicleStatus = "PENDING" | "ACTIVE" | "SUSPENDED" | "RETIRED";
+
+/** Permanent fleet asset. Availability and location remain on TruckPosting. */
+export interface Vehicle {
+  id: UUID;
+  organisationId?: UUID;
+  ownerId: UUID;
+  registration: string;
+  vin?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  bodyType: BodyType;
+  payloadCapacityKg: number;
+  volumeCapacityM3?: number;
+  licenceExpiry?: string;
+  photos: string[];
+  documents: string[];
+  verification: VerificationStatus;
+  status: VehicleStatus;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+export interface VehicleDriverAssignment {
+  id: UUID;
+  vehicleId: UUID;
+  driverId: UUID;
+  assignedBy: UUID;
+  status: "ACTIVE" | "ENDED";
+  startsAt: ISODate;
+  endsAt?: ISODate;
   createdAt: ISODate;
 }
 
@@ -136,13 +207,27 @@ export interface Trip {
   events: TripEvent[];
   simulatedPosition: { lat: number; lng: number; updatedAt: ISODate } | null;
   progressPct: number;
+  currentStopIndex?: number;
+  currentStopId?: UUID;
   etaAt: ISODate | null; // computed from simulation, chipped "Simulated"
-  geofences?: Partial<Record<"PICKUP" | "DESTINATION", { inside: boolean; distanceM?: number; enteredAt?: ISODate; exitedAt?: ISODate }>>;
+  geofences?: Partial<
+    Record<
+      "PICKUP" | "DESTINATION" | "CURRENT_STOP",
+      { inside: boolean; distanceM?: number; enteredAt?: ISODate; exitedAt?: ISODate }
+    >
+  >;
   geofenceEvents?: GeofenceEvent[];
   suggestedAction?: TripStatus | null;
 }
 
-export type IncidentKind = "DELAY" | "BREAKDOWN" | "ACCIDENT" | "NO_SHOW" | "CARGO_ISSUE" | "ROUTE_OBSTRUCTION" | "CANCELLATION";
+export type IncidentKind =
+  | "DELAY"
+  | "BREAKDOWN"
+  | "ACCIDENT"
+  | "NO_SHOW"
+  | "CARGO_ISSUE"
+  | "ROUTE_OBSTRUCTION"
+  | "CANCELLATION";
 
 export interface TripIncident {
   id: UUID;

@@ -1,4 +1,3 @@
-
 import {
   CheckCircle2,
   ChevronRight,
@@ -65,7 +64,8 @@ function statusMeta(status: string): { label: string; cls: string } {
   if (status === "DELIVERED" || status === "COMPLETED")
     return { label: "Delivered", cls: "bg-positive/15 text-positive" };
   if (status === "CANCELLED") return { label: "Cancelled", cls: "bg-danger/15 text-danger" };
-  if (status === "SCHEDULED") return { label: "Upcoming", cls: "bg-signal/20 text-signal-foreground" };
+  if (status === "SCHEDULED")
+    return { label: "Upcoming", cls: "bg-signal/20 text-signal-foreground" };
   return { label: "In-transit", cls: "bg-sky-400/15 text-sky-500" };
 }
 
@@ -133,7 +133,13 @@ function DriverJobs() {
       if (filter === "in-transit" && !isActiveTrip(j.trip.status)) return false;
       if (filter === "delivered" && isActiveTrip(j.trip.status)) return false;
       if (!q) return true;
-      return [j.load.id, j.trip.id, j.load.origin.label, j.load.destination.label, j.owner?.contactName]
+      return [
+        j.load.id,
+        j.trip.id,
+        j.load.origin.label,
+        j.load.destination.label,
+        j.owner?.contactName,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -259,7 +265,9 @@ function DriverJobs() {
               />
               <TrackingPanel
                 job={selected}
-                disputed={incidents.some((item) => item.tripId === selected.trip.id && item.status === "OPEN")}
+                disputed={incidents.some(
+                  (item) => item.tripId === selected.trip.id && item.status === "OPEN",
+                )}
                 onAdvance={() => advance(selected)}
                 onFlag={() => setIncidentLoadId(selected.load.id)}
                 onFullscreen={() => openMap(selected, true)}
@@ -269,7 +277,9 @@ function DriverJobs() {
             <div className="flex h-full items-center justify-center bg-graphite/30 text-center">
               <div>
                 <MapPin className="mx-auto mb-3 size-10 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Select a job to track it on the map.</p>
+                <p className="text-sm text-muted-foreground">
+                  Select a job to track it on the map.
+                </p>
               </div>
             </div>
           )}
@@ -302,7 +312,9 @@ function DriverJobs() {
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-bold uppercase">
-                      {mapNav ? "Navigation" : `${live.load.origin.label} → ${live.load.destination.label}`}
+                      {mapNav
+                        ? "Navigation"
+                        : `${live.load.origin.label} → ${live.load.destination.label}`}
                     </div>
                     <div className="font-mono text-[11px] text-muted-foreground">
                       {live.trip.id} · {mapNav ? "in-app navigation" : "live route"}
@@ -329,7 +341,11 @@ function DriverJobs() {
       {/* Proof of delivery capture — on marking the trip Delivered. */}
       {podJob && (
         <PodCapture
-          route={`${podJob.load.origin.label} → ${podJob.load.destination.label}`}
+          route={
+            podJob.load.stops?.[podJob.trip.currentStopIndex ?? 0]
+              ? `${podJob.load.stops[podJob.trip.currentStopIndex ?? 0]!.kind === "PICKUP" ? "Pickup" : "Drop-off"} · ${podJob.load.stops[podJob.trip.currentStopIndex ?? 0]!.place.label}`
+              : `${podJob.load.origin.label} → ${podJob.load.destination.label}`
+          }
           kind={podJob.trip.status === "AT_PICKUP" ? "pickup" : "delivery"}
           onCancel={() => setPodJob(null)}
           onConfirm={(pod) => {
@@ -375,7 +391,9 @@ function LoadCard({
           </span>
           <span className="font-mono text-sm font-bold">#{load.id}</span>
         </span>
-        <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${meta.cls}`}>{meta.label}</span>
+        <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${meta.cls}`}>
+          {meta.label}
+        </span>
       </div>
 
       <RouteRail status={trip.status} pct={trip.progressPct} />
@@ -414,7 +432,10 @@ function RouteRail({ status, pct }: { status: string; pct: number }) {
     <div className="flex items-center gap-2">
       <span className="size-2 shrink-0 rounded-full bg-foreground" />
       <div className="relative h-0.5 flex-1 rounded bg-border">
-        <div className="absolute inset-y-0 left-0 rounded bg-foreground" style={{ width: `${p}%` }} />
+        <div
+          className="absolute inset-y-0 left-0 rounded bg-foreground"
+          style={{ width: `${p}%` }}
+        />
         <span
           className="absolute top-1/2 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-border bg-background text-foreground shadow-sm"
           style={{ left: `${p}%` }}
@@ -449,7 +470,11 @@ function TrackingPanel({
   const [minimized, setMinimized] = useState(false);
   const { trip, load, truck, owner } = job;
   const meta = statusMeta(trip.status);
-  const nextStep = NEXT_STEP[trip.status];
+  const followingStop = load.stops?.[(trip.currentStopIndex ?? 0) + 1];
+  const nextStep =
+    (trip.status === "LOADED" || trip.status === "DELIVERED") && followingStop
+      ? `Head to next ${followingStop.kind === "PICKUP" ? "pickup" : "drop-off"}`
+      : NEXT_STEP[trip.status];
   const eta = estimateEta(load, trip);
   const delivered = trip.status === "DELIVERED" || trip.status === "COMPLETED";
 
@@ -517,7 +542,9 @@ function TrackingPanel({
             key={key}
             onClick={() => setTab(key)}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-              tab === key ? "bg-signal text-signal-foreground" : "text-muted-foreground hover:bg-steel/40"
+              tab === key
+                ? "bg-signal text-signal-foreground"
+                : "text-muted-foreground hover:bg-steel/40"
             }`}
           >
             {label}
@@ -530,15 +557,21 @@ function TrackingPanel({
         {tab === "tracking" && (
           <>
             <StageTimeline job={job} />
+            {load.stops && load.stops.length > 2 && <StopPlan job={job} />}
             <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
-              {(["PICKUP", "DESTINATION"] as const).map((zone) => {
+              {(["CURRENT_STOP", "DESTINATION"] as const).map((zone) => {
                 const fence = trip.geofences?.[zone];
+                const stop = load.stops?.[trip.currentStopIndex ?? 0];
                 return (
                   <div key={zone} className="rounded-lg bg-steel/35 px-3 py-2">
                     <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                      {zone === "PICKUP" ? "Pickup zone" : "Drop-off zone"}
+                      {zone === "CURRENT_STOP"
+                        ? `${stop?.kind === "DROPOFF" ? "Drop-off" : "Pickup"} zone`
+                        : "Final zone"}
                     </div>
-                    <div className={`mt-0.5 text-xs font-bold ${fence?.inside ? "text-positive" : "text-foreground"}`}>
+                    <div
+                      className={`mt-0.5 text-xs font-bold ${fence?.inside ? "text-positive" : "text-foreground"}`}
+                    >
                       {fence?.inside
                         ? "Inside geofence"
                         : fence?.distanceM != null
@@ -555,7 +588,10 @@ function TrackingPanel({
         {tab === "info" && (
           <dl className="space-y-2.5 text-sm">
             <InfoRow label="Route" value={`${load.origin.label} → ${load.destination.label}`} />
-            <InfoRow label="Rate" value={load.targetRate ? zar(load.targetRate.amount) : "On file"} />
+            <InfoRow
+              label="Rate"
+              value={load.targetRate ? zar(load.targetRate.amount) : "On file"}
+            />
             <InfoRow
               label="Cargo"
               value={`${load.cargoType.replaceAll("_", " ")} · ${(load.weightKg / 1000).toFixed(1)}t`}
@@ -571,7 +607,9 @@ function TrackingPanel({
                 minute: "2-digit",
               })}
             />
-            {owner && <InfoRow label="Client" value={`${owner.contactName} · ${owner.companyName}`} />}
+            {owner && (
+              <InfoRow label="Client" value={`${owner.contactName} · ${owner.companyName}`} />
+            )}
           </dl>
         )}
 
@@ -653,11 +691,26 @@ function StageTimeline({ job }: { job: Job }) {
   const currentIdx = STATUS_ORDER[trip.status] ?? -1;
 
   const stages = [
-    { key: "EN_ROUTE_PICKUP", title: "To pickup", desc: `Heading to ${load.origin.label}`, Icon: Navigation },
-    { key: "AT_PICKUP", title: "At pickup", desc: `Collect at ${load.origin.label}`, Icon: ShoppingBag },
+    {
+      key: "EN_ROUTE_PICKUP",
+      title: "To pickup",
+      desc: `Heading to ${load.origin.label}`,
+      Icon: Navigation,
+    },
+    {
+      key: "AT_PICKUP",
+      title: "At pickup",
+      desc: `Collect at ${load.origin.label}`,
+      Icon: ShoppingBag,
+    },
     { key: "LOADED", title: "Loaded", desc: "Cargo loaded & secured", Icon: Package },
     { key: "IN_TRANSIT", title: "In transit", desc: "On the road", Icon: Truck },
-    { key: "AT_DROPOFF", title: "At drop-off", desc: `Arrive at ${load.destination.label}`, Icon: MapPin },
+    {
+      key: "AT_DROPOFF",
+      title: "At drop-off",
+      desc: `Arrive at ${load.destination.label}`,
+      Icon: MapPin,
+    },
     { key: "DELIVERED", title: "Delivered", desc: "Handed to consignee", Icon: PackageCheck },
   ];
 
@@ -699,9 +752,13 @@ function StageTimeline({ job }: { job: Job }) {
                 <span className={`my-1 w-px flex-1 ${done ? "bg-positive/40" : "bg-border"}`} />
               )}
             </div>
-            <div className={`flex flex-1 items-start justify-between gap-3 ${isLast ? "" : "pb-4"}`}>
+            <div
+              className={`flex flex-1 items-start justify-between gap-3 ${isLast ? "" : "pb-4"}`}
+            >
               <div className="min-w-0">
-                <div className={`text-sm font-bold leading-tight ${on ? "text-foreground" : "text-muted-foreground"}`}>
+                <div
+                  className={`text-sm font-bold leading-tight ${on ? "text-foreground" : "text-muted-foreground"}`}
+                >
                   {s.title}
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">{s.desc}</div>
@@ -714,6 +771,53 @@ function StageTimeline({ job }: { job: Job }) {
         );
       })}
     </ol>
+  );
+}
+
+function StopPlan({ job }: { job: Job }) {
+  const current = job.trip.currentStopIndex ?? 0;
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Route stops · {job.load.stops?.length}
+      </div>
+      <ol className="space-y-2">
+        {job.load.stops?.map((stop, index) => (
+          <li
+            key={stop.id}
+            className={`rounded-lg border px-3 py-2 ${
+              index === current
+                ? "border-signal bg-signal/5"
+                : stop.status === "COMPLETED"
+                  ? "border-positive/30 bg-positive/5"
+                  : "border-border"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-black uppercase">
+                {index + 1}. {stop.kind === "PICKUP" ? "Pickup" : "Drop-off"}
+              </span>
+              <span className="text-[9px] font-bold uppercase text-muted-foreground">
+                {stop.status}
+              </span>
+            </div>
+            <div className="mt-0.5 truncate text-xs font-semibold">{stop.place.label}</div>
+            <div className="mt-1 text-[10px] text-muted-foreground">
+              {new Date(stop.window.from).toLocaleString("en-ZA", {
+                day: "2-digit",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {stop.contactName ? ` · ${stop.contactName}` : ""}
+            </div>
+            {stop.instructions && (
+              <p className="mt-1 text-[10px] text-muted-foreground">{stop.instructions}</p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 

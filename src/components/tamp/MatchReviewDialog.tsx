@@ -53,7 +53,11 @@ export function MatchReviewDialog({
     setError("");
     Promise.all([
       computeRoute(truck.currentLocation, load.origin),
-      computeRoute(load.origin, load.destination),
+      computeRoute(
+        load.origin,
+        load.destination,
+        load.stops?.slice(1, -1).map((stop) => stop.place) ?? [],
+      ),
     ])
       .then(async ([deadhead, journey]) => {
         if (cancelled) return;
@@ -203,13 +207,35 @@ export function MatchReviewDialog({
               <RouteRow label="Truck" value={truck.currentLocation.label} icon={<Truck />} />
               <RouteRow label="Pickup" value={load.origin.label} icon={<MapPin />} />
               <RouteRow label="Destination" value={load.destination.label} icon={<MapPin />} />
+              {load.stops && load.stops.length > 2 && (
+                <RouteRow
+                  label="Stops"
+                  value={`${load.stops.length} total · ${load.stops
+                    .slice(1, -1)
+                    .map((stop) => stop.place.label)
+                    .join(" · ")}`}
+                  icon={<MapPin />}
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Metric label="Truck to pickup" value={routes?.deadhead ? `${routes.deadhead.distanceKm} km` : "—"} />
-              <Metric label="Freight distance" value={routes ? `${routes.journey.distanceKm} km` : "—"} />
-              <Metric label="Estimated duration" value={routes ? formatDuration(routes.journey.durationMin) : "—"} />
-              <Metric label="Rate" value={load.targetRate ? formatMoney(load.targetRate) : "On file"} />
+              <Metric
+                label="Truck to pickup"
+                value={routes?.deadhead ? `${routes.deadhead.distanceKm} km` : "—"}
+              />
+              <Metric
+                label="Freight distance"
+                value={routes ? `${routes.journey.distanceKm} km` : "—"}
+              />
+              <Metric
+                label="Estimated duration"
+                value={routes ? formatDuration(routes.journey.durationMin) : "—"}
+              />
+              <Metric
+                label="Rate"
+                value={load.targetRate ? formatMoney(load.targetRate) : "On file"}
+              />
             </div>
 
             {offer && (
@@ -220,9 +246,12 @@ export function MatchReviewDialog({
             )}
 
             <div className="rounded-lg border border-border bg-graphite/60 p-3 text-xs">
-              <div className="font-bold">{truck.bodyType} · {truck.registration}</div>
+              <div className="font-bold">
+                {truck.bodyType} · {truck.registration}
+              </div>
               <div className="mt-1 text-muted-foreground">
-                {(truck.payloadCapacityKg / 1000).toFixed(1)}t capacity · {(load.weightKg / 1000).toFixed(1)}t load
+                {(truck.payloadCapacityKg / 1000).toFixed(1)}t capacity ·{" "}
+                {(load.weightKg / 1000).toFixed(1)}t load
               </div>
               <div className="mt-1 text-muted-foreground">
                 Pickup {new Date(load.pickupWindow.from).toLocaleString("en-ZA")}
@@ -247,7 +276,10 @@ export function MatchReviewDialog({
         </div>
 
         <footer className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2 text-xs font-bold uppercase"
+          >
             Cancel
           </button>
           <button
@@ -264,11 +296,22 @@ export function MatchReviewDialog({
   );
 }
 
-function RouteRow({ label, value, icon }: { label: string; value: string; icon: React.ReactElement }) {
+function RouteRow({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactElement;
+}) {
   return (
     <div className="flex gap-2">
       <span className="mt-0.5 text-signal [&>svg]:size-3.5">{icon}</span>
-      <div><span className="font-bold">{label}:</span> <span className="text-muted-foreground">{value}</span></div>
+      <div>
+        <span className="font-bold">{label}:</span>{" "}
+        <span className="text-muted-foreground">{value}</span>
+      </div>
     </div>
   );
 }
@@ -276,7 +319,9 @@ function RouteRow({ label, value, icon }: { label: string; value: string; icon: 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border p-2.5">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-0.5 font-mono text-sm font-bold">{value}</div>
     </div>
   );

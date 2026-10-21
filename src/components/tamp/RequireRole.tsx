@@ -15,11 +15,20 @@ import type { Role } from "@/types/domain";
 // a mismatch. Because the guard now redirects to the new role's home — the
 // same place the switch was heading — the two navigations agree and the user
 // always lands on the right dashboard instead of being stranded on 403.
-export function RequireRole({ role, children }: { role: Role | Role[]; children: ReactNode }) {
+export function RequireRole({
+  role,
+  permission,
+  children,
+}: {
+  role: Role | Role[];
+  permission?: string;
+  children: ReactNode;
+}) {
   const { role: activeRole, authParty, authReady } = useTamp();
   const navigate = useNavigate();
   const allowed = Array.isArray(role) ? role : [role];
-  const authorised = authParty != null && allowed.includes(activeRole);
+  const hasPermission = !permission || authParty?.permissions?.includes(permission) === true;
+  const authorised = authParty != null && allowed.includes(activeRole) && hasPermission;
 
   // A social-login account that hasn't finished onboarding is sent to /welcome.
   const needsOnboarding = authParty?.onboardingComplete === false;
@@ -29,8 +38,9 @@ export function RequireRole({ role, children }: { role: Role | Role[]; children:
     if (!authParty) navigate({ to: "/" }); // not signed in → login
     else if (needsOnboarding) navigate({ to: "/welcome" });
     else if (!allowed.includes(activeRole)) navigate({ to: HOME_BY_ROLE[activeRole] });
+    else if (!hasPermission) navigate({ to: "/403" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady, authParty, needsOnboarding, activeRole, navigate]);
+  }, [authReady, authParty, needsOnboarding, activeRole, hasPermission, navigate]);
 
   if (!authReady) return null;
   if (!authorised || needsOnboarding) return null;

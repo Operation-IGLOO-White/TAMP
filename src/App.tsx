@@ -41,6 +41,7 @@ const Page34 = lazy(() => import("@/pages/transporter/earnings"));
 const Page35 = lazy(() => import("@/pages/admin/finance"));
 const Page36 = lazy(() => import("@/pages/dispatch"));
 const Page37 = lazy(() => import("@/pages/messages"));
+const Page38 = lazy(() => import("@/pages/organisation"));
 
 export default function App() {
   return (
@@ -58,7 +59,7 @@ export default function App() {
             <Route
               path="/admin/oversight"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="incidents.manage">
                   <Page1 />
                 </RequireRole>
               }
@@ -66,7 +67,7 @@ export default function App() {
             <Route
               path="/admin"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="platform.admin">
                   <Page2 />
                 </RequireRole>
               }
@@ -74,7 +75,7 @@ export default function App() {
             <Route
               path="/admin/profile"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="platform.admin">
                   <Page3 />
                 </RequireRole>
               }
@@ -82,7 +83,7 @@ export default function App() {
             <Route
               path="/admin/trucks"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="trucks.read">
                   <Page4 />
                 </RequireRole>
               }
@@ -90,7 +91,7 @@ export default function App() {
             <Route
               path="/admin/users/:partyId"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="users.read">
                   <Page5 />
                 </RequireRole>
               }
@@ -98,7 +99,7 @@ export default function App() {
             <Route
               path="/admin/users"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="users.read">
                   <Page6 />
                 </RequireRole>
               }
@@ -257,17 +258,18 @@ export default function App() {
             <Route
               path="/admin/logs"
               element={
-                <RequireRole role={"ADMIN"}>
+                <RequireRole role={"ADMIN"} permission="system.logs.read">
                   <Page32 />
                 </RequireRole>
               }
             />
             <Route path="/owner/billing" element={<RequireRole role={"FREIGHT_OWNER"}><Page33 /></RequireRole>} />
             <Route path="/transporter/earnings" element={<RequireRole role={["TRANSPORTER", "DRIVER"]}><Page34 /></RequireRole>} />
-            <Route path="/admin/finance" element={<RequireRole role={"ADMIN"}><Page35 /></RequireRole>} />
+            <Route path="/admin/finance" element={<RequireRole role={"ADMIN"} permission="finance.manage"><Page35 /></RequireRole>} />
             <Route path="/transporter/dispatch" element={<RequireRole role={"TRANSPORTER"}><Page36 /></RequireRole>} />
             <Route path="/driver/dispatch" element={<RequireRole role={"DRIVER"}><Page36 /></RequireRole>} />
             <Route path="/messages" element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}><Page37 /></RequireRole>} />
+            <Route path="/organisation" element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]} permission="organisations.read"><Page38 /></RequireRole>} />
             <Route
               path="*"
               element={

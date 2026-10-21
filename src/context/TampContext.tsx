@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useCallback,
@@ -45,6 +44,7 @@ import type {
   FinancialTransaction,
   Invoice,
   Load,
+  LoadStop,
   MaintenanceKind,
   MaintenanceTask,
   Match,
@@ -58,6 +58,8 @@ import type {
   TripStatus,
   TruckPosting,
   VerificationStatus,
+  Vehicle,
+  VehicleDriverAssignment,
 } from "@/types/domain";
 
 const STORAGE_KEY = "tamp-state-v4";
@@ -70,6 +72,8 @@ interface State {
   parties: Party[];
   loads: Load[];
   trucks: TruckPosting[];
+  vehicles: Vehicle[];
+  vehicleDriverAssignments: VehicleDriverAssignment[];
   matches: Match[];
   trips: Trip[];
   ratings: Rating[];
@@ -120,7 +124,6 @@ const ACTOR_BY_ROLE: Record<Role, string> = {
   ADMIN: "P-ADMIN-1",
 };
 
-
 interface NewLoadInput {
   ownerId: string;
   cargoType: CargoType;
@@ -132,6 +135,7 @@ interface NewLoadInput {
   pickupWindow: Load["pickupWindow"];
   deliveryBy: string;
   specialRequirements?: string | undefined;
+  stops?: LoadStop[];
 }
 
 interface NewPartyInput {
@@ -156,6 +160,11 @@ interface NewTruckInput {
   preferredLanes?: { origin: string; destination: string }[] | undefined;
   photos?: string[];
   documents?: string[];
+  vin?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  licenceExpiry?: string;
 }
 
 interface Store extends State {
@@ -201,11 +210,29 @@ interface Store extends State {
   confirmMatch: (loadId: string, truckId: string | undefined, proof: OfferProof) => Promise<void>;
   declineMatch: (loadId: string, truckId?: string) => void;
   advanceTrip: (loadId: string, proof?: PodInput) => Promise<void>;
-  reportIncident: (loadId: string, kind: OperationalIncidentKind, description: string, delayMinutes?: number) => Promise<boolean>;
+  reportIncident: (
+    loadId: string,
+    kind: OperationalIncidentKind,
+    description: string,
+    delayMinutes?: number,
+  ) => Promise<boolean>;
   cancelTrip: (loadId: string, reason: string) => Promise<boolean>;
-  updateIncident: (incidentId: string, action: IncidentAction, options?: { assigneeId?: string; note?: string; etaMinutes?: number }) => Promise<boolean>;
-  updateInvoice: (invoiceId: string, action: InvoiceAction, reference: string, note?: string) => Promise<boolean>;
-  updateDispatch: (tripId: string, action: DispatchAction, options?: { driverEmail?: string; note?: string }) => Promise<boolean>;
+  updateIncident: (
+    incidentId: string,
+    action: IncidentAction,
+    options?: { assigneeId?: string; note?: string; etaMinutes?: number },
+  ) => Promise<boolean>;
+  updateInvoice: (
+    invoiceId: string,
+    action: InvoiceAction,
+    reference: string,
+    note?: string,
+  ) => Promise<boolean>;
+  updateDispatch: (
+    tripId: string,
+    action: DispatchAction,
+    options?: { driverEmail?: string; note?: string },
+  ) => Promise<boolean>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
   flagDispute: (loadId: string, category: DisputeCategory, description: string) => void;
   resolveDispute: (loadId: string) => void;
@@ -250,6 +277,8 @@ function initial(): State {
     parties: [],
     loads: [],
     trucks: [],
+    vehicles: [],
+    vehicleDriverAssignments: [],
     matches: [],
     trips: [],
     ratings: [],
@@ -349,9 +378,12 @@ export function TampProvider({ children }: { children: ReactNode }) {
   authRef.current = auth.party;
   const saveChain = useRef<Promise<void>>(Promise.resolve());
   const saving = useRef(false);
-  const reportSaveError = (error: unknown) => window.dispatchEvent(new CustomEvent("tamp:save-error", {
-    detail: error instanceof Error ? error.message : "Changes could not be saved",
-  }));
+  const reportSaveError = (error: unknown) =>
+    window.dispatchEvent(
+      new CustomEvent("tamp:save-error", {
+        detail: error instanceof Error ? error.message : "Changes could not be saved",
+      }),
+    );
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // What has been persisted, for computing deltas.
   const persistedRef = useRef<EntityMaps>(emptyMaps());
@@ -359,40 +391,44 @@ export function TampProvider({ children }: { children: ReactNode }) {
   // Serialize writes so a slower save cannot overwrite a newer one.
   const flushPending = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    const work = saveChain.current.catch(() => {}).then(async () => {
-      if (!authRef.current) return;
-      const accountId = authRef.current.id;
-      const savedState = stateRef.current;
-      const { changed, delta } = computeDelta(persistedRef.current, savedState);
-      if (!changed) return;
-      saving.current = true;
-      try {
-        const result = await applyDelta(delta);
-        if (authRef.current?.id !== accountId) return;
-        if (result.snapshot) {
-          const server = result.snapshot;
-          persistedRef.current = mapsFrom(server);
-          setState(current => {
-            const unsaved = computeDelta(mapsFrom(savedState), current).delta;
-            const merged = { ...current, ...server };
-            for (const key of DOMAIN_KEYS) {
-              const records = new Map<string, { id: string }>(server[key].map(row => [row.id, row]));
-              for (const row of unsaved.upserts[key]) records.set(row.id, row);
-              for (const id of unsaved.deleteIds[key]) records.delete(id);
-              // Every collection keeps its domain type through the wire contract.
-              Object.assign(merged, { [key]: [...records.values()] });
-            }
-            stateRef.current = merged;
-            return merged;
-          });
-        } else {
-          persistedRef.current = mapsFrom(savedState);
+    const work = saveChain.current
+      .catch(() => {})
+      .then(async () => {
+        if (!authRef.current) return;
+        const accountId = authRef.current.id;
+        const savedState = stateRef.current;
+        const { changed, delta } = computeDelta(persistedRef.current, savedState);
+        if (!changed) return;
+        saving.current = true;
+        try {
+          const result = await applyDelta(delta);
+          if (authRef.current?.id !== accountId) return;
+          if (result.snapshot) {
+            const server = result.snapshot;
+            persistedRef.current = mapsFrom(server);
+            setState((current) => {
+              const unsaved = computeDelta(mapsFrom(savedState), current).delta;
+              const merged = { ...current, ...server };
+              for (const key of DOMAIN_KEYS) {
+                const records = new Map<string, { id: string }>(
+                  server[key].map((row) => [row.id, row]),
+                );
+                for (const row of unsaved.upserts[key]) records.set(row.id, row);
+                for (const id of unsaved.deleteIds[key]) records.delete(id);
+                // Every collection keeps its domain type through the wire contract.
+                Object.assign(merged, { [key]: [...records.values()] });
+              }
+              stateRef.current = merged;
+              return merged;
+            });
+          } else {
+            persistedRef.current = mapsFrom(savedState);
+          }
+          window.dispatchEvent(new CustomEvent("tamp:save-error", { detail: "" }));
+        } finally {
+          saving.current = false;
         }
-        window.dispatchEvent(new CustomEvent("tamp:save-error", { detail: "" }));
-      } finally {
-        saving.current = false;
-      }
-    });
+      });
     saveChain.current = work;
     return work;
   }, []);
@@ -409,6 +445,8 @@ export function TampProvider({ children }: { children: ReactNode }) {
         parties: snap.parties,
         loads: snap.loads,
         trucks: snap.trucks,
+        vehicles: snap.vehicles ?? [],
+        vehicleDriverAssignments: snap.vehicleDriverAssignments ?? [],
         matches: snap.matches,
         trips: snap.trips,
         ratings: snap.ratings,
@@ -438,6 +476,8 @@ export function TampProvider({ children }: { children: ReactNode }) {
       parties: [],
       loads: [],
       trucks: [],
+      vehicles: [],
+      vehicleDriverAssignments: [],
       matches: [],
       trips: [],
       ratings: [],
@@ -516,7 +556,9 @@ export function TampProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => {
       void flushPending().catch(reportSaveError);
     }, 400);
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, [state, hydrated, auth.party, flushPending]);
 
   useEffect(() => {
@@ -732,9 +774,9 @@ export function TampProvider({ children }: { children: ReactNode }) {
         };
         const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
         const available = state.trucks.filter((t) => t.status === "AVAILABLE");
-        const scored = (await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)).filter(
-          (m) => m.passed,
-        );
+        const scored = (
+          await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
+        ).filter((m) => m.passed);
         const generated: Match[] = scored.map((m) => ({
           id: nextRef("MT"),
           loadId: id,
@@ -777,9 +819,9 @@ export function TampProvider({ children }: { children: ReactNode }) {
         };
         const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
         const available = state.trucks.filter((t) => t.status === "AVAILABLE");
-        const scored = (await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)).filter(
-          (m) => m.passed,
-        );
+        const scored = (
+          await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
+        ).filter((m) => m.passed);
         const generated: Match[] = scored.map((m) => ({
           id: nextRef("MT"),
           loadId,
@@ -815,12 +857,33 @@ export function TampProvider({ children }: { children: ReactNode }) {
       addTruck: async (input) => {
         const current = stateRef.current;
         const id = nextRef("TR");
+        const vehicleId = nextRef("VH");
+        const now = new Date().toISOString();
         const truck: TruckPosting = {
           id,
+          vehicleId,
           status: "AVAILABLE",
-          createdAt: new Date().toISOString(),
+          createdAt: now,
           ...input,
           preferredLanes: input.preferredLanes ?? [],
+        };
+        const vehicle: Vehicle = {
+          id: vehicleId,
+          ownerId: input.transporterId,
+          registration: input.registration,
+          ...(input.vin ? { vin: input.vin } : {}),
+          ...(input.make ? { make: input.make } : {}),
+          ...(input.model ? { model: input.model } : {}),
+          ...(input.year ? { year: input.year } : {}),
+          bodyType: input.bodyType,
+          payloadCapacityKg: input.payloadCapacityKg,
+          ...(input.licenceExpiry ? { licenceExpiry: input.licenceExpiry } : {}),
+          photos: input.photos ?? [],
+          documents: input.documents ?? [],
+          verification: "PENDING",
+          status: "ACTIVE",
+          createdAt: now,
+          updatedAt: now,
         };
         const operator = current.parties.find((p) => p.id === truck.transporterId)!;
         const openLoads = current.loads.filter((l) => l.status === "POSTED");
@@ -851,6 +914,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
         const nextState: State = {
           ...current,
           trucks: [truck, ...current.trucks],
+          vehicles: [vehicle, ...current.vehicles],
           matches: [...generated, ...current.matches],
           audit: log(
             current.audit,

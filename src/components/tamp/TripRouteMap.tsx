@@ -1,4 +1,3 @@
-
 // In-app route map for a single trip (Uber/Bolt style): draws the real driving
 // route from Valhalla on an OpenStreetMap canvas, with
 // pickup, drop-off and a live truck marker. No hand-off to an external maps app.
@@ -15,9 +14,24 @@ import { useLiveTripPosition } from "@/hooks/useLiveTracking";
 // Before the cargo is loaded the driver heads to the pick-up; after that, to
 // the drop-off. Navigation targets whichever stop is next.
 function nextStopFor(load: Load, trip: Trip) {
+  const stops = load.stops;
+  if (stops?.length) {
+    const stop = stops[Math.min(trip.currentStopIndex ?? 0, stops.length - 1)]!;
+    return {
+      pos: [stop.place.lat, stop.place.lng] as LatLng,
+      label: stop.place.label,
+      kind: stop.kind === "PICKUP" ? "Pick-up" : "Drop-off",
+      toPickup: stop.kind === "PICKUP",
+    };
+  }
   const toPickup = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP"].includes(trip.status);
   return toPickup
-    ? { pos: [load.origin.lat, load.origin.lng] as LatLng, label: load.origin.label, kind: "Pick-up", toPickup }
+    ? {
+        pos: [load.origin.lat, load.origin.lng] as LatLng,
+        label: load.origin.label,
+        kind: "Pick-up",
+        toPickup,
+      }
     : {
         pos: [load.destination.lat, load.destination.lng] as LatLng,
         label: load.destination.label,
@@ -52,17 +66,25 @@ export function TripRouteMap({
   // Fetch the real road geometry once.
   useEffect(() => {
     let cancelled = false;
-    computeRoute(load.origin, load.destination)
-      .then((r) => {
-        if (cancelled || !r) return;
-        setRoute(geoJsonLineToLatLng(r.geometry.coordinates));
-        setInfo({ km: r.distanceKm, min: r.durationMin });
+    const places = load.stops?.map((stop) => stop.place) ?? [load.origin, load.destination];
+    Promise.all(places.slice(0, -1).map((place, index) => computeRoute(place, places[index + 1]!)))
+      .then((legs) => {
+        if (cancelled || legs.some((leg) => !leg)) return;
+        setRoute(
+          legs.flatMap((leg, index) =>
+            geoJsonLineToLatLng(leg!.geometry.coordinates).slice(index ? 1 : 0),
+          ),
+        );
+        setInfo({
+          km: legs.reduce((sum, leg) => sum + leg!.distanceKm, 0),
+          min: legs.reduce((sum, leg) => sum + leg!.durationMin, 0),
+        });
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [load.origin, load.destination]);
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +138,15 @@ export function TripRouteMap({
 
       dot(o, "#16a34a", `Pick-up · ${load.origin.label}`);
       dot(d, "#dc2626", `Drop-off · ${load.destination.label}`);
+      load.stops
+        ?.slice(1, -1)
+        .forEach((stop) =>
+          dot(
+            [stop.place.lat, stop.place.lng],
+            stop.kind === "PICKUP" ? "#16a34a" : "#dc2626",
+            `${stop.sequence + 1}. ${stop.kind === "PICKUP" ? "Pick-up" : "Drop-off"} · ${stop.place.label}`,
+          ),
+        );
 
       // Truck: live GPS fix, else interpolated along the real road by progress.
       const pct = Math.min(100, Math.max(0, trip.progressPct));
@@ -142,7 +173,16 @@ export function TripRouteMap({
     return () => {
       cancelled = true;
     };
-  }, [route, load, trip.id, trip.status, trip.progressPct, trip.simulatedPosition, livePosition, nav]);
+  }, [
+    route,
+    load,
+    trip.id,
+    trip.status,
+    trip.progressPct,
+    trip.simulatedPosition,
+    livePosition,
+    nav,
+  ]);
 
   // Leaflet mismeasures if its container is still sizing (flex/modal). Remeasure
   // and re-fit the route whenever the container resizes, plus a few times on mount.
