@@ -4,6 +4,8 @@ export type ISODate = string; // "2026-08-24T06:30:00+02:00"
 export type Money = { amount: number; currency: "ZAR"; vat: "incl" | "excl" };
 
 export type Role = "FREIGHT_OWNER" | "TRANSPORTER" | "DRIVER" | "ADMIN";
+export type OrganisationRole =
+  "FREIGHT_OWNER" | "TRANSPORTER" | "DRIVER" | "CARGO_OPERATOR" | "DISPATCHER";
 export type VerificationStatus = "UNVERIFIED" | "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface OrganisationSummary {
@@ -35,6 +37,7 @@ export interface User {
   permissions?: string[];
   organisations?: OrganisationSummary[];
   activeOrganisationId?: UUID | null;
+  systemRole?: "system_super_user";
 }
 
 /** @deprecated Use User. Kept while legacy domain fields named ownerId/partyId are migrated. */

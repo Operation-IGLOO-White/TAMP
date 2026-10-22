@@ -1,4 +1,3 @@
-
 import { Link, useNavigate } from "@/lib/nav";
 import {
   Bell,
@@ -14,10 +13,8 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import {
-  fetchNotifications,
-  markNotificationsRead as markServerRead,
-} from "@/fns/notifications";
+import { toast } from "sonner";
+import { fetchNotifications, markNotificationsRead as markServerRead } from "@/fns/notifications";
 import { HOME_BY_ROLE, PROFILE_BY_ROLE, ROLE_SHORT } from "@/lib/role-routes";
 import {
   licenceAlerts,
@@ -94,14 +91,47 @@ function OrganisationSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useClickAway(() => setOpen(false));
   const organisations = authParty?.organisations ?? [];
-  const active = organisations.find((item) => item.id === authParty?.activeOrganisationId) ?? organisations[0];
+  const active =
+    organisations.find((item) => item.id === authParty?.activeOrganisationId) ?? organisations[0];
   if (!active) return null;
-  return <div className="relative" ref={ref}><button onClick={() => setOpen((value) => !value)} className="hidden max-w-48 items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-steel/50 sm:flex"><Building2 className="size-4 text-signal" /><span className="truncate">{active.name}</span>{organisations.length > 1 && <ChevronDown className="size-3.5" />}</button>{open && organisations.length > 1 && <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-white p-1 shadow-xl">{organisations.map((organisation) => <button key={organisation.id} onClick={() => { setOpen(false); if (organisation.id !== active.id) void switchOrganisation(organisation.id).then(() => window.location.reload()); }} className={`w-full rounded-md px-3 py-2 text-left hover:bg-steel/40 ${organisation.id === active.id ? "bg-signal/10" : ""}`}><div className="truncate text-xs font-bold">{organisation.name}</div><div className="text-[10px] uppercase text-muted-foreground">{organisation.type.replaceAll("_", " ")}</div></button>)}</div>}</div>;
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((value) => !value)}
+        className="hidden max-w-48 items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-steel/50 sm:flex"
+      >
+        <Building2 className="size-4 text-signal" />
+        <span className="truncate">{active.name}</span>
+        {organisations.length > 1 && <ChevronDown className="size-3.5" />}
+      </button>
+      {open && organisations.length > 1 && (
+        <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-white p-1 shadow-xl">
+          {organisations.map((organisation) => (
+            <button
+              key={organisation.id}
+              onClick={() => {
+                setOpen(false);
+                if (organisation.id !== active.id)
+                  void switchOrganisation(organisation.id).then(() => window.location.reload());
+              }}
+              className={`w-full rounded-md px-3 py-2 text-left hover:bg-steel/40 ${organisation.id === active.id ? "bg-signal/10" : ""}`}
+            >
+              <div className="truncate text-xs font-bold">{organisation.name}</div>
+              <div className="text-[10px] uppercase text-muted-foreground">
+                {organisation.type.replaceAll("_", " ")}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NotificationsMenu() {
   const {
     role,
+    authParty,
     matches,
     trips,
     disputes,
@@ -114,14 +144,38 @@ function NotificationsMenu() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const ref = useClickAway(() => setOpen(false));
+  const seenServerNotifications = useRef<Set<string>>(new Set());
 
   // Poll the server notification store so the bell reflects domain events the
   // scheduler or other users trigger, not just this session's actions.
   const { data: server = [] } = useQuery({
-    queryKey: ["notifications", role],
+    queryKey: ["notifications", authParty?.id, authParty?.activeOrganisationId],
     queryFn: () => fetchNotifications(30),
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
   });
+
+  useEffect(() => {
+    const now = Date.now();
+    for (const notification of server) {
+      if (seenServerNotifications.current.has(notification.id)) continue;
+      seenServerNotifications.current.add(notification.id);
+      if (notification.unread && now - new Date(notification.at).getTime() < 120_000) {
+        playNotificationSound();
+        toast.info(notification.title, {
+          description: notification.detail,
+          duration: 10_000,
+          ...(notification.title === "New matching load"
+            ? {
+                action: {
+                  label: "View job",
+                  onClick: () => navigate({ to: "/transporter/engagements" }),
+                },
+              }
+            : {}),
+        });
+      }
+    }
+  }, [server, navigate]);
   const serverNotifs: Notification[] = server.map((n) => ({
     id: n.id,
     title: n.title,
@@ -235,6 +289,26 @@ function NotificationsMenu() {
       )}
     </div>
   );
+}
+
+function playNotificationSound() {
+  try {
+    const AudioContextClass = window.AudioContext;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.setValueAtTime(740, context.currentTime);
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.24);
+    oscillator.addEventListener("ended", () => void context.close());
+  } catch {
+    // Browsers may block audio until the account has interacted with the page.
+  }
 }
 
 function ProfileMenu() {

@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import type { OrganisationSummary, Role, User } from "@/types/domain";
+import type { OrganisationRole, OrganisationSummary, User } from "@/types/domain";
 
 export type OrganisationMember = User & {
   membershipId: string;
@@ -10,9 +10,8 @@ export type OrganisationMember = User & {
 export const listOrganisations = (): Promise<OrganisationSummary[]> =>
   trpc.query("organisations.list");
 
-export const listOrganisationMembers = (
-  organisationId: string,
-): Promise<OrganisationMember[]> => trpc.query("organisations.members", { organisationId });
+export const listOrganisationMembers = (organisationId: string): Promise<OrganisationMember[]> =>
+  trpc.query("organisations.members", { organisationId });
 
 export const createOrganisation = (input: {
   name: string;
@@ -22,7 +21,7 @@ export const createOrganisation = (input: {
 export const addOrganisationMember = (input: {
   organisationId: string;
   email: string;
-  role: Exclude<Role, "ADMIN">;
+  role: OrganisationRole;
 }): Promise<{ ok: true; userId: string }> => trpc.mutation("organisations.addMember", input);
 
 export const updateOrganisation = (organisationId: string, name: string) =>
@@ -31,7 +30,7 @@ export const updateOrganisation = (organisationId: string, name: string) =>
 export const setOrganisationMemberRoles = (
   organisationId: string,
   userId: string,
-  roles: Exclude<Role, "ADMIN">[],
+  roles: OrganisationRole[],
 ) => trpc.mutation<{ ok: true }>("organisations.setMemberRoles", { organisationId, userId, roles });
 
 export const removeOrganisationMember = (organisationId: string, userId: string) =>
