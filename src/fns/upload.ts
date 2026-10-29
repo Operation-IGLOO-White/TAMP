@@ -1,6 +1,7 @@
 // Client helper for the multipart upload endpoint. Returns the stored file's
 // served URL, which the caller persists on the relevant record.
 export type FileKind = "AVATAR" | "KYC" | "POD" | "TRUCK_PHOTO" | "TRUCK_DOCUMENT" | "MESSAGE";
+import { responseError } from "@/lib/api-errors";
 
 export interface UploadedFile {
   id: string;
@@ -23,11 +24,11 @@ export async function uploadFile(file: File, kind: FileKind): Promise<UploadedFi
     body,
   });
   if (!res.ok) {
-    const msg = await res
-      .json()
-      .then((j: { error?: string }) => j.error)
-      .catch(() => null);
-    throw new Error(msg ?? `Upload failed (${res.status}).`);
+    throw new Error(await responseError(res, "The file could not be uploaded. Please try again."));
   }
-  return (await res.json()) as UploadedFile;
+  try {
+    return (await res.json()) as UploadedFile;
+  } catch {
+    throw new Error("The upload service returned an invalid response. Please try again shortly.");
+  }
 }

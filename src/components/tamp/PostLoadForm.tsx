@@ -2,7 +2,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { computeRoute } from "@/fns/routes";
-import { formatMoney, PLACES } from "@/lib/tamp-data";
+import { formatMoney } from "@/lib/tamp-data";
 import { bodyTypesForCargo, roadDistanceKm } from "@/fns/matching";
 import { priceLoad, type PriceBreakdown } from "@/fns/pricing";
 import { useTamp } from "@/context/TampContext";
@@ -33,8 +33,8 @@ const cargoTypes: { value: CargoType; label: string }[] = [
 export function PostLoadForm({ onDone }: { onDone: () => void }) {
   const { role, addLoad, me } = useTamp();
   const [form, setForm] = useState({
-    origin: PLACES.johannesburg as Place,
-    destination: PLACES.durban as Place,
+    origin: null as Place | null,
+    destination: null as Place | null,
     cargoType: "GENERAL_PALLETISED" as CargoType,
     weightKg: 24000,
     volumeM3: 0,
@@ -52,9 +52,9 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
   const destination = form.destination;
   const routePlaces = useMemo(
     () => [
-      origin,
+      ...(origin ? [origin] : []),
       ...intermediateStops.flatMap((stop) => (stop.place ? [stop.place] : [])),
-      destination,
+      ...(destination ? [destination] : []),
     ],
     [origin, destination, intermediateStops],
   );
@@ -66,6 +66,7 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     let cancelled = false;
     setRoute(null);
+    if (!origin || !destination) return;
     Promise.all(
       routePlaces.slice(0, -1).map((place, index) => computeRoute(place, routePlaces[index + 1]!)),
     )
@@ -81,13 +82,17 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [routeKey, routePlaces]);
+  }, [origin, destination, routeKey, routePlaces]);
 
   // Straight-line fallback distance, from the backend (src/fns/matching.ts),
   // used until the driving-route effect above resolves.
   const [fallbackDistanceKm, setFallbackDistanceKm] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    if (!origin || !destination) {
+      setFallbackDistanceKm(0);
+      return;
+    }
     Promise.all(
       routePlaces
         .slice(0, -1)
@@ -98,7 +103,7 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [routeKey, routePlaces]);
+  }, [origin, destination, routeKey, routePlaces]);
 
   const distanceKm = route?.km ?? fallbackDistanceKm;
 
@@ -135,6 +140,10 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
     <form
       onSubmit={async (e) => {
         e.preventDefault();
+        if (!origin || !destination) {
+          setError("Select both an origin and destination address.");
+          return;
+        }
         if (intermediateStops.some((stop) => !stop.place)) {
           setError("Select an address for every intermediate stop.");
           return;
@@ -196,17 +205,13 @@ export function PostLoadForm({ onDone }: { onDone: () => void }) {
       className="p-4 border-b border-border bg-graphite/60 grid grid-cols-4 gap-3 animate-slide"
     >
       <Field label="Origin">
-        <AddressInput
-          value={form.origin}
-          onSelect={(p) => set("origin", p)}
-          placeholder="Pick-up address…"
-        />
+        <AddressInput value={form.origin} onSelect={(p) => set("origin", p)} placeholder="" />
       </Field>
       <Field label="Destination">
         <AddressInput
           value={form.destination}
           onSelect={(p) => set("destination", p)}
-          placeholder="Drop-off address…"
+          placeholder=""
         />
       </Field>
       <div className="col-span-4 rounded-lg border border-border bg-background/50 p-3">

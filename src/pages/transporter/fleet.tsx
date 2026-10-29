@@ -1,6 +1,7 @@
 import { Camera, CheckCircle2, FileUp, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { truckRegistrationError } from "@/lib/api-errors";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
@@ -407,6 +408,13 @@ function AddTruckForm({
       return setErr("Payload capacity must be between 1 and 200,000 kg.");
     }
     if (
+      !Number.isInteger(form.year) ||
+      form.year < 1950 ||
+      form.year > new Date().getFullYear() + 1
+    ) {
+      return setErr(`Vehicle year must be between 1950 and ${new Date().getFullYear() + 1}.`);
+    }
+    if (
       !form.location.label.trim() ||
       !Number.isFinite(form.location.lat) ||
       !Number.isFinite(form.location.lng) ||
@@ -455,7 +463,7 @@ function AddTruckForm({
       });
       onDone();
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "The truck could not be registered.";
+      const message = truckRegistrationError(cause);
       setErr(message);
       toast.error("Truck registration failed", { id: toastId, description: message });
     } finally {

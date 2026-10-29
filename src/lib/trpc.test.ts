@@ -30,3 +30,18 @@ it("propagates API failures instead of fabricating successful data", async () =>
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Backend unavailable")));
   await expect(loadState()).rejects.toThrow("Backend unavailable");
 });
+
+it("does not expose HTML/JSON parser errors returned by a proxy", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response("<html><h1>Bad gateway</h1></html>", {
+        status: 502,
+        headers: { "Content-Type": "text/html" },
+      }),
+    ),
+  );
+  await expect(loadState()).rejects.toThrow(
+    "The service is temporarily unavailable. Please try again shortly.",
+  );
+});
