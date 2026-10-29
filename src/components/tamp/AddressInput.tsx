@@ -1,4 +1,4 @@
-// Address field backed by Photon/OpenStreetMap through the backend. Type any South African address; the
+// Address field backed by the configured geocoder through the backend. Type any South African address; the
 // dropdown shows live predictions, and picking one resolves to a Place with
 // accurate coordinates + province used by matching, pricing and the map.
 
@@ -31,6 +31,7 @@ export function AddressInput({
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
+  const sessionToken = useRef(crypto.randomUUID());
 
   // Keep the input text in sync when the selected value changes externally.
   useEffect(() => {
@@ -51,7 +52,7 @@ export function AddressInput({
     setSearchError("");
     const t = setTimeout(async () => {
       try {
-        const preds = await geocodeAutocomplete(query);
+        const preds = await geocodeAutocomplete(query, sessionToken.current);
         if (cancelled) return;
         setResults(preds);
         setOpen(true);
@@ -91,13 +92,14 @@ export function AddressInput({
     setOpen(false);
     setQuery(p.primary);
     try {
-      const place = p.place ?? (await geocodeDetails(p.id));
+      const place = p.place ?? (await geocodeDetails(p.id, sessionToken.current));
       onSelect(place);
       setQuery(place.label);
     } catch {
       /* leave the typed text if details fail */
     } finally {
       setLoading(false);
+      sessionToken.current = crypto.randomUUID();
     }
   };
 
@@ -118,6 +120,7 @@ export function AddressInput({
           setQuery(place.label);
           setResults([]);
           setOpen(false);
+          sessionToken.current = crypto.randomUUID();
         } catch {
           const fallback: Place = {
             label: `Current location (${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)})`,
@@ -231,8 +234,8 @@ export function AddressInput({
           )}
           {results.length === 0 && searched && !loading && !searchError && (
             <li className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
-              <SearchX className="size-4" /> No South African address found. Try a street and
-              suburb.
+              <SearchX className="size-4" /> No South African address found. Try a street number,
+              street and suburb.
             </li>
           )}
           {results.map((p) => (

@@ -1,4 +1,4 @@
-// Client wrappers over the tRPC geocode router (server-side Photon/OpenStreetMap).
+// Client wrappers over the tRPC geocode router. Provider credentials remain server-side.
 import { trpc } from "@/lib/trpc";
 import type { Prediction } from "@/types/api";
 import type { Place } from "@/types/domain";
