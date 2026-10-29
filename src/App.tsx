@@ -49,8 +49,9 @@ export default function App() {
       <Providers>
         <Suspense
           fallback={
-            <div role="status" className="p-8 text-muted-foreground">
-              Loading…
+            <div role="status" aria-label="Loading page" className="route-loading-track">
+              <span className="route-loading-bar" />
+              <span className="sr-only">Loading page</span>
             </div>
           }
         >
@@ -263,13 +264,65 @@ export default function App() {
                 </RequireRole>
               }
             />
-            <Route path="/owner/billing" element={<RequireRole role={"FREIGHT_OWNER"}><Page33 /></RequireRole>} />
-            <Route path="/transporter/earnings" element={<RequireRole role={["TRANSPORTER", "DRIVER"]}><Page34 /></RequireRole>} />
-            <Route path="/admin/finance" element={<RequireRole role={"ADMIN"} permission="finance.manage"><Page35 /></RequireRole>} />
-            <Route path="/transporter/dispatch" element={<RequireRole role={"TRANSPORTER"}><Page36 /></RequireRole>} />
-            <Route path="/driver/dispatch" element={<RequireRole role={"DRIVER"}><Page36 /></RequireRole>} />
-            <Route path="/messages" element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}><Page37 /></RequireRole>} />
-            <Route path="/organisation" element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]} permission="organisations.read"><Page38 /></RequireRole>} />
+            <Route
+              path="/owner/billing"
+              element={
+                <RequireRole role={"FREIGHT_OWNER"}>
+                  <Page33 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/transporter/earnings"
+              element={
+                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                  <Page34 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/finance"
+              element={
+                <RequireRole role={"ADMIN"} permission="finance.manage">
+                  <Page35 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/transporter/dispatch"
+              element={
+                <RequireRole role={"TRANSPORTER"}>
+                  <Page36 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/driver/dispatch"
+              element={
+                <RequireRole role={"DRIVER"}>
+                  <Page36 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}>
+                  <Page37 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/organisation"
+              element={
+                <RequireRole
+                  role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}
+                  permission="organisations.read"
+                >
+                  <Page38 />
+                </RequireRole>
+              }
+            />
             <Route
               path="*"
               element={

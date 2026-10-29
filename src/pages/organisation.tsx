@@ -94,7 +94,7 @@ export default function OrganisationPage() {
     <AppShell>
       <PageHeader title="Organisation" />
       <div className="grid gap-5 p-5 xl:grid-cols-[280px_1fr]">
-        <aside className="rounded-lg border border-border bg-white p-3">
+        <aside className="rounded-lg border border-border bg-graphite p-3">
           <div className="mb-3 flex items-center gap-2 px-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
             <Building2 className="size-4" /> Organisations
           </div>
@@ -149,7 +149,7 @@ export default function OrganisationPage() {
         <main className="min-w-0 space-y-5">
           {active ? (
             <>
-              <section className="rounded-lg border border-border bg-white p-5">
+              <section className="rounded-lg border border-border bg-graphite p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
@@ -197,7 +197,7 @@ export default function OrganisationPage() {
                   </form>
                 )}
               </section>
-              <section className="rounded-lg border border-border bg-white">
+              <section className="rounded-lg border border-border bg-graphite">
                 <div className="flex items-center gap-2 border-b border-border p-4">
                   <Users className="size-4 text-signal" />
                   <h3 className="font-bold">Members</h3>

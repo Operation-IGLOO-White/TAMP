@@ -32,9 +32,7 @@ export default function DispatchPage() {
   ) => {
     setBusy(tripId);
     await updateDispatch(tripId, action, {
-      ...(driverEmail || emails[tripId]
-        ? { driverEmail: driverEmail ?? emails[tripId] }
-        : {}),
+      ...(driverEmail || emails[tripId] ? { driverEmail: driverEmail ?? emails[tripId] } : {}),
       ...(notes[tripId] ? { note: notes[tripId] } : {}),
     });
     setBusy(null);
@@ -43,7 +41,7 @@ export default function DispatchPage() {
   return (
     <AppShell>
       <PageHeader title={carrierMode ? "Dispatch Board" : "Job Offers"} />
-      <div className="space-y-5 bg-[#f7f9fb] p-4 sm:p-6">
+      <div className="space-y-5 bg-background p-4 sm:p-6">
         <div className="grid gap-3 sm:grid-cols-3">
           <Metric label="Scheduled jobs" value={jobs.length} icon={Route} />
           <Metric
@@ -61,7 +59,7 @@ export default function DispatchPage() {
           {jobs.map(({ trip, load, truck, assignment }) => (
             <article
               key={trip.id}
-              className="overflow-hidden rounded-xl border border-border bg-white"
+              className="overflow-hidden rounded-xl border border-border bg-graphite"
             >
               <div className="flex items-start justify-between gap-3 border-b border-border p-4">
                 <div>
@@ -171,7 +169,7 @@ export default function DispatchPage() {
             </article>
           ))}
           {!jobs.length && (
-            <div className="rounded-xl border border-dashed border-border bg-white p-12 text-center text-sm text-muted-foreground xl:col-span-2">
+            <div className="rounded-xl border border-dashed border-border bg-graphite p-12 text-center text-sm text-muted-foreground xl:col-span-2">
               {carrierMode
                 ? "No scheduled jobs need dispatching."
                 : "No driver offers are waiting for you."}
@@ -192,7 +190,7 @@ function Metric({
   icon: typeof Route;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-4">
+    <div className="rounded-xl border border-border bg-graphite p-4">
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>{label}</span>
         <Icon className="size-4 text-signal" />

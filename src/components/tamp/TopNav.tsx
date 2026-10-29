@@ -105,7 +105,7 @@ function OrganisationSwitcher() {
         {organisations.length > 1 && <ChevronDown className="size-3.5" />}
       </button>
       {open && organisations.length > 1 && (
-        <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-white p-1 shadow-xl">
+        <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-border bg-graphite p-1 shadow-xl">
           {organisations.map((organisation) => (
             <button
               key={organisation.id}

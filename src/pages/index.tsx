@@ -103,7 +103,7 @@ function Landing() {
           also covers the first-navigation compile so it never looks stuck. */}
       {redirecting && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#071018]/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <BrandLogo className="h-14 animate-in zoom-in-50 duration-300" priority />
+          <BrandLogo className="h-14 animate-in zoom-in-50 duration-300" priority darkSurface />
           <div className="flex items-center gap-2 text-sm font-semibold text-white/65">
             <Loader2 className="size-4 animate-spin" /> Signing you in…
           </div>
@@ -111,7 +111,7 @@ function Landing() {
       )}
 
       <header className="login-reveal relative z-20 mx-auto flex w-full max-w-[1480px] items-center justify-between px-6 py-6 sm:px-10 lg:px-14 lg:py-8">
-        <LoginBrandLogo />
+        <BrandLogo className="h-11 sm:h-13" priority darkSurface />
         <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
           <span>Track</span>
           <i className="h-3 w-px bg-white/25" />
@@ -270,26 +270,6 @@ function Feature({ icon: Icon, label }: { icon: typeof Route; label: string }) {
       </span>
       {label}
     </div>
-  );
-}
-
-function LoginBrandLogo() {
-  return (
-    <span className="relative block h-11 w-[132px] sm:h-13 sm:w-[156px]" aria-label="TAMP ON">
-      <img
-        src="/tamp-logo.png"
-        alt=""
-        className="absolute inset-0 size-full object-contain brightness-0 invert"
-        fetchPriority="high"
-      />
-      <img
-        src="/tamp-logo.png"
-        alt=""
-        aria-hidden
-        className="absolute inset-0 size-full object-contain [clip-path:inset(0_0_0_51%)]"
-        fetchPriority="high"
-      />
-    </span>
   );
 }
 
