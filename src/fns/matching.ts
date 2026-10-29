@@ -17,7 +17,10 @@ export const scoreLoadAgainstTrucks = (
   trucks: TruckPosting[],
   operators: Party[],
   owner: Party,
-): Promise<ScoredMatch[]> => trpc.query("matching.score", { load, trucks, operators, owner });
+): Promise<ScoredMatch[]> =>
+  // Scoring carries full load, truck and operator records. Use POST so this
+  // payload is not constrained by browser/proxy URL-length limits.
+  trpc.mutation("matching.score", { load, trucks, operators, owner });
 
 export const bodyTypesForCargo = (cargoType: CargoType): Promise<BodyType[]> =>
   trpc.query("matching.bodyTypesForCargo", { cargoType });
