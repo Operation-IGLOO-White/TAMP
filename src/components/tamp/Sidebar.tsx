@@ -87,7 +87,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`hidden shrink-0 flex-col border-r border-border bg-white transition-[width] duration-200 dark:bg-[#0d0e12] md:flex ${
+      className={`hidden shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200 md:flex ${
         sidebarCollapsed ? "w-16" : "w-60"
       }`}
     >
@@ -138,7 +138,7 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
   return (
     <div className="fixed inset-x-0 bottom-0 top-16 z-40 md:hidden">
       <button className="absolute inset-0 bg-black/30" onClick={onClose} aria-label="Close menu" />
-      <aside className="relative flex h-full w-[min(86vw,320px)] flex-col border-r border-border bg-white p-3 text-foreground shadow-2xl animate-in slide-in-from-left duration-200 dark:bg-[#0d0e12]">
+      <aside className="relative flex h-full w-[min(86vw,320px)] flex-col border-r border-border bg-sidebar p-3 text-foreground shadow-2xl animate-in slide-in-from-left duration-200">
         <nav className="space-y-0.5">
           {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact }) => (
             <Link

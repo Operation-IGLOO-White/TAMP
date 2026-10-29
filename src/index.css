@@ -29,6 +29,7 @@
   --color-positive: var(--positive);
   --color-danger: var(--danger);
   --color-card: var(--graphite);
+  --color-sidebar: var(--sidebar);
   --color-card-foreground: var(--foreground);
   --color-primary: var(--signal);
   --color-primary-foreground: var(--signal-foreground);
@@ -55,6 +56,7 @@
   --paper-foreground: oklch(0.2 0.008 285);
   --positive: oklch(0.58 0.14 150);
   --danger: oklch(0.57 0.21 27);
+  --sidebar: #ffffff;
 }
 
 .dark {
@@ -71,6 +73,7 @@
   --paper-foreground: oklch(0.15 0 0);
   --positive: oklch(0.62 0.15 150);
   --danger: oklch(0.62 0.2 27);
+  --sidebar: #0d0e12;
 }
 
 .brand-logo-color {
