@@ -111,7 +111,7 @@ function Landing() {
       )}
 
       <header className="login-reveal relative z-20 mx-auto flex w-full max-w-[1480px] items-center justify-between px-6 py-6 sm:px-10 lg:px-14 lg:py-8">
-        <BrandLogo className="h-11 brightness-0 invert sm:h-13" priority />
+        <LoginBrandLogo />
         <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
           <span>Track</span>
           <i className="h-3 w-px bg-white/25" />
@@ -166,10 +166,6 @@ function Landing() {
             className="login-card w-full max-w-[510px] rounded-[28px] border border-white/20 p-6 shadow-2xl sm:p-9 lg:p-11"
           >
             <div className="mb-8">
-              <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.28em] text-signal">
-                <span className="size-1.5 rounded-full bg-signal shadow-[0_0_14px_currentColor]" />{" "}
-                Secure access
-              </div>
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Sign in</h2>
               <p className="mt-2 text-sm text-white/58">
                 Welcome back. Enter your TAMP account details.
@@ -274,6 +270,26 @@ function Feature({ icon: Icon, label }: { icon: typeof Route; label: string }) {
       </span>
       {label}
     </div>
+  );
+}
+
+function LoginBrandLogo() {
+  return (
+    <span className="relative block h-11 w-[132px] sm:h-13 sm:w-[156px]" aria-label="TAMP ON">
+      <img
+        src="/tamp-logo.png"
+        alt=""
+        className="absolute inset-0 size-full object-contain brightness-0 invert"
+        fetchPriority="high"
+      />
+      <img
+        src="/tamp-logo.png"
+        alt=""
+        aria-hidden
+        className="absolute inset-0 size-full object-contain [clip-path:inset(0_0_0_51%)]"
+        fetchPriority="high"
+      />
+    </span>
   );
 }
 

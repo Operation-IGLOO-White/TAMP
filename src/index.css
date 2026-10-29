@@ -130,34 +130,12 @@
   }
 }
 
-@keyframes login-cinema {
-  from {
-    transform: scale(1.035) translate3d(-0.35%, 0, 0);
-  }
-  to {
-    transform: scale(1.075) translate3d(0.35%, -0.25%, 0);
-  }
-}
-
-@keyframes login-ambient {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: translate3d(0, 0, 0) scale(0.92);
-  }
-  50% {
-    opacity: 0.75;
-    transform: translate3d(-3%, 2%, 0) scale(1.08);
-  }
-}
-
 .login-backdrop-image {
-  animation: login-cinema 18s ease-in-out alternate infinite;
-  will-change: transform;
+  transform: scale(1.035);
 }
 
 .login-ambient {
-  animation: login-ambient 8s ease-in-out infinite;
+  opacity: 0.55;
 }
 
 .login-reveal {
