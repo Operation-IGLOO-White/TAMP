@@ -26,6 +26,7 @@ export function AddressInput({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
@@ -42,10 +43,12 @@ export function AddressInput({
       setResults([]);
       setLoading(false);
       setSearched(false);
+      setSearchError("");
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setSearchError("");
     const t = setTimeout(async () => {
       try {
         const preds = await geocodeAutocomplete(query);
@@ -54,11 +57,16 @@ export function AddressInput({
         setOpen(true);
         setSearched(true);
         setActiveIndex(-1);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setResults([]);
           setSearched(true);
           setOpen(true);
+          setSearchError(
+            error instanceof Error
+              ? error.message
+              : "The address service could not be reached. Try again.",
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -212,7 +220,16 @@ export function AddressInput({
               Use my current location
             </button>
           </li>
-          {results.length === 0 && searched && !loading && (
+          {results.length === 0 && searched && !loading && searchError && (
+            <li className="flex items-start gap-2 px-3 py-3 text-xs text-danger" role="alert">
+              <SearchX className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Address search is unavailable. Check that the backend is running on port 5000 and
+                try again.
+              </span>
+            </li>
+          )}
+          {results.length === 0 && searched && !loading && !searchError && (
             <li className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
               <SearchX className="size-4" /> No South African address found. Try a street and
               suburb.
