@@ -1,6 +1,15 @@
-
 import { Link, useNavigate } from "@/lib/nav";
-import { Clock, Loader2 } from "lucide-react";
+import {
+  Activity,
+  ArrowRight,
+  Clock,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  Radar,
+  Route,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
@@ -77,139 +86,194 @@ function Landing() {
   };
 
   return (
-    <main className="grid min-h-screen md:grid-cols-2">
+    <main className="login-page relative min-h-[100svh] overflow-hidden bg-[#071018] text-white">
+      <div className="login-backdrop absolute inset-0" aria-hidden>
+        <img
+          src="/tamp-login-hero.webp"
+          alt=""
+          className="login-backdrop-image size-full object-cover"
+          fetchPriority="high"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,9,14,.88)_0%,rgba(3,9,14,.52)_48%,rgba(3,9,14,.72)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,8,13,.28)_0%,rgba(2,8,13,.08)_45%,rgba(2,8,13,.86)_100%)]" />
+        <div className="login-ambient absolute -right-32 top-1/4 size-[34rem] rounded-full bg-signal/10 blur-[120px]" />
+      </div>
+
       {/* Redirect overlay — a smooth, animated hand-off to the dashboard that
           also covers the first-navigation compile so it never looks stuck. */}
       {redirecting && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <BrandLogo className="h-12 animate-in zoom-in-50 duration-300" priority />
-          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#071018]/90 backdrop-blur-xl animate-in fade-in duration-300">
+          <BrandLogo className="h-14 animate-in zoom-in-50 duration-300" priority />
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/65">
             <Loader2 className="size-4 animate-spin" /> Signing you in…
           </div>
         </div>
       )}
 
-      <section className="flex flex-col justify-center border-b border-border bg-graphite p-8 md:border-b-0 md:border-r md:p-14">
-        <BrandLogo className="mb-8 h-12 self-start" priority />
-        <h1 className="max-w-md text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-          Loads and trucks, matched by rules you can see.
-        </h1>
-        <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
-          TAMP connects South African freight owners with available truck capacity through
-          rule-based matching, traceable acceptance and trip oversight — no black box, no unlabelled
-          simulation.
-        </p>
-
-        <div className="mt-10 grid max-w-md grid-cols-3 gap-4">
-          <Counter label="Loads posted" value={loadsPosted} />
-          <Counter label="Trucks available" value={trucksAvailable} />
-          <Counter label="Matches accepted" value={matchesAccepted} />
+      <header className="login-reveal relative z-20 mx-auto flex w-full max-w-[1480px] items-center justify-between px-6 py-6 sm:px-10 lg:px-14 lg:py-8">
+        <BrandLogo className="h-11 brightness-0 invert sm:h-13" priority />
+        <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
+          <span>Track</span>
+          <i className="h-3 w-px bg-white/25" />
+          <span>Manage</span>
+          <i className="h-3 w-px bg-white/25" />
+          <span>Move</span>
+          <i className="h-3 w-px bg-white/25" />
+          <span>Perform</span>
+          <i className="ml-1 h-px w-10 bg-signal" />
         </div>
-      </section>
+      </header>
 
-      <section className="flex flex-col justify-center p-8 md:p-14">
-        <form onSubmit={signIn} className="mx-auto w-full max-w-sm space-y-5 animate-slide">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight">Sign in</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Welcome back. Sign in with your TAMP account.
-            </p>
+      <div className="relative z-10 mx-auto grid min-h-[calc(100svh-110px)] w-full max-w-[1480px] items-center gap-10 px-6 pb-10 sm:px-10 lg:grid-cols-[1.1fr_.9fr] lg:px-14 lg:pb-16">
+        <section className="login-copy max-w-2xl self-center pb-4 pt-6 lg:pb-24">
+          <div className="login-reveal login-delay-1 mb-6 flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.42em] text-white/70 sm:text-xs">
+            Cargo transportation <span className="h-px w-12 bg-white/55" />
           </div>
-
-          {notice && (
-            <div className="flex items-center gap-2 rounded-md border border-signal/40 bg-signal/10 px-3 py-2 text-xs font-medium text-foreground">
-              <Clock className="size-4 shrink-0 text-signal" /> {notice}
-            </div>
-          )}
-
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Email
-            </span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputCls}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Password
-              <Link
-                to="/forgot-password"
-                className="normal-case text-signal hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </span>
-            <PasswordInput
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputCls}
-              autoComplete="current-password"
-            />
-          </label>
-
-          {error && <p className="text-center text-xs font-medium text-danger">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-signal py-2.5 text-sm font-bold uppercase tracking-wide text-signal-foreground transition-all hover:brightness-105 disabled:opacity-70"
-          >
-            {busy && <Loader2 className="size-4 animate-spin" />}
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-
-          <p className="text-center text-xs text-muted-foreground">
-            New to TAMP?{" "}
-            <Link to="/register" className="font-semibold text-signal hover:underline">
-              Register an account
-            </Link>
+          <h1 className="login-reveal login-delay-2 text-4xl font-extrabold leading-[1.06] tracking-[-0.045em] sm:text-5xl lg:text-6xl xl:text-[4.6rem]">
+            Loads and trucks,
+            <span className="mt-1 block text-signal">matched in full view.</span>
+          </h1>
+          <p className="login-reveal login-delay-3 mt-7 max-w-xl text-sm leading-7 text-white/68 sm:text-base">
+            TAMP connects South African freight owners with trusted truck capacity through
+            explainable matching, live visibility and accountable operations.
           </p>
 
+          <div className="login-reveal login-delay-4 mt-9 flex flex-wrap gap-3">
+            <div className="login-stat">
+              <strong>{loadsPosted}</strong>
+              <span>Loads posted</span>
+            </div>
+            <div className="login-stat">
+              <strong>{trucksAvailable}</strong>
+              <span>Trucks ready</span>
+            </div>
+            <div className="login-stat">
+              <strong>{matchesAccepted}</strong>
+              <span>Matches accepted</span>
+            </div>
+          </div>
 
-        </form>
-      </section>
+          <div className="login-reveal login-delay-5 mt-12 hidden flex-wrap items-center gap-x-8 gap-y-4 lg:flex">
+            <Feature icon={Radar} label="Smart matching" />
+            <Feature icon={Activity} label="Real-time visibility" />
+            <Feature icon={ShieldCheck} label="Trusted operations" />
+          </div>
+        </section>
+
+        <section className="login-reveal login-delay-2 flex items-center justify-center lg:justify-end">
+          <form
+            onSubmit={signIn}
+            className="login-card w-full max-w-[510px] rounded-[28px] border border-white/20 p-6 shadow-2xl sm:p-9 lg:p-11"
+          >
+            <div className="mb-8">
+              <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.28em] text-signal">
+                <span className="size-1.5 rounded-full bg-signal shadow-[0_0_14px_currentColor]" />{" "}
+                Secure access
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Sign in</h2>
+              <p className="mt-2 text-sm text-white/58">
+                Welcome back. Enter your TAMP account details.
+              </p>
+            </div>
+
+            {notice && (
+              <div className="mb-5 flex items-center gap-2 rounded-xl border border-signal/30 bg-signal/10 px-3 py-2.5 text-xs font-medium text-white">
+                <Clock className="size-4 shrink-0 text-signal" /> {notice}
+              </div>
+            )}
+
+            <div className="space-y-5">
+              <label className="block">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
+                  Email
+                </span>
+                <span className="group relative block">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-signal" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`${inputCls} pl-11`}
+                    placeholder="Enter your email address"
+                    autoComplete="email"
+                    required
+                  />
+                </span>
+              </label>
+              <label className="block">
+                <span className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
+                  Password
+                  <Link
+                    to="/forgot-password"
+                    className="normal-case tracking-normal text-signal transition-colors hover:text-white"
+                  >
+                    Forgot password?
+                  </Link>
+                </span>
+                <span className="group relative block">
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-signal" />
+                  <PasswordInput
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`${inputCls} pl-11`}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </span>
+              </label>
+
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-center text-xs font-medium text-red-300"
+                >
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="login-submit group flex w-full items-center justify-center gap-3 rounded-xl bg-signal py-3.5 text-sm font-extrabold uppercase tracking-[0.12em] text-signal-foreground shadow-[0_12px_34px_rgba(235,170,0,.2)] transition-all duration-300 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_18px_40px_rgba(235,170,0,.3)] disabled:translate-y-0 disabled:opacity-70"
+              >
+                {busy && <Loader2 className="size-4 animate-spin" />}
+                {busy ? "Signing in…" : "Sign in"}
+                {!busy && (
+                  <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
+                )}
+              </button>
+            </div>
+
+            <p className="mt-6 text-center text-xs text-white/52">
+              New to TAMP?{" "}
+              <Link
+                to="/register"
+                className="font-semibold text-signal transition-colors hover:text-white"
+              >
+                Register an account
+              </Link>
+            </p>
+          </form>
+        </section>
+      </div>
+
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-px bg-gradient-to-r from-transparent via-signal/70 to-transparent" />
     </main>
   );
 }
 
 const inputCls =
-  "w-full rounded-md border border-border bg-graphite px-3 py-2.5 text-sm text-foreground outline-none focus:border-signal";
+  "w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 py-3.5 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/28 hover:border-white/25 focus:border-signal/70 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(235,170,0,.08)]";
 
-function Counter({ label, value }: { label: string; value: number }) {
+function Feature({ icon: Icon, label }: { icon: typeof Route; label: string }) {
   return (
-    <div>
-      <div className="font-mono text-2xl font-bold text-foreground">{value}</div>
-      <div className="mt-1 text-[10px] uppercase leading-tight tracking-wide text-muted-foreground">
-        {label}
-      </div>
+    <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/65">
+      <span className="grid size-9 place-items-center rounded-full border border-white/15 bg-white/5 backdrop-blur-sm">
+        <Icon className="size-4 text-signal" />
+      </span>
+      {label}
     </div>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.85 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.67-2.84Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06L5.85 9.9C6.71 7.31 9.14 5.38 12 5.38Z"
-      />
-    </svg>
   );
 }
 
