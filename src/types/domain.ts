@@ -208,6 +208,16 @@ export interface Trip {
   matchId: UUID;
   status: TripStatus;
   events: TripEvent[];
+  /** Latest normalized GPS fix. Older records may only contain simulatedPosition. */
+  livePosition?: {
+    lat: number;
+    lng: number;
+    accuracyM: number | null;
+    speedKph: number | null;
+    heading: number | null;
+    recordedAt: ISODate;
+    updatedAt: ISODate;
+  } | null;
   simulatedPosition: { lat: number; lng: number; updatedAt: ISODate } | null;
   progressPct: number;
   currentStopIndex?: number;

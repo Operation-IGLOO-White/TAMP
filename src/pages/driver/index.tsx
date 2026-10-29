@@ -120,6 +120,18 @@ function DriverJobs() {
     [jobs],
   );
   const locationSharing = useDriverLocationSharing(activeTripIds);
+  const gpsLabel =
+    locationSharing.state === "sharing"
+      ? "GPS live"
+      : locationSharing.state === "denied"
+        ? "GPS blocked"
+        : locationSharing.state === "offline"
+          ? "GPS offline"
+          : locationSharing.state === "error"
+            ? "GPS error"
+            : locationSharing.state === "requesting"
+              ? "Finding GPS"
+              : "Start GPS";
 
   const counts = {
     all: jobs.length,
@@ -159,27 +171,54 @@ function DriverJobs() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <h1 className="text-xl font-extrabold tracking-tight">My jobs</h1>
               {activeTripIds.length > 0 && (
-                <span
+                <button
+                  type="button"
+                  onClick={locationSharing.enabled ? locationSharing.stop : locationSharing.start}
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
-                    locationSharing === "sharing"
+                    locationSharing.state === "sharing"
                       ? "bg-positive/15 text-positive"
-                      : locationSharing === "denied" || locationSharing === "error"
+                      : ["denied", "error", "offline"].includes(locationSharing.state)
                         ? "bg-danger/15 text-danger"
                         : "bg-signal/15 text-signal"
                   }`}
-                  title="Location is shared only for your active assigned trip"
+                  title={
+                    locationSharing.enabled
+                      ? "Stop sharing your location"
+                      : "Share your location for your active assigned trip"
+                  }
                 >
                   <Radio className="size-3" />
-                  {locationSharing === "sharing"
-                    ? "GPS live"
-                    : locationSharing === "denied"
-                      ? "GPS blocked"
-                      : locationSharing === "error"
-                        ? "GPS error"
-                        : "Starting GPS"}
-                </span>
+                  {gpsLabel}
+                </button>
               )}
             </div>
+            {activeTripIds.length > 0 && locationSharing.error && (
+              <div className="mb-3 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-xs text-danger">
+                <p>{locationSharing.error}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    locationSharing.stop();
+                    window.setTimeout(locationSharing.start, 0);
+                  }}
+                  className="mt-1 font-bold underline"
+                >
+                  Try GPS again
+                </button>
+              </div>
+            )}
+            {activeTripIds.length > 0 && locationSharing.state === "sharing" && (
+              <div className="mb-3 text-[10px] text-muted-foreground">
+                Sharing precise location
+                {locationSharing.accuracyM != null
+                  ? ` · accuracy ±${Math.round(locationSharing.accuracyM)} m`
+                  : ""}
+                {locationSharing.lastSentAt
+                  ? ` · updated ${new Date(locationSharing.lastSentAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+                  : ""}
+                . Keep TAMP open while driving.
+              </div>
+            )}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input

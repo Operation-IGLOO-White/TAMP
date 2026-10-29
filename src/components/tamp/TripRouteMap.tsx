@@ -150,7 +150,7 @@ export function TripRouteMap({
 
       // Truck: live GPS fix, else interpolated along the real road by progress.
       const pct = Math.min(100, Math.max(0, trip.progressPct));
-      const currentPosition = livePosition ?? trip.simulatedPosition;
+      const currentPosition = livePosition ?? trip.livePosition ?? trip.simulatedPosition;
       const truckPos: LatLng = currentPosition
         ? [currentPosition.lat, currentPosition.lng]
         : route && route.length > 1
@@ -179,6 +179,7 @@ export function TripRouteMap({
     trip.id,
     trip.status,
     trip.progressPct,
+    trip.livePosition,
     trip.simulatedPosition,
     livePosition,
     nav,

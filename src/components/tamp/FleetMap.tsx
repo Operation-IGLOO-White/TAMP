@@ -1,4 +1,3 @@
-
 // CMP-14 Fleet Map — live truck positions on a Leaflet / OpenStreetMap viewer
 // (OR007). Trucks sit at their simulated GPS fix, or are interpolated along the
 // load lane by the trip's live progress. Leaflet is dynamically imported so it
@@ -66,10 +65,11 @@ export function FleetMap({
         if (!load) return null;
         if (only && !only.has(load.id)) return null;
         const pct = Math.min(100, Math.max(0, trip.progressPct));
-        const pos = trip.simulatedPosition ?? {
-          lng: load.origin.lng + (load.destination.lng - load.origin.lng) * (pct / 100),
-          lat: load.origin.lat + (load.destination.lat - load.origin.lat) * (pct / 100),
-        };
+        const pos = trip.livePosition ??
+          trip.simulatedPosition ?? {
+            lng: load.origin.lng + (load.destination.lng - load.origin.lng) * (pct / 100),
+            lat: load.origin.lat + (load.destination.lat - load.origin.lat) * (pct / 100),
+          };
         const tone = toneFor(trip);
         return {
           trip,
@@ -154,7 +154,9 @@ export function FleetMap({
         // Truck position: live GPS fix if present, else along the real road, else
         // the straight-line interpolation already computed in `markers`.
         const pos: [number, number] =
-          hasRoute && !m.trip.simulatedPosition ? pointAlong(pts, m.pct / 100) : [m.lat, m.lng];
+          hasRoute && !m.trip.livePosition && !m.trip.simulatedPosition
+            ? pointAlong(pts, m.pct / 100)
+            : [m.lat, m.lng];
 
         L.circleMarker(pos, {
           radius: 7,

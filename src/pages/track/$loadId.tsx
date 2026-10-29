@@ -1,6 +1,4 @@
-
 import { useParams } from "react-router-dom";
-
 
 import { CheckCircle2, Circle, PackageCheck, Truck } from "lucide-react";
 import { LaneRail } from "@/components/tamp/LaneRail";
@@ -39,14 +37,29 @@ function TrackPage() {
   const { loadId } = useParams<{ loadId: string }>();
   const { data, isPending, isError } = useQuery({
     queryKey: ["public-tracking", loadId],
-    queryFn: () => trpc.query<Pick<LoadedSnapshot, "loads" | "trucks" | "parties" | "matches" | "trips">>("tracking.view", { token: loadId }),
+    queryFn: () =>
+      trpc.query<Pick<LoadedSnapshot, "loads" | "trucks" | "parties" | "matches" | "trips">>(
+        "tracking.view",
+        { token: loadId },
+      ),
     enabled: !!loadId,
     retry: false,
     refetchInterval: 30000,
   });
   const { loads = [], trucks = [], parties = [], matches = [], trips = [] } = data ?? {};
-  if (isPending) return <main className="p-8" role="status">Loading delivery tracking…</main>;
-  if (isError) return <main className="p-8"><h1>Tracking link unavailable</h1><p>The link may have expired. Ask the sender for a new link.</p></main>;
+  if (isPending)
+    return (
+      <main className="p-8" role="status">
+        Loading delivery tracking…
+      </main>
+    );
+  if (isError)
+    return (
+      <main className="p-8">
+        <h1>Tracking link unavailable</h1>
+        <p>The link may have expired. Ask the sender for a new link.</p>
+      </main>
+    );
 
   const load = loads[0];
   const match = load ? activeMatchForLoad(load.id, matches) : undefined;
@@ -107,7 +120,7 @@ function TrackPage() {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}{" "}
-                      · simulated
+                      · estimated
                     </div>
                   )}
                 </div>
@@ -122,7 +135,7 @@ function TrackPage() {
                   destination={load.destination}
                   distanceKm={load.distanceKm}
                   progressPct={trip.progressPct}
-                  simulated
+                  simulated={!trip.livePosition}
                 />
               </div>
             </div>

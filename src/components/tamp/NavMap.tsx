@@ -181,7 +181,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
 
     // Truck position: live GPS fix, else interpolated along the road by progress.
     const pct = Math.min(100, Math.max(0, trip.progressPct));
-    const currentPosition = livePosition ?? trip.simulatedPosition;
+    const currentPosition = livePosition ?? trip.livePosition ?? trip.simulatedPosition;
     const truck: LatLng = currentPosition
       ? [currentPosition.lat, currentPosition.lng]
       : route && route.length > 1
