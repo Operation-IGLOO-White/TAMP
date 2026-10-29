@@ -38,7 +38,14 @@ async function mockApi(page: Page, role?: string) {
     dispatches: [],
   };
   await page.route("**/api/v1/system-logs**", (route) =>
-    route.fulfill({ json: { groups: [{ name: "modules", files: [] }, { name: "services", files: [] }] } }),
+    route.fulfill({
+      json: {
+        groups: [
+          { name: "modules", files: [] },
+          { name: "services", files: [] },
+        ],
+      },
+    }),
   );
   await page.route("**/api/trpc/**", async (route) => {
     const paths = new URL(route.request().url()).pathname.split("/api/trpc/")[1]!.split(",");
@@ -52,9 +59,16 @@ async function mockApi(page: Page, role?: string) {
                 ? snapshot
                 : path === "notifications.unreadCount"
                   ? 0
-                  : path === "parties.onboarding"
-                    ? null
-                    : [],
+                  : path === "geocode.reverse"
+                    ? {
+                        label: "12 Commissioner Street, Johannesburg, 2001, Gauteng, South Africa",
+                        province: "Gauteng",
+                        lat: -26.2041,
+                        lng: 28.0473,
+                      }
+                    : path === "parties.onboarding"
+                      ? null
+                      : [],
         },
       },
     }));

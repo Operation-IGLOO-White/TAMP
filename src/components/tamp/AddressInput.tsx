@@ -2,10 +2,14 @@
 // dropdown shows live predictions, and picking one resolves to a Place with
 // accurate coordinates + province used by matching, pricing and the map.
 
-
-import { Loader2, MapPin, SearchX } from "lucide-react";
+import { LocateFixed, Loader2, MapPin, SearchX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { geocodeAutocomplete, geocodeDetails, type Prediction } from "@/fns/geocode";
+import {
+  geocodeAutocomplete,
+  geocodeDetails,
+  reverseGeocode,
+  type Prediction,
+} from "@/fns/geocode";
 import type { Place } from "@/types/domain";
 
 export function AddressInput({
@@ -23,6 +27,8 @@ export function AddressInput({
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
 
   // Keep the input text in sync when the selected value changes externally.
@@ -89,6 +95,53 @@ export function AddressInput({
 
   const hint = useMemo(() => placeholder ?? "Start typing an address…", [placeholder]);
 
+  const useCurrentLocation = () => {
+    setLocationError("");
+    if (!navigator.geolocation) {
+      setLocationError("Current location is not supported by this browser.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const place = await reverseGeocode(coords.latitude, coords.longitude);
+          onSelect(place);
+          setQuery(place.label);
+          setResults([]);
+          setOpen(false);
+        } catch {
+          const fallback: Place = {
+            label: `Current location (${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)})`,
+            province: "",
+            lat: coords.latitude,
+            lng: coords.longitude,
+          };
+          onSelect(fallback);
+          setQuery(fallback.label);
+          setOpen(false);
+          setLocationError(
+            "Your coordinates were selected, but the street address could not be found.",
+          );
+        } finally {
+          setLocating(false);
+        }
+      },
+      (error) => {
+        const message =
+          error.code === error.PERMISSION_DENIED
+            ? "Location permission was denied. Allow location access in your browser and try again."
+            : error.code === error.TIMEOUT
+              ? "Finding your current location took too long. Try again outdoors or enable precise location."
+              : "Your current location could not be determined. Check that location services are enabled.";
+        setLocationError(message);
+        setOpen(false);
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
+    );
+  };
+
   return (
     <div ref={boxRef} className="relative">
       <div className="relative">
@@ -96,7 +149,7 @@ export function AddressInput({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => results.length > 0 && setOpen(true)}
+          onFocus={() => setOpen(true)}
           onKeyDown={(event) => {
             if (!open || results.length === 0) return;
             if (event.key === "ArrowDown") {
@@ -113,18 +166,56 @@ export function AddressInput({
             }
           }}
           placeholder={hint}
-          className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-8 text-sm text-foreground outline-none focus:border-signal"
+          className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-16 text-sm text-foreground outline-none focus:border-signal"
           autoComplete="off"
+          inputMode="search"
+          aria-autocomplete="list"
+          aria-expanded={open}
         />
         {loading && (
-          <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <Loader2 className="absolute right-10 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
+        <button
+          type="button"
+          onClick={useCurrentLocation}
+          disabled={locating}
+          title="Use my current location"
+          aria-label="Use my current location"
+          className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-steel/60 hover:text-foreground disabled:cursor-wait disabled:opacity-60"
+        >
+          {locating ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <LocateFixed className="size-4" />
+          )}
+        </button>
       </div>
-      {open && (results.length > 0 || (searched && !loading)) && (
+      {locationError && (
+        <p className="mt-1.5 text-xs text-danger" role="alert">
+          {locationError}
+        </p>
+      )}
+      {open && (
         <ul className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border border-border bg-background py-1 shadow-xl">
-          {results.length === 0 && (
+          <li className="border-b border-border">
+            <button
+              type="button"
+              onClick={useCurrentLocation}
+              disabled={locating}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-semibold hover:bg-steel/40 disabled:cursor-wait disabled:opacity-60"
+            >
+              {locating ? (
+                <Loader2 className="size-4 animate-spin text-signal" />
+              ) : (
+                <LocateFixed className="size-4 text-signal" />
+              )}
+              Use my current location
+            </button>
+          </li>
+          {results.length === 0 && searched && !loading && (
             <li className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
-              <SearchX className="size-4" /> No South African address found. Try a street and suburb.
+              <SearchX className="size-4" /> No South African address found. Try a street and
+              suburb.
             </li>
           )}
           {results.map((p) => (

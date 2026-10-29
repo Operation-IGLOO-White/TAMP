@@ -10,3 +10,6 @@ export const geocodeAutocomplete = (query: string, sessionToken?: string): Promi
 
 export const geocodeDetails = (placeId: string, sessionToken?: string): Promise<Place> =>
   trpc.query("geocode.details", { placeId, ...(sessionToken ? { sessionToken } : {}) });
+
+export const reverseGeocode = (lat: number, lng: number): Promise<Place> =>
+  trpc.query("geocode.reverse", { lat, lng });
