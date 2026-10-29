@@ -22,7 +22,7 @@ const client = createTRPCUntypedClient({
             ? "The service is temporarily unavailable. Please try again shortly."
             : response.status === 401
               ? "Your session has expired. Sign in again and retry."
-              : "The server returned an invalid response. Please try again shortly.";
+              : "We could not reach the TAMP service. Please try again shortly.";
           throw new Error(message);
         }
         return response;

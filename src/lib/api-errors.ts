@@ -20,7 +20,7 @@ export function userFacingError(error: unknown, fallback = "We could not complet
   if (status === 502 || status === 503 || status === 504)
     return "The service is temporarily unavailable. Please try again shortly.";
   if (TECHNICAL_RESPONSE.test(raw))
-    return "The server returned an invalid response. Please try again shortly.";
+    return "We could not reach the TAMP service. Please try again shortly.";
   if (/failed to fetch|networkerror|network request failed|load failed/i.test(raw))
     return "We could not connect to the server. Check your connection and try again.";
   if (/internal server error/i.test(raw))

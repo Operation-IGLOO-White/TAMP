@@ -3,7 +3,7 @@ import { truckRegistrationError, userFacingError } from "@/lib/api-errors";
 
 it("hides raw JSON parsing failures", () => {
   expect(userFacingError(new Error("Unexpected token '<', '<html>' is not valid JSON"))).toBe(
-    "The server returned an invalid response. Please try again shortly.",
+    "We could not reach the TAMP service. Please try again shortly.",
   );
 });
 
