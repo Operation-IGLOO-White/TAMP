@@ -338,14 +338,14 @@ function DriverJobs() {
           const live = jobs.find((j) => j.trip.id === mapJob.trip.id) ?? mapJob;
           return (
             <div
-              className="fixed inset-0 z-50 flex flex-col bg-black/60 p-3 sm:p-6"
+              className="fixed inset-0 z-50 flex flex-col bg-black/60 p-0 sm:p-6"
               role="dialog"
               aria-modal="true"
               aria-label={mapNav ? "Driver navigation" : "Trip route map"}
               onClick={() => setMapJob(null)}
             >
               <div
-                className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-graphite shadow-2xl"
+                className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden border-border bg-graphite shadow-2xl sm:rounded-2xl sm:border"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -367,11 +367,21 @@ function DriverJobs() {
                     <X className="size-5" />
                   </button>
                 </div>
-                {mapNav ? (
-                  <NavMap load={live.load} trip={live.trip} className="min-h-0 flex-1" />
-                ) : (
-                  <TripRouteMap load={live.load} trip={live.trip} className="min-h-0 flex-1" />
-                )}
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  {mapNav ? (
+                    <NavMap load={live.load} trip={live.trip} className="absolute inset-0" />
+                  ) : (
+                    <TripRouteMap load={live.load} trip={live.trip} className="absolute inset-0" />
+                  )}
+                  <MobileTripControls
+                    job={live}
+                    disputed={incidents.some(
+                      (item) => item.tripId === live.trip.id && item.status === "OPEN",
+                    )}
+                    onAdvance={() => advance(live)}
+                    onFlag={() => setIncidentLoadId(live.load.id)}
+                  />
+                </div>
               </div>
             </div>
           );
@@ -401,6 +411,105 @@ function DriverJobs() {
         />
       )}
     </AppShell>
+  );
+}
+
+// Persistent mobile navigation controls. The map remains the primary surface,
+// while the current lifecycle action stays thumb-reachable like a ride-hailing
+// driver app instead of being hidden in the desktop-only tracking panel.
+function MobileTripControls({
+  job,
+  disputed,
+  onAdvance,
+  onFlag,
+}: {
+  job: Job;
+  disputed: boolean;
+  onAdvance: () => void;
+  onFlag: () => void;
+}) {
+  const { trip, load } = job;
+  const meta = statusMeta(trip.status);
+  const stop = load.stops?.[trip.currentStopIndex ?? 0];
+  const followingStop = load.stops?.[(trip.currentStopIndex ?? 0) + 1];
+  const nextStep =
+    (trip.status === "LOADED" || trip.status === "DELIVERED") && followingStop
+      ? `Head to next ${followingStop.kind === "PICKUP" ? "pickup" : "drop-off"}`
+      : NEXT_STEP[trip.status];
+  const destination =
+    trip.status === "SCHEDULED" || trip.status === "EN_ROUTE_PICKUP"
+      ? stop?.place.label || load.origin.label
+      : stop?.place.label || load.destination.label;
+  const delivered = trip.status === "DELIVERED" || trip.status === "COMPLETED";
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-[500] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5">
+      <div className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-border bg-background/95 shadow-2xl backdrop-blur-xl">
+        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
+        <div className="px-4 pb-3 pt-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2">
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${meta.cls}`}>
+                  {meta.label}
+                </span>
+                <span className="text-[10px] font-semibold text-muted-foreground">
+                  {Math.round(trip.progressPct)}% complete
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Navigation className="mt-0.5 size-4 shrink-0 text-signal" />
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {trip.status === "SCHEDULED" || trip.status === "EN_ROUTE_PICKUP"
+                      ? "Travel to pickup"
+                      : "Current destination"}
+                  </div>
+                  <div className="line-clamp-2 text-sm font-bold leading-tight text-foreground">
+                    {destination}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">#{load.id}</span>
+          </div>
+
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-steel/60">
+            <div
+              className="h-full rounded-full bg-signal transition-[width] duration-500"
+              style={{ width: `${Math.max(3, Math.min(100, trip.progressPct))}%` }}
+            />
+          </div>
+
+          {trip.suggestedAction && (
+            <div className="mt-2 text-center text-[10px] font-bold uppercase tracking-wide text-positive">
+              GPS verified · {trip.suggestedAction.replaceAll("_", " ")} available
+            </div>
+          )}
+
+          {!delivered && nextStep && (
+            <button
+              type="button"
+              onClick={onAdvance}
+              className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-signal px-4 text-sm font-black uppercase tracking-wide text-signal-foreground shadow-lg active:scale-[0.99]"
+            >
+              {nextStep} <ChevronRight className="size-5" />
+            </button>
+          )}
+
+          {!delivered && (
+            <button
+              type="button"
+              onClick={onFlag}
+              disabled={disputed}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground disabled:text-danger"
+            >
+              <Flag className="size-3" /> {disputed ? "Issue reported" : "Report an issue"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
