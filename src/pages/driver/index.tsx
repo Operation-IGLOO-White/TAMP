@@ -95,7 +95,12 @@ function DriverJobs() {
       return;
     }
     void advanceTrip(job.load.id);
-    if (job.trip.status === "SCHEDULED") openMap(job, true);
+    if (job.trip.status === "SCHEDULED") {
+      // Starting a trip also starts precise location sharing so navigation can
+      // route from the driver's real position to the pickup.
+      locationSharing.start();
+      openMap(job, true);
+    }
   };
 
   const jobs: Job[] = useMemo(

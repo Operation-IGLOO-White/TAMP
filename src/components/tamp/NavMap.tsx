@@ -55,28 +55,34 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
   const [route, setRoute] = useState<LatLng[] | null>(null);
   const [info, setInfo] = useState<{ km: number; min: number } | null>(null);
   const livePosition = useLiveTripPosition(trip.id);
+  const trackedPosition = livePosition ?? trip.livePosition ?? trip.simulatedPosition;
+  const activeStop = nextStopFor(load, trip);
+  const stopLat = activeStop.pos[0];
+  const stopLng = activeStop.pos[1];
+  const trackedLat = trackedPosition?.lat;
+  const trackedLng = trackedPosition?.lng;
 
   useEffect(() => {
     let cancelled = false;
-    const places = load.stops?.map((stop) => stop.place) ?? [load.origin, load.destination];
-    Promise.all(places.slice(0, -1).map((place, index) => computeRoute(place, places[index + 1]!)))
-      .then((legs) => {
-        if (cancelled || legs.some((leg) => !leg)) return;
-        setRoute(
-          legs.flatMap((leg, index) =>
-            geoJsonLineToLatLng(leg!.geometry.coordinates).slice(index ? 1 : 0),
-          ),
-        );
-        setInfo({
-          km: legs.reduce((sum, leg) => sum + leg!.distanceKm, 0),
-          min: legs.reduce((sum, leg) => sum + leg!.durationMin, 0),
-        });
+    setRoute(null);
+    setInfo(null);
+
+    // Navigation always routes the active leg: the driver's latest position
+    // to the current operational stop. Before the first GPS fix, use the last
+    // trip position; as a final fallback show the load route.
+    const origin =
+      trackedLat != null && trackedLng != null ? { lat: trackedLat, lng: trackedLng } : load.origin;
+    computeRoute(origin, { lat: stopLat, lng: stopLng })
+      .then((leg) => {
+        if (cancelled || !leg) return;
+        setRoute(geoJsonLineToLatLng(leg.geometry.coordinates));
+        setInfo({ km: leg.distanceKm, min: leg.durationMin });
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [load, stopLat, stopLng, trackedLat, trackedLng]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,7 +156,13 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
   function drawAndFly(maplibregl: typeof import("maplibre-gl"), map: MlMap) {
     const o: LatLng = [load.origin.lat, load.origin.lng];
     const d: LatLng = [load.destination.lat, load.destination.lng];
-    const line: LatLng[] = route && route.length > 1 ? route : [o, d];
+    const currentPosition = livePosition ?? trip.livePosition ?? trip.simulatedPosition;
+    const truckFallback: LatLng = currentPosition
+      ? [currentPosition.lat, currentPosition.lng]
+      : activeStop.toPickup
+        ? o
+        : d;
+    const line: LatLng[] = route && route.length > 1 ? route : [truckFallback, activeStop.pos];
     const coords = line.map(([lat, lng]) => [lng, lat] as [number, number]);
 
     const geojson = {
@@ -179,18 +191,17 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
       });
     }
 
-    // Truck position: live GPS fix, else interpolated along the road by progress.
+    // Truck position: use the latest real GPS fix. The route itself begins at
+    // this point, so the blue line and camera move with the driver.
     const pct = Math.min(100, Math.max(0, trip.progressPct));
-    const currentPosition = livePosition ?? trip.livePosition ?? trip.simulatedPosition;
     const truck: LatLng = currentPosition
       ? [currentPosition.lat, currentPosition.lng]
       : route && route.length > 1
-        ? pointAlong(route, pct / 100)
-        : [o[0] + (d[0] - o[0]) * (pct / 100), o[1] + (d[1] - o[1]) * (pct / 100)];
+        ? route[0]!
+        : truckFallback;
 
     // Heading = direction of travel (truck → a point just ahead on the road).
-    const ahead: LatLng =
-      route && route.length > 1 ? pointAlong(route, Math.min(1, pct / 100 + 0.04)) : d;
+    const ahead: LatLng = route && route.length > 1 ? pointAlong(route, 0.04) : activeStop.pos;
     const heading = bearing(truck, ahead);
 
     markersRef.current.forEach((m) => m.remove());
@@ -200,8 +211,7 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
       m.setLngLat([pos[1], pos[0]]).addTo(map);
       markersRef.current.push(m);
     };
-    addMarker(o, "#16a34a");
-    addMarker(d, "#dc2626");
+    addMarker(activeStop.pos, activeStop.toPickup ? "#16a34a" : "#dc2626");
     // Truck marker — a heading arrow chip.
     const truckEl = document.createElement("div");
     truckEl.style.cssText =
@@ -231,12 +241,9 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
     }
   }
 
-  const stop = nextStopFor(load, trip);
-  const pctDone = Math.min(100, Math.max(0, trip.progressPct));
-  const remKm =
-    info && !stop.toPickup ? Math.max(0, Math.round(info.km * (1 - pctDone / 100))) : null;
-  const remMin =
-    info && !stop.toPickup ? Math.max(0, Math.round(info.min * (1 - pctDone / 100))) : null;
+  const stop = activeStop;
+  const remKm = info ? Math.max(0, Math.round(info.km)) : null;
+  const remMin = info ? Math.max(0, Math.round(info.min)) : null;
 
   return (
     <div className={`flex flex-col overflow-hidden ${className ?? ""}`}>
@@ -249,11 +256,11 @@ export function NavMap({ load, trip, className }: { load: Load; trip: Trip; clas
             {stop.toPickup ? "Head to pick-up" : "En route to drop-off"} · {stop.label}
           </div>
           <div className="font-mono text-[11px] text-muted-foreground">
-            {stop.toPickup
-              ? "Proceed to the collection point"
-              : remKm != null
-                ? `${remKm} km left · ~${Math.floor((remMin ?? 0) / 60)}h ${(remMin ?? 0) % 60}m to go`
-                : "Calculating route…"}
+            {remKm != null
+              ? `${remKm} km left · ~${Math.floor((remMin ?? 0) / 60)}h ${(remMin ?? 0) % 60}m to go`
+              : trackedPosition
+                ? "Calculating route from your location…"
+                : "Waiting for your GPS location…"}
           </div>
         </div>
       </div>
