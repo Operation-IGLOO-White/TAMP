@@ -253,8 +253,8 @@ function Spec({ label, value }: { label: string; value: string }) {
   );
 }
 
-// Assign a driver to this truck by the email they registered with — the fleet
-// doesn't hold the driver directory, so we resolve the account server-side.
+// Assign a driver to this truck by the organisation-managed email. Driver
+// accounts can be provisioned directly from the Organisation screen.
 function AssignDriver({
   assigned,
   selfAssigned,
@@ -286,7 +286,7 @@ function AssignDriver({
     try {
       const driver = await findDriver(value);
       if (!driver) {
-        setMsg({ ok: false, text: "No driver account found with that email." });
+        setMsg({ ok: false, text: "No driver found. Add them under Organisation first." });
         return;
       }
       if (driver.verification !== "VERIFIED") {
@@ -375,8 +375,8 @@ function AssignDriver({
         </button>
       )}
       <p className="text-[10px] leading-snug text-muted-foreground">
-        Enter the email the driver signed up with. They'll see this truck's jobs the next time they
-        sign in.
+        Enter an organisation driver's email. Add new drivers under Organisation; they do not need
+        to sign up themselves.
       </p>
     </div>
   );

@@ -1,6 +1,8 @@
 import {
   Building2,
   ClipboardList,
+  Copy,
+  KeyRound,
   Plus,
   ShieldCheck,
   Trash2,
@@ -73,6 +75,13 @@ export default function OrganisationPage() {
     enabled: Boolean(activeId),
   });
   const [email, setEmail] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const [memberPhone, setMemberPhone] = useState("");
+  const [credentials, setCredentials] = useState<{
+    name: string;
+    email: string;
+    password: string;
+  } | null>(null);
   const memberRoles: OrganisationRole[] =
     carrierOrganisation
       ? canCreate
@@ -98,11 +107,33 @@ export default function OrganisationPage() {
     queryClient.invalidateQueries({ queryKey: ["organisation-members", activeId] });
   const add = useMutation({
     mutationFn: () =>
-      addOrganisationMember({ organisationId: activeId!, email, role: selectedRole }),
-    onSuccess: () => {
+      addOrganisationMember({
+        organisationId: activeId!,
+        email,
+        role: selectedRole,
+        ...(carrierOrganisation && selectedRole === "DRIVER"
+          ? {
+              contactName: memberName,
+              phone: memberPhone,
+              createAccount: true,
+            }
+          : {}),
+      }),
+    onSuccess: (result) => {
+      if (result.temporaryPassword) {
+        setCredentials({
+          name: memberName,
+          email,
+          password: result.temporaryPassword,
+        });
+      } else {
+        setCredentials(null);
+      }
       setEmail("");
+      setMemberName("");
+      setMemberPhone("");
       void refresh();
-      toast.success("Member added");
+      toast.success(result.created ? "Driver account created" : "Member added");
     },
     onError: (error) => toast.error("Could not add member", { description: error.message }),
   });
@@ -286,15 +317,41 @@ export default function OrganisationPage() {
                     className="border-b border-border p-4"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      if (email) add.mutate();
+                      if (
+                        email &&
+                        (!carrierOrganisation || selectedRole !== "DRIVER" || memberName.trim())
+                      )
+                        add.mutate();
                     }}
                   >
+                    {carrierOrganisation && selectedRole === "DRIVER" && (
+                      <div className="mb-2 grid gap-2 sm:grid-cols-2">
+                        <input
+                          value={memberName}
+                          onChange={(event) => setMemberName(event.target.value)}
+                          placeholder="Driver's full name"
+                          className="min-h-11 rounded-md border border-border px-3 py-2 text-sm"
+                          required
+                        />
+                        <input
+                          type="tel"
+                          value={memberPhone}
+                          onChange={(event) => setMemberPhone(event.target.value)}
+                          placeholder="Mobile number (optional)"
+                          className="min-h-11 rounded-md border border-border px-3 py-2 text-sm"
+                        />
+                      </div>
+                    )}
                     <div className="grid gap-2 sm:grid-cols-[1fr_210px_auto]">
                       <input
                         type="email"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
-                        placeholder="Registered user's email address"
+                        placeholder={
+                          carrierOrganisation && selectedRole === "DRIVER"
+                            ? "Driver's email address"
+                            : "Registered user's email address"
+                        }
                         className="min-h-11 rounded-md border border-border px-3 py-2 text-sm"
                       />
                       <select
@@ -309,7 +366,13 @@ export default function OrganisationPage() {
                         ))}
                       </select>
                       <button
-                        disabled={add.isPending || !email}
+                        disabled={
+                          add.isPending ||
+                          !email ||
+                          (carrierOrganisation &&
+                            selectedRole === "DRIVER" &&
+                            !memberName.trim())
+                        }
                         className="min-h-11 rounded-md bg-signal px-4 py-2 text-xs font-bold text-signal-foreground disabled:opacity-40"
                       >
                         {carrierOrganisation && selectedRole === "DRIVER"
@@ -318,8 +381,57 @@ export default function OrganisationPage() {
                       </button>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {ROLE_HELP[selectedRole]} The person must first have a registered TAMP account.
+                      {ROLE_HELP[selectedRole]}{" "}
+                      {carrierOrganisation && selectedRole === "DRIVER"
+                        ? "If the email is new, TAMP creates the driver account and gives you a temporary password to share securely."
+                        : "The person must first have a registered TAMP account."}
                     </p>
+                    {credentials && (
+                      <div className="mt-4 rounded-xl border border-signal/40 bg-signal/10 p-4 shadow-sm">
+                        <div className="flex items-start gap-3">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-signal text-signal-foreground">
+                            <KeyRound className="size-5" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-black">Save these driver credentials now</h4>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              This temporary password is displayed only once. Send it directly to {credentials.name}.
+                            </p>
+                            <dl className="mt-3 grid gap-2 rounded-lg border border-border bg-graphite p-3 text-xs sm:grid-cols-2">
+                              <div>
+                                <dt className="text-[10px] font-bold uppercase text-muted-foreground">Email</dt>
+                                <dd className="mt-1 break-all font-mono font-bold">{credentials.email}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] font-bold uppercase text-muted-foreground">Temporary password</dt>
+                                <dd className="mt-1 break-all font-mono font-bold">{credentials.password}</dd>
+                              </div>
+                            </dl>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void navigator.clipboard.writeText(
+                                    `TAMP driver login\nEmail: ${credentials.email}\nTemporary password: ${credentials.password}`,
+                                  );
+                                  toast.success("Credentials copied");
+                                }}
+                                className="inline-flex min-h-9 items-center gap-2 rounded-md bg-foreground px-3 text-xs font-bold text-background"
+                              >
+                                <Copy className="size-3.5" /> Copy credentials
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCredentials(null)}
+                                className="min-h-9 rounded-md border border-border px-3 text-xs font-bold"
+                              >
+                                I saved them
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </form>
                 )}
                 <div className="divide-y divide-border">
