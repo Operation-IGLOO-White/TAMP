@@ -539,37 +539,39 @@ function MobileTripControls({
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-[500] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5">
-      <div className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-border bg-background/95 shadow-2xl backdrop-blur-xl">
+      <div className="mx-auto max-w-xl overflow-hidden rounded-[1.75rem] border border-border bg-background/98 shadow-2xl backdrop-blur-xl">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
-        <div className="px-4 pb-3 pt-2.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="mb-1 flex items-center gap-2">
-                <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${meta.cls}`}>
-                  {meta.label}
-                </span>
-                <span className="text-[10px] font-semibold text-muted-foreground">
-                  {Math.round(trip.progressPct)}% complete
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <Navigation className="mt-0.5 size-4 shrink-0 text-signal" />
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    {trip.status === "SCHEDULED" || trip.status === "EN_ROUTE_PICKUP"
-                      ? "Travel to pickup"
-                      : "Current destination"}
-                  </div>
-                  <div className="line-clamp-2 text-sm font-bold leading-tight text-foreground">
-                    {destination}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">#{load.id}</span>
+        <div className="px-5 pb-4 pt-3 sm:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <span className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold ${meta.cls}`}>
+              {meta.label}
+            </span>
+            <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
+              #{load.id}
+            </span>
           </div>
 
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-steel/60">
+          <div className="mt-3 flex items-start gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-signal/15 text-signal">
+              <Navigation className="size-[18px]" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {trip.status === "SCHEDULED" || trip.status === "EN_ROUTE_PICKUP"
+                  ? "Travel to pickup"
+                  : "Current destination"}
+              </div>
+              <div className="mt-0.5 line-clamp-2 text-base font-black leading-snug text-foreground">
+                {destination}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between text-[10px] font-semibold text-muted-foreground">
+            <span>Trip progress</span>
+            <span>{Math.round(trip.progressPct)}%</span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-steel/60">
             <div
               className="h-full rounded-full bg-signal transition-[width] duration-500"
               style={{ width: `${Math.max(3, Math.min(100, trip.progressPct))}%` }}
@@ -586,7 +588,7 @@ function MobileTripControls({
             <button
               type="button"
               onClick={onAdvance}
-              className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-signal px-4 text-sm font-black uppercase tracking-wide text-signal-foreground shadow-lg active:scale-[0.99]"
+              className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-signal px-4 text-sm font-black uppercase tracking-wide text-signal-foreground shadow-lg active:scale-[0.99]"
             >
               {nextStep} <ChevronRight className="size-5" />
             </button>
@@ -597,7 +599,7 @@ function MobileTripControls({
               type="button"
               onClick={onFlag}
               disabled={disputed}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground disabled:text-danger"
+              className="mt-3 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-steel/30 disabled:text-danger"
             >
               <Flag className="size-3" /> {disputed ? "Issue reported" : "Report an issue"}
             </button>
