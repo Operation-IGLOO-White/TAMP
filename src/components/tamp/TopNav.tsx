@@ -224,21 +224,21 @@ function NotificationsMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-lg border border-border bg-graphite shadow-xl">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+        <div className="fixed left-3 right-3 top-[4.5rem] z-[60] w-auto overflow-hidden rounded-xl border border-border bg-graphite shadow-2xl sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80">
+          <div className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-3.5 py-2.5 sm:px-4">
+            <span className="min-w-0 truncate text-[11px] font-bold uppercase tracking-widest text-muted-foreground sm:text-xs">
               Notifications
             </span>
             {unread > 0 && (
               <button
                 onClick={markAll}
-                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-signal hover:underline"
+                className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] font-bold uppercase tracking-wide text-signal hover:underline"
               >
                 <CheckCheck className="size-3.5" /> Mark all read
               </button>
             )}
           </div>
-          <ol className="max-h-96 divide-y divide-border overflow-y-auto">
+          <ol className="max-h-[min(24rem,calc(100dvh-10rem))] divide-y divide-border overflow-y-auto overscroll-contain">
             {notifications.length === 0 && (
               <li className="px-4 py-6 text-center text-xs text-muted-foreground">Nothing yet.</li>
             )}
@@ -246,7 +246,7 @@ function NotificationsMenu() {
               <li key={n.id}>
                 <button
                   onClick={() => go(n)}
-                  className={`flex w-full gap-3 px-4 py-3 text-left hover:bg-steel/40 ${
+                  className={`flex w-full min-w-0 gap-2.5 px-3.5 py-3 text-left hover:bg-steel/40 sm:gap-3 sm:px-4 ${
                     n.unread ? "bg-signal/5" : ""
                   }`}
                 >
@@ -262,7 +262,7 @@ function NotificationsMenu() {
                     }`}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold">{n.title}</div>
+                    <div className="truncate text-xs font-semibold">{n.title}</div>
                     <div className="truncate text-[11px] text-muted-foreground">{n.detail}</div>
                     <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
                       {new Date(n.at).toLocaleString("en-ZA", {
@@ -281,7 +281,7 @@ function NotificationsMenu() {
           <Link
             to="/notifications"
             onClick={() => setOpen(false)}
-            className="block border-t border-border px-4 py-2.5 text-center text-[11px] font-bold uppercase tracking-wide text-signal hover:bg-steel/30"
+            className="block min-h-11 border-t border-border px-4 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-signal hover:bg-steel/30"
           >
             See all notifications
           </Link>

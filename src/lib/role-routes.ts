@@ -2,11 +2,11 @@ import type { Role } from "@/types/domain";
 
 export const HOME_BY_ROLE: Record<
   Role,
-  "/owner" | "/transporter" | "/driver/dashboard" | "/admin"
+  "/owner" | "/transporter" | "/driver" | "/admin"
 > = {
   FREIGHT_OWNER: "/owner",
   TRANSPORTER: "/transporter",
-  DRIVER: "/driver/dashboard",
+  DRIVER: "/driver",
   ADMIN: "/admin",
 };
 

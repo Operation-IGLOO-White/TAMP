@@ -1,9 +1,20 @@
-import { Building2, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
+import {
+  Building2,
+  ClipboardList,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Truck,
+  UserRoundPlus,
+  Users,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import type { ComponentType } from "react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { useTamp } from "@/context/TampContext";
+import { Link } from "@/lib/nav";
 import {
   addOrganisationMember,
   createOrganisation,
@@ -30,9 +41,16 @@ const ROLE_LABEL: Record<OrganisationRole, string> = {
   CARGO_OPERATOR: "Cargo operator",
   DISPATCHER: "Fleet dispatcher",
 };
+const ROLE_HELP: Record<OrganisationRole, string> = {
+  FREIGHT_OWNER: "Manages the cargo company, team, loads and commercial activity.",
+  TRANSPORTER: "Manages the truck company, fleet, drivers and commercial activity.",
+  DRIVER: "Views assigned vehicles and performs dispatched trips.",
+  CARGO_OPERATOR: "Posts loads, reviews matches and monitors cargo movements.",
+  DISPATCHER: "Manages trucks, assigns drivers and coordinates active jobs.",
+};
 
 export default function OrganisationPage() {
-  const { authParty } = useTamp();
+  const { authParty, trucks, vehicles, loads } = useTamp();
   const queryClient = useQueryClient();
   const canCreate = authParty?.systemRole === "system_super_user";
   const canManageMembers =
@@ -45,6 +63,10 @@ export default function OrganisationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const activeId = selectedId ?? authParty?.activeOrganisationId ?? organisations[0]?.id ?? null;
   const active = organisations.find((item) => item.id === activeId);
+  const carrierOrganisation =
+    active?.type === "CARRIER" ||
+    active?.type === "DRIVER_NETWORK" ||
+    active?.type === "TRANSPORTER";
   const { data: members = [] } = useQuery({
     queryKey: ["organisation-members", activeId],
     queryFn: () => listOrganisationMembers(activeId!),
@@ -52,7 +74,7 @@ export default function OrganisationPage() {
   });
   const [email, setEmail] = useState("");
   const memberRoles: OrganisationRole[] =
-    active?.type === "CARRIER" || active?.type === "DRIVER_NETWORK"
+    carrierOrganisation
       ? canCreate
         ? ["TRANSPORTER", "DISPATCHER", "DRIVER"]
         : ["DISPATCHER", "DRIVER"]
@@ -61,6 +83,12 @@ export default function OrganisationPage() {
         : ["CARGO_OPERATOR"];
   const [role, setRole] = useState<OrganisationRole>("DRIVER");
   const selectedRole = memberRoles.includes(role) ? role : memberRoles[0]!;
+  const driverCount = members.filter((member) =>
+    member.roleIds.includes(ROLE_IDS.DRIVER),
+  ).length;
+  const operatorCount = members.filter((member) =>
+    member.roleIds.includes(ROLE_IDS.CARGO_OPERATOR),
+  ).length;
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<"CARGO_OWNER" | "CARRIER" | "BROKER" | "DRIVER_NETWORK">(
     "CARRIER",
@@ -197,44 +225,101 @@ export default function OrganisationPage() {
                   </form>
                 )}
               </section>
+              <section className="grid gap-3 sm:grid-cols-2">
+                {carrierOrganisation ? (
+                  <>
+                    <OrganisationTool
+                      icon={Truck}
+                      title="Company fleet"
+                      description={`${vehicles.length || trucks.length} registered ${vehicles.length === 1 || trucks.length === 1 ? "truck" : "trucks"} in the active company.`}
+                      action="Add a truck"
+                      to="/transporter/fleet?add=true"
+                      enabled={authParty?.permissions?.includes("trucks.manage") ?? false}
+                    />
+                    <OrganisationTool
+                      icon={UserRoundPlus}
+                      title="Drivers and dispatch"
+                      description={`${driverCount} ${driverCount === 1 ? "driver" : "drivers"}. Add drivers for trips or dispatchers to coordinate the fleet.`}
+                      action="Manage below"
+                      anchor
+                      enabled={canManageMembers}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <OrganisationTool
+                      icon={ClipboardList}
+                      title="Company loads"
+                      description={`${loads.length} ${loads.length === 1 ? "load" : "loads"} visible to the active cargo company.`}
+                      action="Post a load"
+                      to="/owner/board?post=true"
+                      enabled={authParty?.permissions?.includes("loads.manage") ?? false}
+                    />
+                    <OrganisationTool
+                      icon={UserRoundPlus}
+                      title="Cargo operations team"
+                      description={`${operatorCount} cargo ${operatorCount === 1 ? "operator" : "operators"}. Operators can post loads and manage matches for this company.`}
+                      action="Manage below"
+                      anchor
+                      enabled={canManageMembers}
+                    />
+                  </>
+                )}
+              </section>
               <section className="rounded-lg border border-border bg-graphite">
-                <div className="flex items-center gap-2 border-b border-border p-4">
+                <div id="organisation-members" className="flex items-start gap-2 border-b border-border p-4">
                   <Users className="size-4 text-signal" />
-                  <h3 className="font-bold">Members</h3>
+                  <div>
+                    <h3 className="font-bold">
+                      {carrierOrganisation ? "Fleet team" : "Cargo operations team"}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {carrierOrganisation
+                        ? "Truck company administrators can add dispatchers and drivers. Drivers only receive operational access."
+                        : "Cargo company administrators can add cargo operators. Operators work only with this organisation's loads."}
+                    </p>
+                  </div>
                   <span className="ml-auto text-xs text-muted-foreground">{members.length}</span>
                 </div>
                 {canManageMembers && (
                   <form
-                    className="grid gap-2 border-b border-border p-4 sm:grid-cols-[1fr_180px_auto]"
+                    className="border-b border-border p-4"
                     onSubmit={(event) => {
                       event.preventDefault();
                       if (email) add.mutate();
                     }}
                   >
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="Registered user email"
-                      className="rounded-md border border-border px-3 py-2 text-sm"
-                    />
-                    <select
-                      value={selectedRole}
-                      onChange={(event) => setRole(event.target.value as OrganisationRole)}
-                      className="rounded-md border border-border px-3 py-2 text-sm"
-                    >
-                      {memberRoles.map((value) => (
-                        <option key={value} value={value}>
-                          {ROLE_LABEL[value]}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      disabled={add.isPending || !email}
-                      className="rounded-md bg-signal px-4 py-2 text-xs font-bold text-signal-foreground disabled:opacity-40"
-                    >
-                      Add member
-                    </button>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_210px_auto]">
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="Registered user's email address"
+                        className="min-h-11 rounded-md border border-border px-3 py-2 text-sm"
+                      />
+                      <select
+                        value={selectedRole}
+                        onChange={(event) => setRole(event.target.value as OrganisationRole)}
+                        className="min-h-11 rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        {memberRoles.map((value) => (
+                          <option key={value} value={value}>
+                            {ROLE_LABEL[value]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={add.isPending || !email}
+                        className="min-h-11 rounded-md bg-signal px-4 py-2 text-xs font-bold text-signal-foreground disabled:opacity-40"
+                      >
+                        {carrierOrganisation && selectedRole === "DRIVER"
+                          ? "Add driver"
+                          : "Add member"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {ROLE_HELP[selectedRole]} The person must first have a registered TAMP account.
+                    </p>
                   </form>
                 )}
                 <div className="divide-y divide-border">
@@ -307,5 +392,54 @@ export default function OrganisationPage() {
         </main>
       </div>
     </AppShell>
+  );
+}
+
+function OrganisationTool({
+  icon: Icon,
+  title,
+  description,
+  action,
+  to,
+  anchor = false,
+  enabled,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  action: string;
+  to?: string;
+  anchor?: boolean;
+  enabled: boolean;
+}) {
+  const actionClass =
+    "mt-4 inline-flex min-h-10 items-center justify-center rounded-md bg-signal px-4 text-xs font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105";
+  return (
+    <article className="rounded-lg border border-border bg-graphite p-5">
+      <div className="flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-signal/10 text-signal">
+          <Icon className="size-5" />
+        </span>
+        <div>
+          <h3 className="font-bold">{title}</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {enabled && to && (
+        <Link to={to} className={actionClass}>
+          {action}
+        </Link>
+      )}
+      {enabled && anchor && (
+        <a href="#organisation-members" className={actionClass}>
+          {action}
+        </a>
+      )}
+      {!enabled && (
+        <p className="mt-4 text-[11px] font-semibold text-muted-foreground">
+          Your organisation role has view-only access.
+        </p>
+      )}
+    </article>
   );
 }

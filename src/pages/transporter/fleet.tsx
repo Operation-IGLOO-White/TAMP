@@ -1,5 +1,6 @@
 import { Camera, CheckCircle2, FileUp, MapPin, Pencil, Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { truckRegistrationError } from "@/lib/api-errors";
 import { AddressInput } from "@/components/tamp/AddressInput";
@@ -36,10 +37,14 @@ const daysFromNow = (iso: string) =>
   Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 864e5));
 
 function FleetPage() {
-  const { me, loads, trucks, vehicles, parties, addTruck, updateTruck } = useTamp();
+  const { me, authParty, loads, trucks, vehicles, parties, addTruck, updateTruck } = useTamp();
   const isDriver = me.role === "DRIVER";
+  const canManageFleet = authParty?.permissions?.includes("trucks.manage") ?? false;
+  const [searchParams] = useSearchParams();
   const openLoads = useMemo(() => loads.filter((l) => l.status === "POSTED"), [loads]);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(
+    canManageFleet && searchParams.get("add") === "true",
+  );
   const [query, setQuery] = useState("");
 
   // Search across registration, body type, location and status.
@@ -98,7 +103,7 @@ function FleetPage() {
     <AppShell>
       <PageHeader
         title={isDriver ? "My Trucks" : "Fleet Register"}
-        actions={
+        actions={canManageFleet ? (
           <button
             onClick={() => setAdding((a) => !a)}
             className="inline-flex items-center gap-1.5 rounded-md bg-signal px-4 py-2 text-xs font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
@@ -106,7 +111,7 @@ function FleetPage() {
             {adding ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
             {adding ? "Cancel" : "Add truck"}
           </button>
-        }
+        ) : undefined}
       />
 
       <p className="border-b border-border px-6 py-3 text-xs text-muted-foreground">
@@ -117,7 +122,9 @@ function FleetPage() {
         any time, and see its best-matching open loads.
       </p>
 
-      {adding && <AddTruckForm onDone={() => setAdding(false)} onAdd={addTruck} />}
+      {adding && canManageFleet && (
+        <AddTruckForm onDone={() => setAdding(false)} onAdd={addTruck} />
+      )}
 
       {trucks.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">

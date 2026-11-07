@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Providers } from "@/context/Providers";
 import { RequireRole } from "@/components/tamp/RequireRole";
 import { Link } from "@/lib/nav";
@@ -10,7 +10,6 @@ const Page3 = lazy(() => import("@/pages/admin/profile"));
 const Page4 = lazy(() => import("@/pages/admin/trucks"));
 const Page5 = lazy(() => import("@/pages/admin/users/$partyId"));
 const Page6 = lazy(() => import("@/pages/admin/users/index"));
-const Page7 = lazy(() => import("@/pages/driver/dashboard"));
 const Page8 = lazy(() => import("@/pages/transporter/engagements"));
 const Page9 = lazy(() => import("@/pages/transporter/fleet"));
 const Page10 = lazy(() => import("@/pages/fleet-ops"));
@@ -107,16 +106,12 @@ export default function App() {
             />
             <Route
               path="/driver/dashboard"
-              element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
-                  <Page7 />
-                </RequireRole>
-              }
+              element={<Navigate to="/driver" replace />}
             />
             <Route
               path="/driver/engagements"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="matches.manage">
                   <Page8 />
                 </RequireRole>
               }
@@ -124,7 +119,7 @@ export default function App() {
             <Route
               path="/driver/fleet"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="trucks.manage">
                   <Page9 />
                 </RequireRole>
               }
@@ -132,7 +127,7 @@ export default function App() {
             <Route
               path="/driver/fleet-ops"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="trucks.manage">
                   <Page10 />
                 </RequireRole>
               }
@@ -140,7 +135,7 @@ export default function App() {
             <Route
               path="/driver/history"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="dispatch.manage">
                   <Page11 />
                 </RequireRole>
               }
@@ -275,7 +270,7 @@ export default function App() {
             <Route
               path="/transporter/earnings"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="finance.read">
                   <Page34 />
                 </RequireRole>
               }
@@ -298,16 +293,12 @@ export default function App() {
             />
             <Route
               path="/driver/dispatch"
-              element={
-                <RequireRole role={"DRIVER"}>
-                  <Page36 />
-                </RequireRole>
-              }
+              element={<Navigate to="/driver" replace />}
             />
             <Route
               path="/messages"
               element={
-                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}>
+                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "ADMIN"]}>
                   <Page37 />
                 </RequireRole>
               }
@@ -316,7 +307,7 @@ export default function App() {
               path="/organisation"
               element={
                 <RequireRole
-                  role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}
+                  role={["FREIGHT_OWNER", "TRANSPORTER", "ADMIN"]}
                   permission="organisations.read"
                 >
                   <Page38 />

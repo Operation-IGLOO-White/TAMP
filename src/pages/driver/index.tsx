@@ -72,7 +72,18 @@ function statusMeta(status: string): { label: string; cls: string } {
 type FilterKey = "all" | "in-transit" | "delivered";
 
 function DriverJobs() {
-  const { trucks, matches, loads, trips, parties, incidents, advanceTrip } = useTamp();
+  const {
+    me,
+    trucks,
+    matches,
+    loads,
+    trips,
+    parties,
+    incidents,
+    dispatches,
+    advanceTrip,
+    updateDispatch,
+  } = useTamp();
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -81,6 +92,7 @@ function DriverJobs() {
   const [mapJob, setMapJob] = useState<Job | null>(null);
   const [mapNav, setMapNav] = useState(false);
   const [podJob, setPodJob] = useState<Job | null>(null);
+  const [dispatchBusy, setDispatchBusy] = useState<string | null>(null);
 
   const openMap = (job: Job, navMode = false) => {
     setMapJob(job);
@@ -103,9 +115,45 @@ function DriverJobs() {
     }
   };
 
+  const latestDispatchByTrip = useMemo(() => {
+    const latest = new Map<string, (typeof dispatches)[number]>();
+    for (const assignment of dispatches) {
+      const current = latest.get(assignment.tripId);
+      if (!current || new Date(assignment.offeredAt).getTime() > new Date(current.offeredAt).getTime())
+        latest.set(assignment.tripId, assignment);
+    }
+    return latest;
+  }, [dispatches]);
+
+  const pendingAssignments = useMemo(
+    () =>
+      trips
+        .filter((trip) => {
+          const assignment = latestDispatchByTrip.get(trip.id);
+          return assignment?.driverId === me.id && assignment.status === "OFFERED";
+        })
+        .map((trip) => {
+          const match = matches.find((item) => item.id === trip.matchId);
+          const load = loads.find((item) => item.id === match?.loadId);
+          const truck = trucks.find((item) => item.id === match?.truckPostingId);
+          return load && truck ? { trip, load, truck } : null;
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null),
+    [latestDispatchByTrip, loads, matches, me.id, trips, trucks],
+  );
+
   const jobs: Job[] = useMemo(
     () =>
       trips
+        .filter((trip) => {
+          if (me.role !== "DRIVER") return true;
+          const assignment = latestDispatchByTrip.get(trip.id);
+          return (
+            trip.assignedDriverId === me.id &&
+            assignment?.driverId === me.id &&
+            assignment.status === "ACCEPTED"
+          );
+        })
         .map((trip) => {
           const match = matches.find((m) => m.id === trip.matchId);
           const truck = trucks.find((t) => t.id === match?.truckPostingId);
@@ -118,8 +166,14 @@ function DriverJobs() {
         .filter((j): j is Job => j !== null)
         // Active jobs first, then most recent.
         .sort((a, b) => Number(isActiveTrip(b.trip.status)) - Number(isActiveTrip(a.trip.status))),
-    [trips, matches, trucks, loads, parties],
+    [trips, matches, trucks, loads, parties, me.id, me.role, latestDispatchByTrip],
   );
+
+  const respondToAssignment = async (tripId: string, action: "ACCEPT" | "DECLINE") => {
+    setDispatchBusy(tripId);
+    await updateDispatch(tripId, action);
+    setDispatchBusy(null);
+  };
   const activeTripIds = useMemo(
     () => jobs.filter((job) => isActiveTrip(job.trip.status)).map((job) => job.trip.id),
     [jobs],
@@ -270,12 +324,48 @@ function DriverJobs() {
           </div>
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+            {pendingAssignments.map(({ trip, load, truck }) => (
+              <article
+                key={`offer-${trip.id}`}
+                className="rounded-2xl border border-signal/50 bg-signal/5 p-4 shadow-sm"
+              >
+                <div className="text-[10px] font-black uppercase tracking-widest text-signal">
+                  New job assignment
+                </div>
+                <div className="mt-2 text-sm font-bold">
+                  {load.origin.label} → {load.destination.label}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Truck {truck.registration} · pickup {new Date(load.pickupWindow.from).toLocaleDateString("en-ZA")}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={dispatchBusy === trip.id}
+                    onClick={() => void respondToAssignment(trip.id, "DECLINE")}
+                    className="min-h-11 rounded-lg border border-danger/50 text-xs font-bold uppercase text-danger disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    disabled={dispatchBusy === trip.id}
+                    onClick={() => void respondToAssignment(trip.id, "ACCEPT")}
+                    className="min-h-11 rounded-lg bg-signal text-xs font-black uppercase text-signal-foreground disabled:opacity-50"
+                  >
+                    Accept job
+                  </button>
+                </div>
+              </article>
+            ))}
             {visible.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-graphite/40 p-10 text-center">
                 <MapPin className="mx-auto mb-3 size-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
                   {jobs.length === 0
-                    ? "No job assigned. New deliveries for your truck appear here."
+                    ? pendingAssignments.length
+                      ? "Accept an assignment above to add it to My Jobs."
+                      : "No job has been assigned to you. Your dispatcher will send new work here."
                     : "No jobs match your filters."}
                 </p>
               </div>

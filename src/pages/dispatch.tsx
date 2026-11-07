@@ -1,14 +1,26 @@
 import { CheckCircle2, Clock3, Route, Truck, UserCheck, UserPlus, XCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { useTamp } from "@/context/TampContext";
+import { listOrganisationMembers } from "@/fns/organisations";
 
 export default function DispatchPage() {
-  const { me, trips, matches, loads, trucks, parties, dispatches, updateDispatch } = useTamp();
+  const { me, authParty, trips, matches, loads, trucks, parties, dispatches, updateDispatch } =
+    useTamp();
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const carrierMode = me.role === "TRANSPORTER";
+  const carrierMode = authParty?.permissions?.includes("dispatch.manage") ?? false;
+  const organisationId = authParty?.activeOrganisationId ?? null;
+  const { data: organisationMembers = [] } = useQuery({
+    queryKey: ["organisation-members", organisationId],
+    queryFn: () => listOrganisationMembers(organisationId!),
+    enabled: carrierMode && Boolean(organisationId),
+  });
+  const organisationDrivers = organisationMembers.filter(
+    (member) => member.roleIds.includes("ROLE-DRIVER") && member.verification === "VERIFIED",
+  );
   const jobs = useMemo(
     () =>
       trips
@@ -106,13 +118,24 @@ export default function DispatchPage() {
                         <div className="text-center text-[10px] font-bold uppercase text-muted-foreground">
                           or assign another driver
                         </div>
-                        <input
-                          type="email"
+                        <select
                           value={emails[trip.id] ?? ""}
                           onChange={(e) => setEmails({ ...emails, [trip.id]: e.target.value })}
-                          placeholder="Verified driver email"
                           className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                        />
+                        >
+                          <option value="">Select an organisation driver</option>
+                          {organisationDrivers.map((driver) => (
+                            <option key={driver.id} value={driver.email}>
+                              {driver.contactName}
+                            </option>
+                          ))}
+                        </select>
+                        {organisationDrivers.length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            No verified drivers are attached to this organisation. Add a driver
+                            under Organisation before dispatching this job.
+                          </p>
+                        )}
                         <textarea
                           value={notes[trip.id] ?? ""}
                           onChange={(e) => setNotes({ ...notes, [trip.id]: e.target.value })}

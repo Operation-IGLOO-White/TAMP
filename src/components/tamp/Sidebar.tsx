@@ -18,7 +18,7 @@ import {
   MessageCircle,
   Building2,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { useEffect, type ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
 import type { Role } from "@/types/domain";
 
@@ -56,16 +56,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   // Owner-driver merge: DRIVER is no longer a separate workspace; its job
   // screen is reachable from the Truck Owner rail above.
   DRIVER: [
-    { to: "/driver/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { to: "/driver", label: "My Jobs", icon: PackageCheck, exact: true },
-    { to: "/driver/fleet", label: "My Trucks", icon: Truck },
-    { to: "/driver/fleet-ops", label: "Fleet Costs", icon: Wrench },
-    { to: "/driver/engagements", label: "Engagements", icon: RouteIcon },
-    { to: "/driver/dispatch", label: "Job Offers", icon: Send },
-    { to: "/driver/history", label: "History", icon: History },
-    { to: "/transporter/earnings", label: "Earnings", icon: WalletCards },
-    { to: "/messages", label: "Messages", icon: MessageCircle },
-    { to: "/organisation", label: "Organisation", icon: Building2 },
     { to: "/driver/profile", label: "Profile", icon: User },
   ],
   ADMIN: [
@@ -133,13 +124,23 @@ export function Sidebar() {
 
 export function MobileNavigation({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { role } = useTamp();
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-16 z-40 md:hidden">
+    <div className="fixed inset-x-0 bottom-0 top-16 z-[1000] isolate md:hidden">
       <button className="absolute inset-0 bg-black/30" onClick={onClose} aria-label="Close menu" />
-      <aside className="relative flex h-full w-[min(86vw,320px)] flex-col border-r border-border bg-sidebar p-3 text-foreground shadow-2xl animate-in slide-in-from-left duration-200">
-        <nav className="space-y-0.5">
+      <aside className="relative z-10 flex h-full w-[min(86vw,320px)] flex-col overflow-y-auto border-r border-border bg-sidebar p-3 text-foreground shadow-2xl animate-in slide-in-from-left duration-200">
+        <nav className="space-y-0.5 pb-6">
           {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact }) => (
             <Link
               key={to}
