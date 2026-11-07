@@ -125,17 +125,17 @@ function OwnerDashboard() {
           <Link
             to="/owner/board"
             search={{ post: true }}
-            className="inline-flex items-center gap-1.5 rounded-md bg-signal px-4 py-2 text-xs font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
+            className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-md bg-signal px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105 sm:px-4 sm:text-xs"
           >
             <Plus className="size-3.5" /> Post a load
           </Link>
         }
       />
 
-      <div className="space-y-8 p-6">
+      <div className="space-y-6 p-3 sm:space-y-8 sm:p-6">
         {/* ① Needs you */}
         <Section title="Needs you">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
             <NeedTile
               label="Matches to decide"
               count={decisionsNeeded}
@@ -173,14 +173,18 @@ function OwnerDashboard() {
                   key={trip.id}
                   to="/owner/loads/$loadId"
                   params={{ loadId: load!.id }}
-                  className="block px-4 py-4 hover:bg-steel/30"
+                  className="block px-3 py-4 hover:bg-steel/30 sm:px-4"
                 >
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm font-bold uppercase">
+                  <div className="mb-3 flex min-w-0 flex-col items-start gap-2 sm:mb-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="flex min-w-0 items-start gap-2 text-[13px] font-bold uppercase leading-snug sm:items-center sm:text-sm">
                       <LivePulse />
-                      {load!.origin.label} → {load!.destination.label}
+                      <span className="line-clamp-2 min-w-0">
+                        {load!.origin.label} → {load!.destination.label}
+                      </span>
                     </span>
-                    <StatusChip status={displayStatusForLoad(load!, matches, trips, disputes)} />
+                    <span className="shrink-0 sm:ml-3">
+                      <StatusChip status={displayStatusForLoad(load!, matches, trips, disputes)} />
+                    </span>
                   </div>
                   <TripProgress status={trip.status} />
                   <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground sm:grid-cols-4">
@@ -229,16 +233,16 @@ function OwnerDashboard() {
                     params={{ loadId: load.id }}
                     className={`block px-4 py-3 hover:bg-steel/30 ${stale ? "bg-danger/5" : ""}`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-bold uppercase leading-tight">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="line-clamp-2 text-sm font-bold uppercase leading-tight">
                           {load.origin.label} → {load.destination.label}
                         </div>
                         <div className="font-mono text-[11px] text-muted-foreground">
                           #{load.id} · posted {age === 0 ? "today" : `${age}d ago`}
                         </div>
                       </div>
-                      <div className="text-right text-xs">
+                      <div className="shrink-0 text-left text-xs sm:text-right">
                         <span
                           className={`font-bold ${suggestions === 0 ? "text-muted-foreground" : "text-foreground"}`}
                         >
@@ -375,18 +379,18 @@ function NeedTile({
   const active = count > 0;
   const accent =
     tone === "danger" ? "border-danger/40 bg-danger/10" : "border-signal/40 bg-signal/10";
-  const cls = `rounded-lg border p-4 transition-colors ${
+  const cls = `rounded-lg border p-3 transition-colors sm:p-4 ${
     active ? accent : "border-border bg-graphite hover:bg-steel/30"
   }`;
   const body = (
     <>
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground sm:text-[11px]">
           {label}
         </span>
         <Icon className="size-4 text-muted-foreground" />
       </div>
-      <div className={`mt-2 text-3xl font-bold font-mono ${active ? "" : "text-muted-foreground"}`}>
+      <div className={`mt-2 font-mono text-2xl font-bold sm:text-3xl ${active ? "" : "text-muted-foreground"}`}>
         {count}
       </div>
     </>

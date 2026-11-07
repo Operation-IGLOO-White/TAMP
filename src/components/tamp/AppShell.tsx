@@ -17,9 +17,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 /** Sticky page header used across role pages. */
 export function PageHeader({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
-    <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-background/90 px-6 py-4 backdrop-blur-md">
-      <h1 className="text-base font-bold tracking-tight">{title}</h1>
-      {actions}
+    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur-md sm:gap-4 sm:px-6 sm:py-4">
+      <h1 className="min-w-0 text-sm font-bold leading-tight tracking-tight sm:text-base">{title}</h1>
+      <div className="shrink-0">{actions}</div>
     </div>
   );
 }
