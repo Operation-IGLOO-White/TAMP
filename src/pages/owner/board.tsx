@@ -1,7 +1,7 @@
 
 import { useSearchParams } from "react-router-dom";
 import { Link } from "@/lib/nav";
-import { ChevronRight, Plus, Search, Star, Truck, X } from "lucide-react";
+import { ChevronRight, Pencil, Plus, Search, Star, Truck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
@@ -48,6 +48,7 @@ function BoardPage() {
   const statusParam = searchParams.get("status") ?? undefined;
   const postParam = searchParams.get("post") === "true";
   const [posting, setPosting] = useState(postParam);
+  const [editingLoad, setEditingLoad] = useState<Load | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DisplayStatus | "ALL">(
     (statusParam as DisplayStatus) ?? "ALL",
@@ -201,7 +202,10 @@ function BoardPage() {
         title="Freight Board"
         actions={
           <button
-            onClick={() => setPosting((p) => !p)}
+            onClick={() => {
+              setEditingLoad(null);
+              setPosting((current) => !current);
+            }}
             className="inline-flex items-center gap-1.5 rounded-md bg-signal px-4 py-2 text-xs font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
           >
             <Plus className="size-3.5" /> Post New Load
@@ -209,7 +213,16 @@ function BoardPage() {
         }
       />
 
-      {posting && <PostLoadForm onDone={() => setPosting(false)} />}
+      {(posting || editingLoad) && (
+        <PostLoadForm
+          key={editingLoad?.id ?? "new"}
+          {...(editingLoad ? { initialLoad: editingLoad } : {})}
+          onDone={() => {
+            setPosting(false);
+            setEditingLoad(null);
+          }}
+        />
+      )}
 
       {/* Filter toolbar */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border px-6 py-3">
@@ -299,6 +312,11 @@ function BoardPage() {
               const truck = trucks.find((item) => item.id === truckId);
               if (truck) setReview({ load: row.load, truck, kind: "request" });
             }}
+            onEdit={() => {
+              setPosting(false);
+              setEditingLoad(row.load);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           />
         ))}
       </div>
@@ -329,6 +347,7 @@ function LoadCard({
   requests,
   onAccept,
   onAcceptRequest,
+  onEdit,
 }: {
   load: Load;
   status: DisplayStatus;
@@ -339,6 +358,7 @@ function LoadCard({
   requests: TruckRequest[];
   onAccept: () => void;
   onAcceptRequest: (truckId: string) => void;
+  onEdit: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   return (
@@ -361,6 +381,15 @@ function LoadCard({
         </div>
         <div className="text-right">
           <StatusChip status={status} />
+          {load.status === "POSTED" && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="ml-2 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:border-signal"
+            >
+              <Pencil className="size-3" /> Edit
+            </button>
+          )}
           <div className="mt-1.5 font-mono text-sm font-semibold">
             {load.targetRate ? formatMoney(load.targetRate) : "—"}
           </div>

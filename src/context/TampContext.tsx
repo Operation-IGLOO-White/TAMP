@@ -181,6 +181,7 @@ interface Store extends State {
   markNotificationsRead: () => void;
   registerParty: (p: NewPartyInput) => string;
   addLoad: (l: NewLoadInput) => Promise<void>;
+  updateLoad: (loadId: string, l: NewLoadInput) => Promise<void>;
   repostLoad: (loadId: string) => Promise<void>;
   addTruck: (t: NewTruckInput) => Promise<void>;
   updateTruck: (
@@ -802,6 +803,62 @@ export function TampProvider({ children }: { children: ReactNode }) {
             "LOAD",
             id,
             `${ownerParty.companyName} posted ${id} (${load.origin.label} → ${load.destination.label}).`,
+          ),
+        }));
+      },
+
+      updateLoad: async (loadId, input) => {
+        const existing = state.loads.find((load) => load.id === loadId);
+        if (!existing || existing.status !== "POSTED") return;
+        const [requiredBodyTypes, targetRate] = await Promise.all([
+          bodyTypesForCargo(input.cargoType),
+          priceLoadMoney(input.distanceKm, input.weightKg, input.cargoType),
+        ]);
+        const load: Load = {
+          ...existing,
+          ...input,
+          id: existing.id,
+          reference: existing.reference,
+          status: "POSTED",
+          createdAt: existing.createdAt,
+          requiredBodyTypes,
+          targetRate,
+        };
+        const ownerParty = state.parties.find((party) => party.id === load.ownerId)!;
+        const available = state.trucks.filter((truck) => truck.status === "AVAILABLE");
+        const scored = (
+          await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
+        ).filter((match) => match.passed);
+        const generated: Match[] = scored.map((match) => ({
+          id: nextRef("MT"),
+          loadId,
+          truckPostingId: match.truck.id,
+          score: match.score,
+          breakdown: match.breakdown,
+          hardFilterResults: match.hardFilterResults,
+          status: "SUGGESTED",
+          initiatedBy: "SYSTEM",
+          expiresAt: new Date(Date.now() + 864e5).toISOString(),
+          createdAt: new Date().toISOString(),
+        }));
+
+        setState((current) => ({
+          ...current,
+          loads: current.loads.map((item) => (item.id === loadId ? load : item)),
+          matches: [
+            ...generated,
+            ...current.matches.filter(
+              (match) => !(match.loadId === loadId && match.status === "SUGGESTED"),
+            ),
+          ],
+          audit: log(
+            current.audit,
+            "LOAD_POSTED",
+            load.ownerId,
+            "FREIGHT_OWNER",
+            "LOAD",
+            loadId,
+            `${ownerParty.companyName} updated ${loadId} (${load.origin.label} → ${load.destination.label}).`,
           ),
         }));
       },
