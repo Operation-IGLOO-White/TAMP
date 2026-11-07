@@ -15,7 +15,7 @@ export function StatCard({
 }) {
   return (
     <div
-      className={`rounded-lg border p-4 ${
+      className={`app-surface p-4 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
         accent ? "border-signal/40 bg-signal/10" : "border-border bg-graphite"
       }`}
     >
@@ -43,7 +43,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <div className={`rounded-lg border border-border bg-graphite ${className}`}>
+    <div className={`app-surface overflow-hidden ${className}`}>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           {title}

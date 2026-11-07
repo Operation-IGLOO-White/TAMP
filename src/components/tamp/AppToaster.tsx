@@ -3,13 +3,13 @@ import { Toaster } from "sonner";
 export function AppToaster() {
   return (
     <Toaster
-      position="top-right"
+      position="top-center"
       closeButton
       duration={4500}
       visibleToasts={4}
       toastOptions={{
         classNames: {
-          toast: "!border-border !bg-background !text-foreground !shadow-xl",
+          toast: "!rounded-xl !border-border !bg-background !text-foreground !shadow-2xl",
           title: "!text-sm !font-bold",
           description: "!text-xs !text-muted-foreground",
           success: "!border-l-4 !border-l-positive",

@@ -24,3 +24,21 @@ it("explains the individual file limit", () => {
     "This file is too large. The maximum size for one file is 10 MB.",
   );
 });
+
+it("turns the unverified write restriction into a clear status message", () => {
+  const error = Object.assign(
+    new Error(
+      "Your account is still under review. You can browse the system, but changes are available after verification.",
+    ),
+    { data: { httpStatus: 403 } },
+  );
+  expect(userFacingError(error)).toBe(
+    "Your account is still being reviewed. You can browse the system, but changes are available after verification.",
+  );
+});
+
+it("never exposes database implementation details", () => {
+  expect(userFacingError(new Error("sqlalchemy.exc.IntegrityError: duplicate key value"))).toBe(
+    "We could not reach the TAMP service. Please try again shortly.",
+  );
+});

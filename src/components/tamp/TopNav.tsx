@@ -10,6 +10,7 @@ import {
   Sun,
   UserRound,
   Building2,
+  ShieldAlert,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +29,7 @@ import { Avatar } from "./Avatar";
 import { BrandLogo } from "./BrandLogo";
 import { MobileNavigation } from "./Sidebar";
 import { switchOrganisation } from "@/fns/organisations";
+import type { Party } from "@/types/domain";
 
 // Owner-driver merge: DRIVER folds into TRANSPORTER, so it isn't a separate
 // switchable workspace.
@@ -81,8 +83,54 @@ export function TopNav() {
           <ProfileMenu />
         </div>
       </nav>
+      <VerificationNotice party={authParty} profilePath={PROFILE_BY_ROLE[role]} />
       <MobileNavigation open={mobileMenu} onClose={() => setMobileMenu(false)} />
     </>
+  );
+}
+
+function VerificationNotice({
+  party,
+  profilePath,
+}: {
+  party: Party;
+  profilePath: string;
+}) {
+  if (party.verification === "VERIFIED" || party.role === "ADMIN") return null;
+  const rejected = party.verification === "REJECTED";
+  return (
+    <div
+      role="status"
+      className={`fixed inset-x-3 bottom-3 z-[45] mx-auto flex max-w-lg items-center gap-3 rounded-xl border px-3 py-2.5 shadow-2xl backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:mx-0 md:w-[390px] ${
+        rejected
+          ? "border-danger/40 bg-background/95"
+          : "border-signal/50 bg-background/95"
+      }`}
+    >
+      <span
+        className={`grid size-9 shrink-0 place-items-center rounded-lg ${
+          rejected ? "bg-danger/10 text-danger" : "bg-signal/15 text-signal"
+        }`}
+      >
+        <ShieldAlert className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-bold">
+          {rejected ? "Verification needs attention" : "Verification in progress"}
+        </div>
+        <div className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+          {rejected
+            ? "Your account is read-only. Review your submitted information."
+            : "You can browse TAMP. Actions unlock after your account is approved."}
+        </div>
+      </div>
+      <Link
+        to={profilePath}
+        className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase hover:border-signal"
+      >
+        Profile
+      </Link>
+    </div>
   );
 }
 

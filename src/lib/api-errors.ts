@@ -3,7 +3,10 @@ type ErrorWithData = Error & {
 };
 
 const TECHNICAL_RESPONSE =
-  /unexpected token|not valid json|json\.parse|json at position|<!doctype|<html|syntaxerror/i;
+  /unexpected token|not valid json|json\.parse|json at position|<!doctype|<html|syntaxerror|traceback|sqlalchemy|asyncpg|psycopg|integrityerror|typeerror:|attributeerror:|pydantic|validation error/i;
+
+const TECHNICAL_FIELD =
+  /(^|\s)(input|body|payload|query|path|upserts|deleteids)(\.|\[)|input should be|field required|string did not match|expected pattern|invalid request data/i;
 
 export const MAX_UPLOAD_SIZE_LABEL = "10 MB";
 export const MAX_ACCOUNT_UPLOAD_LABEL = "100 MB";
@@ -15,6 +18,10 @@ export function userFacingError(error: unknown, fallback = "We could not complet
   const raw = typeof value?.message === "string" ? value.message.trim() : "";
 
   if (status === 401) return "Your session has expired. Sign in again and retry.";
+  if (/still under review|pending verification|account.*not verified|verification is required/i.test(raw))
+    return "Your account is still being reviewed. You can browse the system, but changes are available after verification.";
+  if (/rejected verification|verification.*rejected/i.test(raw))
+    return "Your verification needs attention. Review your profile documents or contact support.";
   if (status === 403) return "You do not have permission to perform this action.";
   if (status === 429) return "Too many attempts were made. Wait a moment and try again.";
   if (status === 502 || status === 503 || status === 504)
@@ -29,12 +36,18 @@ export function userFacingError(error: unknown, fallback = "We could not complet
     return `Your account has reached its ${MAX_ACCOUNT_UPLOAD_LABEL} upload limit. Remove files you no longer need or contact support for more storage.`;
   if (/file exceeds size limit|request too large/i.test(raw))
     return `This file is too large. The maximum size for one file is ${MAX_UPLOAD_SIZE_LABEL}.`;
+  if (TECHNICAL_FIELD.test(raw))
+    return "Some information is missing or invalid. Review the highlighted fields and try again.";
   return raw || fallback;
 }
 
 export function truckRegistrationError(error: unknown) {
   const message = userFacingError(error, "The truck could not be registered. Please try again.");
-  const normalized = message.toLowerCase();
+  const raw =
+    error && typeof (error as { message?: unknown }).message === "string"
+      ? String((error as { message: string }).message)
+      : "";
+  const normalized = `${raw} ${message}`.toLowerCase();
 
   if (normalized.includes("vin") || normalized.includes("match the expected pattern"))
     return "Check the VIN. It must contain exactly 17 letters and numbers, excluding I, O and Q.";
