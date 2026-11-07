@@ -1,7 +1,15 @@
 import { useParams } from "react-router-dom";
-import { ArrowLeft, BadgeCheck, EllipsisVertical, Flag, History, Route } from "lucide-react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  EllipsisVertical,
+  Flag,
+  History,
+  MessageCircle,
+  Route,
+} from "lucide-react";
 
-import { Link } from "@/lib/nav";
+import { Link, useNavigate } from "@/lib/nav";
 import { useEffect, useMemo, useState } from "react";
 import { LaneRail } from "@/components/tamp/LaneRail";
 import { AppShell } from "@/components/tamp/AppShell";
@@ -81,6 +89,7 @@ function ruleEarned(breakdown: MatchScoreComponent[], ruleId: string): number {
 
 function LoadDetail() {
   const { loadId } = useParams<{ loadId: string }>();
+  const navigate = useNavigate();
   const {
     loads,
     trucks,
@@ -184,6 +193,15 @@ function LoadDetail() {
             {mobileMenuOpen && (
               <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-xl border border-border bg-graphite p-1 shadow-2xl">
                 <MobileAction icon={Route} label="Trip progress" onClick={() => scrollToSection("load-trip-timeline", setMobileMenuOpen)} />
+                {trip && (
+                  <MobileAction
+                    icon={MessageCircle}
+                    label="Message trip"
+                    onClick={() =>
+                      navigate({ to: "/messages", search: { tripId: trip.id } })
+                    }
+                  />
+                )}
                 <MobileAction icon={History} label="Audit history" onClick={() => scrollToSection("load-audit-history", setMobileMenuOpen)} />
                 {trip && (
                   <MobileAction
@@ -216,6 +234,15 @@ function LoadDetail() {
           <aside className="space-y-6">
             {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={trip} />}
             {trip && <ShareTrackingLink loadId={load.id} />}
+            {trip && (
+              <Link
+                to="/messages"
+                search={{ tripId: trip.id }}
+                className="hidden min-h-11 items-center justify-center gap-2 rounded-lg border border-border text-xs font-bold uppercase tracking-wide hover:border-signal md:flex"
+              >
+                <MessageCircle className="size-4" /> Message trip
+              </Link>
+            )}
 
             {trip && (
               <div id="load-trip-timeline" className="scroll-mt-24 border border-border">

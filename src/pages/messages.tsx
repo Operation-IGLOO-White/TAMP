@@ -1,4 +1,5 @@
-import { Circle, FileText, MessageCircle, Paperclip, Send, Truck } from "lucide-react";
+import { ArrowLeft, Circle, FileText, MessageCircle, Paperclip, Send, Truck } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import {
@@ -14,6 +15,9 @@ import type { TripConversation, TripMessage } from "@/types/domain";
 
 export default function MessagesPage() {
   const { me, loads, parties } = useTamp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTripId = searchParams.get("tripId");
+  const requestedConversationId = searchParams.get("conversationId");
   const [conversations, setConversations] = useState<TripConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TripMessage[]>([]);
@@ -31,7 +35,17 @@ export default function MessagesPage() {
         .then((items) => {
           if (!active) return;
           setConversations(items);
-          setSelectedId((id) => id ?? items[0]?.id ?? null);
+          setSelectedId((id) => {
+            if (id) return id;
+            const requested = items.find(
+              (item) =>
+                item.id === requestedConversationId || item.tripId === requestedTripId,
+            );
+            if (requested) return requested.id;
+            return window.matchMedia("(min-width: 1024px)").matches
+              ? (items[0]?.id ?? null)
+              : null;
+          });
         })
         .catch(() => {});
     refresh();
@@ -40,7 +54,7 @@ export default function MessagesPage() {
       active = false;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [requestedConversationId, requestedTripId]);
   useEffect(() => {
     if (!selectedId) return;
     let active = true;
@@ -160,25 +174,44 @@ export default function MessagesPage() {
     }
   };
 
+  const openConversation = (conversation: TripConversation) => {
+    setSelectedId(conversation.id);
+    setSearchParams({ conversationId: conversation.id }, { replace: true });
+  };
+
+  const closeConversation = () => {
+    setSelectedId(null);
+    setSearchParams({}, { replace: true });
+  };
+
   return (
     <AppShell>
-      <PageHeader title="Trip Messages" />
-      <div className="grid h-[calc(100vh-8rem)] min-h-[650px] bg-graphite lg:grid-cols-[350px_1fr]">
-        <aside className="border-b border-border lg:border-b-0 lg:border-r">
-          <div className="border-b border-border p-4 text-xs text-muted-foreground">
-            Secure conversations for confirmed deliveries
+      <div className="hidden lg:block">
+        <PageHeader title="Trip Messages" />
+      </div>
+      <div className="grid h-[calc(100dvh-4rem)] min-h-0 overflow-hidden bg-graphite lg:h-[calc(100vh-8rem)] lg:min-h-[650px] lg:grid-cols-[350px_1fr]">
+        <aside
+          className={`${selected ? "hidden lg:flex" : "flex"} min-h-0 min-w-0 flex-col border-border lg:border-r`}
+        >
+          <div className="border-b border-border px-4 py-4">
+            <h1 className="text-lg font-bold lg:hidden">Ride chats</h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Select a confirmed trip to open its conversation.
+            </p>
           </div>
-          <div className="divide-y divide-border">
+          <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain">
             {conversations.map((conversation) => {
               const item = loads.find((load) => load.id === conversation.loadId);
               return (
                 <button
                   key={conversation.id}
-                  onClick={() => setSelectedId(conversation.id)}
-                  className={`w-full p-4 text-left hover:bg-steel/20 ${selectedId === conversation.id ? "border-l-4 border-signal bg-signal/5" : ""}`}
+                  onClick={() => openConversation(conversation)}
+                  className={`w-full min-w-0 overflow-hidden p-4 text-left hover:bg-steel/20 ${selectedId === conversation.id ? "border-l-4 border-signal bg-signal/5" : ""}`}
                 >
-                  <div className="flex justify-between gap-2">
-                    <strong className="font-mono text-xs">{conversation.loadId}</strong>
+                  <div className="flex min-w-0 justify-between gap-2">
+                    <strong className="min-w-0 truncate font-mono text-xs">
+                      {conversation.loadId}
+                    </strong>
                     {conversation.unreadCount > 0 && (
                       <span className="grid size-5 place-items-center rounded-full bg-signal text-[10px] font-black text-signal-foreground">
                         {conversation.unreadCount}
@@ -204,16 +237,29 @@ export default function MessagesPage() {
             )}
           </div>
         </aside>
-        <section className="flex min-h-0 flex-col">
+        <section className={`${selected ? "flex" : "hidden lg:flex"} min-h-0 min-w-0 flex-col bg-background`}>
           {selected ? (
             <>
-              <header className="border-b border-border p-4">
+              <header className="border-b border-border px-3 py-3 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={closeConversation}
+                      aria-label="Back to ride chats"
+                      className="grid size-9 shrink-0 place-items-center rounded-lg border border-border lg:hidden"
+                    >
+                      <ArrowLeft className="size-4" />
+                    </button>
                     <Truck className="size-4 shrink-0 text-signal" />
-                    <strong className="truncate">
-                      {load ? `${load.origin.label} → ${load.destination.label}` : selected.tripId}
-                    </strong>
+                    <div className="min-w-0">
+                      <strong className="block truncate text-sm">
+                        {load ? `${load.origin.label} → ${load.destination.label}` : selected.tripId}
+                      </strong>
+                      <p className="truncate text-[10px] text-muted-foreground lg:hidden">
+                        {participantNames}
+                      </p>
+                    </div>
                   </div>
                   <span className="flex shrink-0 items-center gap-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
                     <Circle
@@ -226,9 +272,9 @@ export default function MessagesPage() {
                         : "Reconnecting"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{participantNames}</p>
+                <p className="mt-1 hidden text-xs text-muted-foreground lg:block">{participantNames}</p>
               </header>
-              <div className="flex-1 space-y-3 overflow-y-auto bg-background p-4">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:p-4">
                 {messages.map((message) =>
                   message.kind === "SYSTEM" ? (
                     <div
@@ -243,7 +289,7 @@ export default function MessagesPage() {
                       className={`flex ${message.senderId === me.id ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[78%] rounded-xl px-3 py-2 shadow-sm ${message.senderId === me.id ? "bg-signal text-signal-foreground" : "border border-border bg-graphite"}`}
+                        className={`max-w-[86%] rounded-xl px-3 py-2 shadow-sm sm:max-w-[78%] ${message.senderId === me.id ? "bg-signal text-signal-foreground" : "border border-border bg-graphite"}`}
                       >
                         <div className="mb-1 text-[9px] font-bold uppercase opacity-70">
                           {message.senderId === me.id
@@ -277,14 +323,14 @@ export default function MessagesPage() {
                 )}
                 <div ref={bottom} />
               </div>
-              <footer className="border-t border-border p-3">
+              <footer className="border-t border-border px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
                 {attachment && (
                   <div className="mb-2 flex items-center justify-between rounded-md bg-steel/40 px-3 py-2 text-xs">
                     <span>{attachment.name}</span>
                     <button onClick={() => setAttachment(null)}>Remove</button>
                   </div>
                 )}
-                <div className="flex gap-2">
+                <div className="flex min-w-0 gap-2">
                   <label className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-md border border-border">
                     <Paperclip className="size-4" />
                     <input
@@ -316,7 +362,7 @@ export default function MessagesPage() {
                     }}
                     rows={1}
                     placeholder="Message this trip…"
-                    className="min-h-10 flex-1 resize-none rounded-md border border-border px-3 py-2 text-sm"
+                    className="min-h-10 min-w-0 flex-1 resize-none rounded-md border border-border px-3 py-2 text-sm"
                   />
                   <button
                     aria-label="Send message"
