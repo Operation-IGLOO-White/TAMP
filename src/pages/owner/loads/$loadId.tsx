@@ -1,9 +1,11 @@
 import { useParams } from "react-router-dom";
-import { BadgeCheck } from "lucide-react";
+import { ArrowLeft, BadgeCheck, EllipsisVertical, Flag, History, Route } from "lucide-react";
 
 import { Link } from "@/lib/nav";
 import { useEffect, useMemo, useState } from "react";
 import { LaneRail } from "@/components/tamp/LaneRail";
+import { AppShell } from "@/components/tamp/AppShell";
+import { IncidentDialog } from "@/components/tamp/IncidentDialog";
 import { MatchTicket } from "@/components/tamp/MatchTicket";
 import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
 import { ShareTrackingLink } from "@/components/tamp/ShareTrackingLink";
@@ -95,6 +97,8 @@ function LoadDetail() {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [showUnqualified, setShowUnqualified] = useState(false);
   const [reviewTruck, setReviewTruck] = useState<TruckPosting | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [issueOpen, setIssueOpen] = useState(false);
 
   const load = loads.find((l) => l.id === loadId);
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
@@ -128,9 +132,11 @@ function LoadDetail() {
 
   if (!load) {
     return (
-      <main className="h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <p className="text-xs text-muted-foreground">Load {loadId} not found.</p>
-      </main>
+      <AppShell>
+        <main className="flex min-h-full items-center justify-center">
+          <p className="text-xs text-muted-foreground">Load {loadId} not found.</p>
+        </main>
+      </AppShell>
     );
   }
 
@@ -148,24 +154,63 @@ function LoadDetail() {
       .slice(0, 8);
 
     return (
-      <main className="h-[calc(100vh-3.5rem)] overflow-y-auto">
-        <div className="sticky top-0 bg-background/90 backdrop-blur-md p-4 border-b border-border z-10 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <AppShell>
+      <main className="min-h-full">
+        <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-md sm:p-4">
+          <div className="relative flex min-w-0 items-center gap-2 md:hidden">
             <Link
               to="/owner/board"
-              className="text-[10px] font-bold uppercase tracking-widest text-signal"
+              aria-label="Back to freight board"
+              className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-foreground"
             >
-              ← Back to board
+              <ArrowLeft className="size-4" />
             </Link>
-            <h1 className="text-sm font-bold tracking-tight font-mono">{load.id}</h1>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-mono text-xs font-bold">{load.reference || load.id}</div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                {load.origin.label} → {load.destination.label}
+              </div>
+            </div>
             <StatusChip status={status} />
+            <button
+              type="button"
+              aria-label="More load actions"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground"
+            >
+              <EllipsisVertical className="size-4" />
+            </button>
+            {mobileMenuOpen && (
+              <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-xl border border-border bg-graphite p-1 shadow-2xl">
+                <MobileAction icon={Route} label="Trip progress" onClick={() => scrollToSection("load-trip-timeline", setMobileMenuOpen)} />
+                <MobileAction icon={History} label="Audit history" onClick={() => scrollToSection("load-audit-history", setMobileMenuOpen)} />
+                {trip && (
+                  <MobileAction
+                    icon={Flag}
+                    label="Report an issue"
+                    danger
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setIssueOpen(true);
+                    }}
+                  />
+                )}
+              </div>
+            )}
           </div>
-          <div className="text-xs text-muted-foreground font-mono">
-            {load.origin.label} → {load.destination.label}
+
+          <div className="hidden items-center justify-between gap-4 md:flex">
+            <div className="flex min-w-0 items-center gap-3">
+              <Link to="/owner/board" className="text-[10px] font-bold uppercase tracking-widest text-signal">← Back to board</Link>
+              <h1 className="font-mono text-sm font-bold tracking-tight">{load.id}</h1>
+              <StatusChip status={status} />
+            </div>
+            <div className="truncate font-mono text-xs text-muted-foreground">{load.origin.label} → {load.destination.label}</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(360px,440px)_1fr] gap-6 p-6 items-start">
+        <div className="grid grid-cols-1 items-start gap-4 p-3 sm:p-6 lg:grid-cols-[minmax(360px,440px)_1fr] lg:gap-6">
           <Waybill load={load} />
 
           <aside className="space-y-6">
@@ -173,7 +218,7 @@ function LoadDetail() {
             {trip && <ShareTrackingLink loadId={load.id} />}
 
             {trip && (
-              <div className="border border-border">
+              <div id="load-trip-timeline" className="scroll-mt-24 border border-border">
                 <h3 className="text-[10px] font-bold uppercase tracking-widest p-3 border-b border-border bg-graphite/50">
                   Trip timeline
                 </h3>
@@ -279,7 +324,7 @@ function LoadDetail() {
                 );
               })()}
 
-            <div className="border border-border">
+            <div id="load-audit-history" className="scroll-mt-24 border border-border">
               <h3 className="text-[10px] font-bold uppercase tracking-widest p-3 border-b border-border bg-graphite/50">
                 Audit history ({loadEvents.length})
               </h3>
@@ -310,38 +355,55 @@ function LoadDetail() {
           </aside>
         </div>
       </main>
+      <IncidentDialog
+        loadId={load.id}
+        open={issueOpen}
+        onClose={() => setIssueOpen(false)}
+      />
+      </AppShell>
     );
   }
 
   return (
-    <main className="h-[calc(100vh-3.5rem)] overflow-y-auto">
-      <div className="sticky top-0 bg-background/90 backdrop-blur-md p-4 border-b border-border z-10 space-y-3">
-        <Link
-          to="/owner/board"
-          className="text-[10px] font-bold uppercase tracking-widest text-signal"
-        >
-          ← Back to board
-        </Link>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-sm font-bold tracking-tight font-mono">{load.id}</h1>
-            <StatusChip status={status} />
+    <AppShell>
+    <main className="min-h-full">
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-md sm:p-4">
+        <div className="flex min-w-0 items-center gap-2 md:hidden">
+          <Link
+            to="/owner/board"
+            aria-label="Back to freight board"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-mono text-xs font-bold">{load.reference || load.id}</div>
+            <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+              {(load.weightKg / 1000).toFixed(1)}t · {load.cargoType.replaceAll("_", " ")}
+            </div>
           </div>
-          <div className="text-xs text-muted-foreground font-mono">
+          <StatusChip status={status} />
+        </div>
+
+        <div className="hidden space-y-3 md:block">
+          <Link to="/owner/board" className="text-[10px] font-bold uppercase tracking-widest text-signal">← Back to board</Link>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <h1 className="font-mono text-sm font-bold tracking-tight">{load.id}</h1>
+              <StatusChip status={status} />
+            </div>
+            <div className="font-mono text-xs text-muted-foreground">
             {(load.weightKg / 1000).toFixed(1)}t · {load.requiredBodyTypes.join("/")} ·{" "}
             {load.cargoType.replaceAll("_", " ")}
+            </div>
           </div>
-        </div>
-        <div className="max-w-lg">
-          <LaneRail
-            origin={load.origin}
-            destination={load.destination}
-            distanceKm={load.distanceKm}
-          />
+          <div className="max-w-lg">
+            <LaneRail origin={load.origin} destination={load.destination} distanceKm={load.distanceKm} />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 p-6">
+      <div className="grid grid-cols-1 gap-4 p-3 sm:p-6 lg:grid-cols-[1fr_360px] lg:gap-6">
         <section className="space-y-4">
           {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={undefined} />}
           <div className="flex items-center justify-between">
@@ -472,6 +534,37 @@ function LoadDetail() {
         />
       )}
     </main>
+    </AppShell>
+  );
+}
+
+function scrollToSection(id: string, close: (open: boolean) => void) {
+  close(false);
+  window.requestAnimationFrame(() =>
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+  );
+}
+
+function MobileAction({
+  icon: Icon,
+  label,
+  onClick,
+  danger = false,
+}: {
+  icon: typeof Route;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-xs font-semibold hover:bg-steel/50 ${danger ? "text-danger" : "text-foreground"}`}
+    >
+      <Icon className="size-4 shrink-0" />
+      {label}
+    </button>
   );
 }
 
