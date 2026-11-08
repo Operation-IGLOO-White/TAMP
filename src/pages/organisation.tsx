@@ -2,13 +2,17 @@ import {
   Building2,
   ClipboardList,
   Copy,
+  Gauge,
   KeyRound,
+  PackageOpen,
   Plus,
+  Route,
   ShieldCheck,
   Trash2,
   Truck,
   UserRoundPlus,
   Users,
+  WalletCards,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,6 +21,7 @@ import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { useTamp } from "@/context/TampContext";
 import { Link } from "@/lib/nav";
+import { zar } from "@/lib/tamp-data";
 import {
   addOrganisationMember,
   createOrganisation,
@@ -27,7 +32,17 @@ import {
   switchOrganisation,
   updateOrganisation,
 } from "@/fns/organisations";
-import type { OrganisationRole } from "@/types/domain";
+import type {
+  DispatchAssignment,
+  Invoice,
+  Load,
+  Match,
+  OrganisationRole,
+  OrganisationSummary,
+  Party,
+  Trip,
+  TruckPosting,
+} from "@/types/domain";
 
 const ROLE_IDS: Record<OrganisationRole, string> = {
   FREIGHT_OWNER: "ROLE-FREIGHT-OWNER",
@@ -52,7 +67,7 @@ const ROLE_HELP: Record<OrganisationRole, string> = {
 };
 
 export default function OrganisationPage() {
-  const { authParty, trucks, vehicles, loads } = useTamp();
+  const { authParty, trucks, vehicles, loads, matches, trips, invoices, dispatches } = useTamp();
   const queryClient = useQueryClient();
   const canCreate = authParty?.systemRole === "system_super_user";
   const canManageMembers =
@@ -297,6 +312,18 @@ export default function OrganisationPage() {
                   </>
                 )}
               </section>
+              {authParty?.role === "ADMIN" && (
+                <AdminOrganisationOversight
+                  organisation={active}
+                  members={members}
+                  loads={loads}
+                  trucks={trucks}
+                  matches={matches}
+                  trips={trips}
+                  invoices={invoices}
+                  dispatches={dispatches}
+                />
+              )}
               <section className="rounded-lg border border-border bg-graphite">
                 <div id="organisation-members" className="flex items-start gap-2 border-b border-border p-4">
                   <Users className="size-4 text-signal" />
@@ -505,6 +532,193 @@ export default function OrganisationPage() {
       </div>
     </AppShell>
   );
+}
+
+type OversightTab = "overview" | "loads" | "trucks" | "engagements" | "finance";
+
+function AdminOrganisationOversight({
+  organisation,
+  members,
+  loads,
+  trucks,
+  matches,
+  trips,
+  invoices,
+  dispatches,
+}: {
+  organisation: OrganisationSummary;
+  members: (Party & { membershipId: string; isPrimary: boolean; roleIds: string[] })[];
+  loads: Load[];
+  trucks: TruckPosting[];
+  matches: Match[];
+  trips: Trip[];
+  invoices: Invoice[];
+  dispatches: DispatchAssignment[];
+}) {
+  const [tab, setTab] = useState<OversightTab>("overview");
+  const memberIds = new Set(members.map((member) => member.id));
+  const orgLoads = loads.filter((load) => memberIds.has(load.ownerId));
+  const orgTrucks = trucks.filter(
+    (truck) => memberIds.has(truck.transporterId) || Boolean(truck.driverId && memberIds.has(truck.driverId)),
+  );
+  const loadIds = new Set(orgLoads.map((load) => load.id));
+  const truckIds = new Set(orgTrucks.map((truck) => truck.id));
+  const orgMatches = matches.filter(
+    (match) => loadIds.has(match.loadId) || truckIds.has(match.truckPostingId),
+  );
+  const matchIds = new Set(orgMatches.map((match) => match.id));
+  const orgTrips = trips.filter((trip) => matchIds.has(trip.matchId));
+  const tripIds = new Set(orgTrips.map((trip) => trip.id));
+  const orgInvoices = invoices.filter(
+    (invoice) =>
+      memberIds.has(invoice.ownerId) ||
+      memberIds.has(invoice.carrierId) ||
+      matchIds.has(invoice.matchId),
+  );
+  const orgDispatches = dispatches.filter((assignment) => tripIds.has(assignment.tripId));
+  const activeTrips = orgTrips.filter(
+    (trip) => !["COMPLETED", "CANCELLED"].includes(trip.status),
+  );
+  const totalBilled = orgInvoices.reduce((sum, invoice) => sum + invoice.total, 0);
+  const tabs: { id: OversightTab; label: string; count?: number }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "loads", label: "Loads", count: orgLoads.length },
+    { id: "trucks", label: "Trucks", count: orgTrucks.length },
+    { id: "engagements", label: "Engagements", count: orgMatches.length },
+    { id: "finance", label: "Finance", count: orgInvoices.length },
+  ];
+
+  return (
+    <section className="app-surface overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4 sm:p-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <Gauge className="size-4 text-signal" />
+            <h3 className="font-black">Platform oversight</h3>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Tenant-scoped operational and financial activity for {organisation.name}.
+          </p>
+        </div>
+        <span className="rounded-full border border-border px-3 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+          {organisation.verification}
+        </span>
+      </div>
+
+      <div className="overflow-x-auto border-b border-border px-3 pt-2">
+        <div className="flex min-w-max gap-1">
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={`rounded-t-lg px-3 py-2.5 text-xs font-bold ${tab === item.id ? "bg-steel text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {item.label}{item.count !== undefined ? ` (${item.count})` : ""}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "overview" && (
+        <div className="p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <OversightMetric icon={Users} label="Members" value={members.length} />
+            <OversightMetric icon={PackageOpen} label="Loads" value={orgLoads.length} />
+            <OversightMetric icon={Truck} label="Trucks" value={orgTrucks.length} />
+            <OversightMetric icon={Route} label="Active trips" value={activeTrips.length} />
+            <OversightMetric icon={WalletCards} label="Total billed" value={zar(totalBilled)} />
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            <OverviewList title="Load status" rows={countBy(orgLoads, (item) => item.status)} />
+            <OverviewList title="Truck status" rows={countBy(orgTrucks, (item) => item.status)} />
+            <OverviewList title="Trip status" rows={countBy(orgTrips, (item) => item.status)} />
+          </div>
+        </div>
+      )}
+
+      {tab === "loads" && (
+        <OversightTable
+          empty="This organisation has no loads."
+          heads={["Load", "Route", "Cargo", "Weight", "Status"]}
+          rows={orgLoads.map((load) => [
+            load.id,
+            `${load.origin.label} → ${load.destination.label}`,
+            load.cargoType.replaceAll("_", " "),
+            `${(load.weightKg / 1000).toFixed(1)} t`,
+            load.status,
+          ])}
+        />
+      )}
+      {tab === "trucks" && (
+        <OversightTable
+          empty="This organisation has no trucks."
+          heads={["Truck", "Body", "Capacity", "Driver", "Status"]}
+          rows={orgTrucks.map((truck) => [
+            truck.registration,
+            truck.bodyType.replaceAll("_", " "),
+            `${(truck.payloadCapacityKg / 1000).toFixed(1)} t`,
+            members.find((member) => member.id === truck.driverId)?.contactName ?? "Unassigned",
+            truck.status,
+          ])}
+        />
+      )}
+      {tab === "engagements" && (
+        <OversightTable
+          empty="This organisation has no match or trip engagements."
+          heads={["Match", "Load", "Truck", "Score", "Match status", "Trip status"]}
+          rows={orgMatches.map((match) => {
+            const trip = orgTrips.find((item) => item.matchId === match.id);
+            return [
+              match.id,
+              match.loadId,
+              orgTrucks.find((truck) => truck.id === match.truckPostingId)?.registration ?? match.truckPostingId,
+              `${match.score.toFixed(1)} / 100`,
+              match.status,
+              trip?.status ?? "Not started",
+            ];
+          })}
+        />
+      )}
+      {tab === "finance" && (
+        <OversightTable
+          empty="No invoices have been generated for this organisation."
+          heads={["Invoice", "Load", "Total", "Payment", "Payout", "Due"]}
+          rows={orgInvoices.map((invoice) => [
+            invoice.invoiceNumber,
+            invoice.loadId,
+            zar(invoice.total),
+            invoice.status,
+            invoice.payoutStatus,
+            new Date(invoice.dueAt).toLocaleDateString("en-ZA"),
+          ])}
+        />
+      )}
+
+      <div className="border-t border-border px-4 py-3 text-[10px] text-muted-foreground">
+        {orgDispatches.length} dispatch assignment{orgDispatches.length === 1 ? "" : "s"} recorded for this organisation.
+      </div>
+    </section>
+  );
+}
+
+function OversightMetric({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: string | number }) {
+  return <div className="rounded-xl border border-border bg-background p-3 shadow-sm"><div className="flex items-center justify-between text-[10px] font-bold uppercase text-muted-foreground"><span>{label}</span><Icon className="size-4" /></div><div className="mt-2 text-xl font-black">{value}</div></div>;
+}
+
+function countBy<T>(items: T[], key: (item: T) => string) {
+  const counts = new Map<string, number>();
+  items.forEach((item) => counts.set(key(item), (counts.get(key(item)) ?? 0) + 1));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function OverviewList({ title, rows }: { title: string; rows: [string, number][] }) {
+  return <div className="rounded-xl border border-border bg-background p-4"><h4 className="text-xs font-black uppercase tracking-wide">{title}</h4><div className="mt-3 space-y-2">{rows.length ? rows.map(([label, count]) => <div key={label} className="flex items-center justify-between text-xs"><span className="text-muted-foreground">{label.replaceAll("_", " ")}</span><strong>{count}</strong></div>) : <span className="text-xs text-muted-foreground">No activity</span>}</div></div>;
+}
+
+function OversightTable({ heads, rows, empty }: { heads: string[]; rows: (string | number)[][]; empty: string }) {
+  if (!rows.length) return <div className="p-8 text-center text-sm text-muted-foreground">{empty}</div>;
+  return <div className="overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="bg-steel/30 text-[10px] uppercase tracking-wide text-muted-foreground"><tr>{heads.map((head) => <th key={head} className="whitespace-nowrap px-4 py-3">{head}</th>)}</tr></thead><tbody className="divide-y divide-border">{rows.map((row, index) => <tr key={`${row[0]}-${index}`} className="hover:bg-steel/20">{row.map((cell, cellIndex) => <td key={cellIndex} className={`px-4 py-3 ${cellIndex === 0 ? "font-mono font-bold" : "max-w-sm"}`}>{cell}</td>)}</tr>)}</tbody></table></div>;
 }
 
 function OrganisationTool({

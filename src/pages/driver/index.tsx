@@ -1,6 +1,8 @@
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Copy,
   Flag,
   Map as MapIcon,
@@ -524,6 +526,7 @@ function MobileTripControls({
   onFlag: () => void;
 }) {
   const { trip, load } = job;
+  const [collapsed, setCollapsed] = useState(false);
   const meta = statusMeta(trip.status);
   const stop = load.stops?.[trip.currentStopIndex ?? 0];
   const followingStop = load.stops?.[(trip.currentStopIndex ?? 0) + 1];
@@ -537,11 +540,47 @@ function MobileTripControls({
       : stop?.place.label || load.destination.label;
   const delivered = trip.status === "DELIVERED" || trip.status === "COMPLETED";
 
+  if (collapsed) {
+    return (
+      <div className="absolute inset-x-0 bottom-0 z-[500] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          aria-label="Show trip controls"
+          className="mx-auto flex min-h-16 w-full max-w-xl items-center gap-3 rounded-2xl border border-border bg-background/95 px-4 text-left shadow-2xl backdrop-blur-xl"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-signal/15 text-signal">
+            <Navigation className="size-[18px]" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+              {meta.label} · {Math.round(trip.progressPct)}%
+            </span>
+            <span className="block truncate text-sm font-bold text-foreground">{destination}</span>
+          </span>
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-border text-muted-foreground">
+            <ChevronUp className="size-4" />
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="absolute inset-x-0 bottom-0 z-[500] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-5">
       <div className="mx-auto max-w-xl overflow-hidden rounded-[1.75rem] border border-border bg-background/98 shadow-2xl backdrop-blur-xl">
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
-        <div className="px-5 pb-4 pt-3 sm:px-6">
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          aria-label="Hide trip controls and show more map"
+          className="mx-auto flex min-h-8 w-full items-center justify-center text-muted-foreground"
+        >
+          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest">
+            <span className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+            Hide <ChevronDown className="size-3.5" />
+          </span>
+        </button>
+        <div className="px-5 pb-4 pt-1 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <span className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold ${meta.cls}`}>
               {meta.label}
