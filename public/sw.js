@@ -1,6 +1,6 @@
 const SHELL = "tamp-shell-v2";
 const RUNTIME = "tamp-runtime-v2";
-const PRECACHE = ["/", "/offline.html", "/manifest.webmanifest", "/favicon.svg", "/tamp-logo.png"];
+const PRECACHE = ["/", "/offline.html", "/manifest.webmanifest", "/favicon.svg", "/tamp-pwa.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(SHELL).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));

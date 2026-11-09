@@ -30,7 +30,8 @@ export function assessFleetCompliance(
     warnings.push(`Vehicle licence expires in ${licenceDaysRemaining} days`);
   if (documents.length < 3)
     blockers.push(`Vehicle documents incomplete (${documents.length}/3 uploaded)`);
-  if (vehicle?.verification === "REJECTED") blockers.push("Vehicle verification was rejected");
+  if (!vehicle) warnings.push("Vehicle review is pending");
+  else if (vehicle.verification === "REJECTED") blockers.push("Vehicle verification was rejected");
   else if (vehicle?.verification === "PENDING") warnings.push("Vehicle review is pending");
   if (vehicle?.status === "SUSPENDED" || vehicle?.status === "RETIRED")
     blockers.push(`Vehicle is ${vehicle.status.toLowerCase()}`);
