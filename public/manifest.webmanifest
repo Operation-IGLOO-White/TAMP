@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "TAMP Logistics",
+  "short_name": "TAMP",
+  "description": "Freight matching, dispatch, navigation and live trip operations.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0e12",
+  "theme_color": "#0d0e12",
+  "categories": ["business", "navigation", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "My jobs", "short_name": "Jobs", "url": "/driver" },
+    { "name": "Freight board", "short_name": "Freight", "url": "/owner/board" },
+    { "name": "Messages", "short_name": "Messages", "url": "/messages" }
+  ]
+}

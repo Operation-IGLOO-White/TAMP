@@ -95,6 +95,7 @@ interface State {
 // EVT-## catalogue — spec §10.4.
 const EVT = {
   LOAD_POSTED: "EVT-10",
+  LOAD_CANCELLED: "EVT-12",
   USER_REGISTERED: "EVT-11",
   TRUCK_POSTED: "EVT-30",
   TRUCK_UPDATED: "EVT-33",
@@ -182,6 +183,7 @@ interface Store extends State {
   registerParty: (p: NewPartyInput) => string;
   addLoad: (l: NewLoadInput) => Promise<void>;
   updateLoad: (loadId: string, l: NewLoadInput) => Promise<void>;
+  cancelLoad: (loadId: string) => void;
   repostLoad: (loadId: string) => Promise<void>;
   addTruck: (t: NewTruckInput) => Promise<void>;
   updateTruck: (
@@ -862,6 +864,32 @@ export function TampProvider({ children }: { children: ReactNode }) {
           ),
         }));
       },
+
+      cancelLoad: (loadId) =>
+        setState((current) => {
+          const load = current.loads.find((item) => item.id === loadId);
+          if (!load || load.status !== "POSTED") return current;
+          return {
+            ...current,
+            loads: current.loads.map((item) =>
+              item.id === loadId ? { ...item, status: "CANCELLED" as const } : item,
+            ),
+            matches: current.matches.map((match) =>
+              match.loadId === loadId && ["SUGGESTED", "OFFERED"].includes(match.status)
+                ? { ...match, status: "REJECTED" as const }
+                : match,
+            ),
+            audit: log(
+              current.audit,
+              "LOAD_CANCELLED",
+              load.ownerId,
+              "FREIGHT_OWNER",
+              "LOAD",
+              loadId,
+              `${loadId} was cancelled before engagement.`,
+            ),
+          };
+        }),
 
       // Re-post an expired (stale) load: reset its post date so the 7-day clock
       // starts over, ensure it's POSTED, and regenerate fresh suggestions

@@ -1,9 +1,10 @@
 
-import { CheckCircle2, Coins, Fuel, Plus, ScrollText, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Coins, Fuel, Plus, ShieldCheck, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { formatMoney } from "@/lib/tamp-data";
+import { assessFleetCompliance } from "@/lib/fleet-compliance";
 import { useTamp } from "@/context/TampContext";
 import type { MaintenanceKind } from "@/types/domain";
 
@@ -23,21 +24,21 @@ const dayISO = (offsetDays = 0) =>
   new Date(Date.now() + offsetDays * 864e5).toISOString().slice(0, 10);
 
 function FleetOpsPage() {
-  const { trucks, fuelLogs, maintenance, addFuelLog, addMaintenance, completeMaintenance } =
+  const { trucks, vehicles, fuelLogs, maintenance, addFuelLog, addMaintenance, completeMaintenance } =
     useTamp();
   const updateTruck = useTamp().updateTruck;
-  const [tab, setTab] = useState<"maintenance" | "fuel" | "licensing" | "costs">("maintenance");
+  const [tab, setTab] = useState<"compliance" | "maintenance" | "fuel" | "costs">("compliance");
 
   const TABS = [
+    { key: "compliance" as const, label: "Compliance", icon: ShieldCheck },
     { key: "maintenance" as const, label: "Maintenance", icon: Wrench },
     { key: "fuel" as const, label: "Fuel", icon: Fuel },
-    { key: "licensing" as const, label: "Licensing", icon: ScrollText },
     { key: "costs" as const, label: "Costs / vehicle", icon: Coins },
   ];
 
   return (
     <AppShell>
-      <PageHeader title="Fleet Costs" />
+      <PageHeader title="Fleet & Compliance" />
 
       <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
         {trucks.length === 0 ? (
@@ -61,6 +62,9 @@ function FleetOpsPage() {
               ))}
             </div>
 
+            {tab === "compliance" && (
+              <ComplianceTab trucks={trucks} vehicles={vehicles} maintenance={maintenance} onSet={updateTruck} />
+            )}
             {tab === "maintenance" && (
               <MaintenanceTab
                 trucks={trucks}
@@ -70,7 +74,6 @@ function FleetOpsPage() {
               />
             )}
             {tab === "fuel" && <FuelTab trucks={trucks} logs={fuelLogs} onAdd={addFuelLog} />}
-            {tab === "licensing" && <LicensingTab trucks={trucks} onSet={updateTruck} />}
             {tab === "costs" && (
               <CostsTab trucks={trucks} tasks={maintenance} logs={fuelLogs} />
             )}
@@ -486,36 +489,61 @@ function FuelTab({
   );
 }
 
-// ---- Licensing ------------------------------------------------------------
+// ---- Compliance -----------------------------------------------------------
 
-function LicensingTab({
+function ComplianceTab({
   trucks,
+  vehicles,
+  maintenance,
   onSet,
 }: {
   trucks: ReturnType<typeof useTamp>["trucks"];
+  vehicles: ReturnType<typeof useTamp>["vehicles"];
+  maintenance: ReturnType<typeof useTamp>["maintenance"];
   onSet: ReturnType<typeof useTamp>["updateTruck"];
 }) {
   const now = Date.now();
-  const soon = now + 30 * 864e5;
+  const reports = trucks.map((truck) => ({
+    truck,
+    report: assessFleetCompliance(
+      truck,
+      vehicles.find((vehicle) => vehicle.id === truck.vehicleId),
+      maintenance,
+      now,
+    ),
+  }));
+  const compliant = reports.filter(({ report }) => report.level === "COMPLIANT").length;
+  const dueSoon = reports.filter(({ report }) => report.level === "DUE_SOON").length;
+  const blocked = reports.filter(({ report }) => report.level === "ACTION_REQUIRED").length;
   return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-        Vehicle licensing
-      </h2>
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Stat label="Road ready" value={String(compliant)} />
+        <Stat label="Due soon" value={String(dueSoon)} />
+        <Stat label="Action required" value={String(blocked)} />
+      </div>
+      <div className="rounded-xl border border-border bg-graphite/40 p-4">
+        <h2 className="font-bold">Fleet compliance centre</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Vehicles need a valid licence, all three documents, completed verification and no
+          overdue maintenance before they can be recommended for work.
+        </p>
+      </div>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[520px] text-sm">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-border bg-graphite/60 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               <th className="px-4 py-2.5">Vehicle</th>
               <th className="px-3 py-2.5">Licence expiry</th>
-              <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5">Documents</th>
+              <th className="px-3 py-2.5">Score</th>
+              <th className="px-3 py-2.5">Compliance status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {trucks.map((t) => {
-              const exp = t.licenceExpiry ? new Date(t.licenceExpiry).getTime() : null;
-              const expired = exp !== null && exp < now;
-              const expiring = exp !== null && !expired && exp <= soon;
+            {reports.map(({ truck: t, report }) => {
+              const vehicle = vehicles.find((item) => item.id === t.vehicleId);
+              const docs = vehicle?.documents ?? t.documents ?? [];
               return (
                 <tr key={t.id}>
                   <td className="px-4 py-2.5">
@@ -538,22 +566,27 @@ function LicensingTab({
                       className="rounded-md border border-border bg-graphite px-2 py-1 text-xs outline-none focus:border-signal"
                     />
                   </td>
+                  <td className="px-3 py-2.5 font-mono">{docs.length}/3</td>
+                  <td className="px-3 py-2.5 font-mono font-bold">{report.score}%</td>
                   <td className="px-3 py-2.5">
-                    {exp === null ? (
-                      <span className="text-[11px] text-muted-foreground">Not set</span>
-                    ) : expired ? (
-                      <span className="rounded bg-danger/15 px-2 py-0.5 text-[10px] font-bold uppercase text-danger">
-                        Expired
-                      </span>
-                    ) : expiring ? (
-                      <span className="rounded bg-signal/20 px-2 py-0.5 text-[10px] font-bold uppercase text-signal-foreground">
-                        Expiring soon
-                      </span>
-                    ) : (
-                      <span className="rounded bg-positive/15 px-2 py-0.5 text-[10px] font-bold uppercase text-positive">
-                        Valid
-                      </span>
-                    )}
+                    <div className="flex items-start gap-2">
+                      {report.level === "COMPLIANT" ? (
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-positive" />
+                      ) : (
+                        <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${report.level === "ACTION_REQUIRED" ? "text-danger" : "text-signal"}`} />
+                      )}
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wide">
+                          {report.level.replaceAll("_", " ")}
+                        </div>
+                        {[...report.blockers, ...report.warnings].map((message) => (
+                          <div key={message} className="text-[11px] text-muted-foreground">{message}</div>
+                        ))}
+                        {report.level === "COMPLIANT" && (
+                          <div className="text-[11px] text-muted-foreground">Eligible for matching and dispatch</div>
+                        )}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               );
@@ -562,8 +595,7 @@ function LicensingTab({
         </table>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Set each vehicle&apos;s licence-disc expiry — you&apos;ll get renewal reminders in
-        Notifications when a disc is expiring within 30 days or has expired.
+        Licence dates are editable here. Replace expired documents from the Fleet Register.
       </p>
     </div>
   );

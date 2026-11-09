@@ -42,7 +42,7 @@ const LOAD_EXPIRY_DAYS = 7;
 
 function BoardPage() {
   // All domain data comes from the store, hydrated from Postgres on load.
-  const { loads, matches, trips, disputes, trucks, parties, acceptMatch, acceptRequest } =
+  const { loads, matches, trips, disputes, trucks, parties, acceptMatch, acceptRequest, cancelLoad } =
     useTamp();
   const [searchParams] = useSearchParams();
   const statusParam = searchParams.get("status") ?? undefined;
@@ -317,6 +317,10 @@ function BoardPage() {
               setEditingLoad(row.load);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
+            onCancel={() => {
+              if (window.confirm("Cancel this load? It will be removed from matching and cannot be accepted."))
+                cancelLoad(row.load.id);
+            }}
           />
         ))}
       </div>
@@ -348,6 +352,7 @@ function LoadCard({
   onAccept,
   onAcceptRequest,
   onEdit,
+  onCancel,
 }: {
   load: Load;
   status: DisplayStatus;
@@ -359,6 +364,7 @@ function LoadCard({
   onAccept: () => void;
   onAcceptRequest: (truckId: string) => void;
   onEdit: () => void;
+  onCancel: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   return (
@@ -382,13 +388,22 @@ function LoadCard({
         <div className="text-right">
           <StatusChip status={status} />
           {load.status === "POSTED" && (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="ml-2 inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:border-signal"
-            >
-              <Pencil className="size-3" /> Edit
-            </button>
+            <span className="ml-2 inline-flex gap-1">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:border-signal"
+              >
+                <Pencil className="size-3" /> Edit
+              </button>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="inline-flex items-center gap-1 rounded-md border border-danger/30 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-danger hover:bg-danger/10"
+              >
+                <X className="size-3" /> Cancel
+              </button>
+            </span>
           )}
           <div className="mt-1.5 font-mono text-sm font-semibold">
             {load.targetRate ? formatMoney(load.targetRate) : "—"}

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AppToaster } from "@/components/tamp/AppToaster";
 import { TopNav } from "@/components/tamp/TopNav";
+import { PwaManager } from "@/components/tamp/PwaManager";
 import { TampProvider } from "@/context/TampContext";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <TampProvider>
         {showNav && <TopNav />}
         {children}
+        <PwaManager />
         <AppToaster />
       </TampProvider>
     </QueryClientProvider>

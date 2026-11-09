@@ -28,6 +28,7 @@ import {
   listOrganisationMembers,
   listOrganisations,
   removeOrganisationMember,
+  setOrganisationVerification,
   setOrganisationMemberRoles,
   switchOrganisation,
   updateOrganisation,
@@ -163,6 +164,16 @@ export default function OrganisationPage() {
     onError: (error) =>
       toast.error("Could not create organisation", { description: error.message }),
   });
+  const verifyOrganisation = useMutation({
+    mutationFn: (status: "PENDING" | "VERIFIED" | "REJECTED") =>
+      setOrganisationVerification(activeId!, status),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["organisations"] });
+      toast.success("Organisation verification updated");
+    },
+    onError: (error) =>
+      toast.error("Could not update verification", { description: error.message }),
+  });
 
   return (
     <AppShell>
@@ -243,6 +254,37 @@ export default function OrganisationPage() {
                     >
                       Use this organisation
                     </button>
+                  )}
+                  {canCreate && (
+                    <div className="flex flex-wrap gap-2">
+                      {active.verification !== "VERIFIED" && (
+                        <button
+                          onClick={() => verifyOrganisation.mutate("VERIFIED")}
+                          disabled={verifyOrganisation.isPending}
+                          className="rounded-md bg-positive px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          Verify organisation
+                        </button>
+                      )}
+                      {active.verification !== "REJECTED" && (
+                        <button
+                          onClick={() => verifyOrganisation.mutate("REJECTED")}
+                          disabled={verifyOrganisation.isPending}
+                          className="rounded-md border border-danger/40 px-4 py-2 text-xs font-bold text-danger disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {active.verification !== "PENDING" && (
+                        <button
+                          onClick={() => verifyOrganisation.mutate("PENDING")}
+                          disabled={verifyOrganisation.isPending}
+                          className="rounded-md border border-border px-4 py-2 text-xs font-bold disabled:opacity-50"
+                        >
+                          Return to review
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 {canUpdate && (

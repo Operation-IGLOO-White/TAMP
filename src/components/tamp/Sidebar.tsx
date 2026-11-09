@@ -43,7 +43,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   TRANSPORTER: [
     { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { to: "/transporter/fleet", label: "Fleet Register", icon: Truck },
-    { to: "/transporter/fleet-ops", label: "Fleet Costs", icon: Wrench },
+    { to: "/transporter/fleet-ops", label: "Fleet & Compliance", icon: Wrench },
     { to: "/transporter/engagements", label: "Engagements", icon: RouteIcon },
     { to: "/transporter/dispatch", label: "Dispatch", icon: Send },
     { to: "/driver", label: "My Jobs", icon: PackageCheck },

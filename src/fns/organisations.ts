@@ -31,6 +31,11 @@ export const addOrganisationMember = (input: {
 export const updateOrganisation = (organisationId: string, name: string) =>
   trpc.mutation<OrganisationSummary>("organisations.update", { organisationId, name });
 
+export const setOrganisationVerification = (
+  organisationId: string,
+  status: "PENDING" | "VERIFIED" | "REJECTED",
+) => trpc.mutation<OrganisationSummary>("organisations.setVerification", { organisationId, status });
+
 export const setOrganisationMemberRoles = (
   organisationId: string,
   userId: string,

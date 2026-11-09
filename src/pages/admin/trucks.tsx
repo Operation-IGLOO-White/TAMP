@@ -5,9 +5,10 @@ import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { useTamp } from "@/context/TampContext";
+import { assessFleetCompliance } from "@/lib/fleet-compliance";
 
 function AdminTrucks() {
-  const { trucks, parties } = useTamp();
+  const { trucks, vehicles, maintenance, parties } = useTamp();
   const [query, setQuery] = useState("");
 
   // Decorate each truck with its owner + driver names once, then filter.
@@ -16,15 +17,20 @@ function AdminTrucks() {
       trucks.map((t) => {
         const owner = parties.find((p) => p.id === t.transporterId);
         const driver = t.driverId ? parties.find((p) => p.id === t.driverId) : undefined;
-        return { truck: t, owner, driver };
+        const compliance = assessFleetCompliance(
+          t,
+          vehicles.find((vehicle) => vehicle.id === t.vehicleId),
+          maintenance,
+        );
+        return { truck: t, owner, driver, compliance };
       }),
-    [trucks, parties],
+    [trucks, vehicles, maintenance, parties],
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter(({ truck: t, owner, driver }) =>
+    return rows.filter(({ truck: t, owner, driver, compliance }) =>
       [
         t.id,
         t.registration,
@@ -35,6 +41,7 @@ function AdminTrucks() {
         owner?.companyName,
         owner?.contactName,
         driver?.contactName,
+        compliance.level,
       ]
         .filter(Boolean)
         .join(" ")
@@ -83,10 +90,11 @@ function AdminTrucks() {
                 <th className="px-3 py-3">Driver</th>
                 <th className="px-3 py-3">Location</th>
                 <th className="px-3 py-3">Status</th>
+                <th className="px-3 py-3">Compliance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map(({ truck: t, owner, driver }) => (
+              {filtered.map(({ truck: t, owner, driver, compliance }) => (
                 <tr key={t.id} className="hover:bg-steel/20">
                   <td className="px-4 py-3">
                     <Link
@@ -117,6 +125,12 @@ function AdminTrucks() {
                     >
                       {t.status.replaceAll("_", " ")}
                     </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className={`text-[10px] font-bold uppercase ${compliance.level === "COMPLIANT" ? "text-positive" : compliance.level === "DUE_SOON" ? "text-signal" : "text-danger"}`}>
+                      {compliance.level.replaceAll("_", " ")}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">{compliance.score}%</div>
                   </td>
                 </tr>
               ))}
