@@ -156,6 +156,7 @@ interface NewTruckInput {
   registration: string;
   bodyType: BodyType;
   payloadCapacityKg: number;
+  volumeCapacityM3?: number;
   currentLocation: TruckPosting["currentLocation"];
   availableFrom: string;
   availableTo: string;
@@ -166,7 +167,9 @@ interface NewTruckInput {
   make?: string;
   model?: string;
   year?: number;
-  licenceExpiry?: string;
+  licenceNumber: string;
+  licenceExpiry: string;
+  alwaysAvailable?: boolean;
 }
 
 interface Store extends State {
@@ -189,19 +192,8 @@ interface Store extends State {
   addTruck: (t: NewTruckInput) => Promise<void>;
   updateTruck: (
     truckId: string,
-    patch: Partial<
-      Pick<
-        TruckPosting,
-        | "status"
-        | "currentLocation"
-        | "availableFrom"
-        | "availableTo"
-        | "payloadCapacityKg"
-        | "preferredLanes"
-        | "licenceExpiry"
-      >
-    >,
-  ) => void;
+    patch: Partial<TruckPosting>,
+  ) => Promise<void>;
   assignDriver: (truckId: string, driverId: string) => void;
   linkDriver: (truckId: string, driver: Party) => void;
   requestJob: (load: Load, truckId: string, score: number) => void;
@@ -976,9 +968,11 @@ export function TampProvider({ children }: { children: ReactNode }) {
           ...(input.make ? { make: input.make } : {}),
           ...(input.model ? { model: input.model } : {}),
           ...(input.year ? { year: input.year } : {}),
+          licenceNumber: input.licenceNumber,
           bodyType: input.bodyType,
           payloadCapacityKg: input.payloadCapacityKg,
-          ...(input.licenceExpiry ? { licenceExpiry: input.licenceExpiry } : {}),
+          ...(input.volumeCapacityM3 ? { volumeCapacityM3: input.volumeCapacityM3 } : {}),
+          licenceExpiry: input.licenceExpiry,
           photos: input.photos ?? [],
           documents: input.documents ?? [],
           verification: "PENDING",
@@ -1039,15 +1033,15 @@ export function TampProvider({ children }: { children: ReactNode }) {
 
       // Edit a persistent truck's availability details (status, location,
       // window, capacity, preferred lane) — no need to re-post a new truck.
-      updateTruck: (truckId, patch) =>
-        setState((s) => {
-          const truck = s.trucks.find((t) => t.id === truckId);
-          if (!truck) return s;
-          return {
-            ...s,
-            trucks: s.trucks.map((t) => (t.id === truckId ? { ...t, ...patch } : t)),
+      updateTruck: async (truckId, patch) => {
+        const current = stateRef.current;
+        const truck = current.trucks.find((t) => t.id === truckId);
+        if (!truck) return;
+        const nextState = {
+            ...current,
+            trucks: current.trucks.map((t) => (t.id === truckId ? { ...t, ...patch } : t)),
             audit: log(
-              s.audit,
+              current.audit,
               "TRUCK_UPDATED",
               truck.transporterId,
               "TRANSPORTER",
@@ -1056,7 +1050,15 @@ export function TampProvider({ children }: { children: ReactNode }) {
               `${truck.registration} availability updated.`,
             ),
           };
-        }),
+        stateRef.current = nextState;
+        setState(nextState);
+        try {
+          await flushPending();
+        } catch (error) {
+          await hydrateDomain();
+          throw error;
+        }
+      },
 
       // Two-party handshake, step 1: the cargo owner accepts a suggestion.
       // The match moves to ACCEPTED and the load to MATCHED — no trip yet; it

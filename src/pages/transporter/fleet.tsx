@@ -7,7 +7,7 @@ import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { StatusChip } from "@/components/tamp/StatusChip";
-import { formatMoney, PLACES } from "@/lib/tamp-data";
+import { formatMoney } from "@/lib/tamp-data";
 import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
@@ -33,8 +33,7 @@ const TRUCK_DOCS = [
   "Insurance certificate",
 ];
 
-const daysFromNow = (iso: string) =>
-  Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 864e5));
+const dateInputValue = (iso: string | undefined) => (iso ? iso.slice(0, 10) : "");
 
 function FleetPage() {
   const { me, authParty, loads, trucks, vehicles, parties, addTruck, updateTruck } = useTamp();
@@ -194,31 +193,92 @@ function TruckCard({
   vehicle: Vehicle | undefined;
   operatorName: string;
   best: { load: Load; score: number } | undefined;
-  onSave: (patch: Partial<TruckPosting>) => void;
+  onSave: (patch: Partial<TruckPosting>) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => ({
     status: truck.status,
+    registration: truck.registration,
+    bodyType: truck.bodyType,
     location: truck.currentLocation as Place,
-    availableInDays: daysFromNow(truck.availableFrom),
+    availableFrom: dateInputValue(truck.availableFrom),
+    availableTo: dateInputValue(truck.availableTo),
+    alwaysAvailable: truck.alwaysAvailable ?? false,
     capacityKg: truck.payloadCapacityKg,
+    volumeCapacityM3: truck.volumeCapacityM3 ?? vehicle?.volumeCapacityM3 ?? 0,
+    vin: truck.vin ?? vehicle?.vin ?? "",
+    make: truck.make ?? vehicle?.make ?? "",
+    model: truck.model ?? vehicle?.model ?? "",
+    year: truck.year ?? vehicle?.year ?? new Date().getFullYear(),
+    licenceNumber: truck.licenceNumber ?? vehicle?.licenceNumber ?? "",
+    licenceExpiry: dateInputValue(truck.licenceExpiry ?? vehicle?.licenceExpiry),
     dest: (truck.preferredLanes?.[0]
       ? { label: truck.preferredLanes[0].destination, province: "", lat: 0, lng: 0 }
       : null) as Place | null,
   }));
+  const [editError, setEditError] = useState("");
+  const [replacementPhotos, setReplacementPhotos] = useState<Record<number, File>>({});
+  const [replacementDocuments, setReplacementDocuments] = useState<Record<number, File>>({});
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
-    onSave({
+  const save = async () => {
+    if (!form.registration.trim()) return setEditError("Registration is required.");
+    if (!form.licenceNumber.trim()) return setEditError("Vehicle licence number is required.");
+    if (!form.licenceExpiry) return setEditError("Vehicle licence expiry date is required.");
+    if (!form.alwaysAvailable && (!form.availableFrom || !form.availableTo))
+      return setEditError("Select both availability dates.");
+    if (!form.alwaysAvailable && form.availableTo < form.availableFrom)
+      return setEditError("Availability end date cannot be before the start date.");
+    if (form.vin && !/^[A-HJ-NPR-Z0-9]{17}$/i.test(form.vin))
+      return setEditError("VIN must contain 17 valid letters and numbers.");
+    if (form.capacityKg <= 0 || form.capacityKg > 200000)
+      return setEditError("Payload capacity must be between 1 and 200,000 kg.");
+    setEditError("");
+    setSaving(true);
+    try {
+      const photos = [...(truck.photos ?? vehicle?.photos ?? [])];
+      const documents = [...(truck.documents ?? vehicle?.documents ?? [])];
+      await Promise.all([
+        ...Object.entries(replacementPhotos).map(async ([index, file]) => {
+          photos[Number(index)] = (await uploadFile(file, "TRUCK_PHOTO")).url;
+        }),
+        ...Object.entries(replacementDocuments).map(async ([index, file]) => {
+          documents[Number(index)] = (await uploadFile(file, "TRUCK_DOCUMENT")).url;
+        }),
+      ]);
+      await onSave({
       status: form.status,
+      registration: form.registration.trim().toUpperCase(),
+      bodyType: form.bodyType,
       currentLocation: form.location,
       payloadCapacityKg: form.capacityKg,
-      availableFrom: new Date(Date.now() + form.availableInDays * 864e5).toISOString(),
-      availableTo: new Date(Date.now() + (form.availableInDays + 7) * 864e5).toISOString(),
+      ...(form.volumeCapacityM3 > 0 ? { volumeCapacityM3: form.volumeCapacityM3 } : {}),
+      availableFrom: form.alwaysAvailable
+        ? new Date().toISOString()
+        : new Date(`${form.availableFrom}T00:00:00`).toISOString(),
+      availableTo: form.alwaysAvailable
+        ? new Date("2100-12-31T23:59:59Z").toISOString()
+        : new Date(`${form.availableTo}T23:59:59`).toISOString(),
+      alwaysAvailable: form.alwaysAvailable,
+      ...(form.vin.trim() ? { vin: form.vin.trim().toUpperCase() } : {}),
+      ...(form.make.trim() ? { make: form.make.trim() } : {}),
+      ...(form.model.trim() ? { model: form.model.trim() } : {}),
+      year: form.year,
+      licenceNumber: form.licenceNumber.trim().toUpperCase(),
+      licenceExpiry: form.licenceExpiry,
+      photos,
+      documents,
       preferredLanes: form.dest
         ? [{ origin: form.location.label, destination: form.dest.label }]
         : undefined,
-    });
-    setEditing(false);
+      });
+      setEditing(false);
+      toast.success("Truck settings updated", { description: `${form.registration.toUpperCase()} was saved.` });
+    } catch (cause) {
+      setEditError(truckRegistrationError(cause));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const lane = truck.preferredLanes?.[0];
@@ -252,7 +312,36 @@ function TruckCard({
 
       {/* Availability */}
       {editing ? (
-        <div className="grid grid-cols-2 gap-3 p-4">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground sm:col-span-2">
+            Vehicle settings
+          </div>
+          <Field label="Registration">
+            <input value={form.registration} onChange={(e) => setForm({ ...form, registration: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Body type">
+            <select value={form.bodyType} onChange={(e) => setForm({ ...form, bodyType: e.target.value as BodyType })} className={inputCls}>
+              {bodyTypes.map((type) => <option key={type} value={type}>{BODY_TYPE_LABEL[type]}</option>)}
+            </select>
+          </Field>
+          <Field label="VIN">
+            <input value={form.vin} maxLength={17} onChange={(e) => setForm({ ...form, vin: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Make">
+            <input value={form.make} onChange={(e) => setForm({ ...form, make: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Model">
+            <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Year">
+            <input type="number" min={1950} max={new Date().getFullYear() + 1} value={form.year} onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} className={inputCls} />
+          </Field>
+          <Field label="Vehicle licence number *">
+            <input value={form.licenceNumber} onChange={(e) => setForm({ ...form, licenceNumber: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="Licence expiry *">
+            <input type="date" value={form.licenceExpiry} onChange={(e) => setForm({ ...form, licenceExpiry: e.target.value })} className={inputCls} />
+          </Field>
           <Field label="Status">
             <select
               value={form.status}
@@ -273,6 +362,9 @@ function TruckCard({
               className={inputCls}
             />
           </Field>
+          <Field label="Volume capacity (m³)">
+            <input type="number" min={0} value={form.volumeCapacityM3} onChange={(e) => setForm({ ...form, volumeCapacityM3: Number(e.target.value) })} className={inputCls} />
+          </Field>
           <Field label="Current location">
             <AddressInput
               value={form.location}
@@ -280,15 +372,22 @@ function TruckCard({
               placeholder="Where is the truck?"
             />
           </Field>
-          <Field label="Available in (days)">
+          <Field label="Available from">
             <input
-              type="number"
-              min={0}
-              value={form.availableInDays}
-              onChange={(e) => setForm({ ...form, availableInDays: Number(e.target.value) })}
+              type="date"
+              value={form.availableFrom}
+              disabled={form.alwaysAvailable}
+              onChange={(e) => setForm({ ...form, availableFrom: e.target.value })}
               className={inputCls}
             />
           </Field>
+          <Field label="Available until">
+            <input type="date" min={form.availableFrom} value={form.availableTo} disabled={form.alwaysAvailable} onChange={(e) => setForm({ ...form, availableTo: e.target.value })} className={inputCls} />
+          </Field>
+          <label className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 sm:col-span-2">
+            <input type="checkbox" checked={form.alwaysAvailable} onChange={(e) => setForm({ ...form, alwaysAvailable: e.target.checked })} className="size-4 accent-[var(--signal)]" />
+            <span><span className="block text-sm font-semibold">Always available</span><span className="text-xs text-muted-foreground">Automatically return to matching when this truck is not committed to a load.</span></span>
+          </label>
           <div className="col-span-2">
             <Field label="Destination (preferred lane)">
               <AddressInput
@@ -298,12 +397,38 @@ function TruckCard({
               />
             </Field>
           </div>
-          <div className="col-span-2 flex gap-2">
+          <div className="space-y-2 sm:col-span-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Truck photos</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {TRUCK_PHOTOS.map((label, index) => (
+                <label key={label} className="cursor-pointer rounded-lg border border-border px-3 py-2 text-xs hover:border-signal/60">
+                  <span className="block font-semibold">{label}</span>
+                  <span className="text-muted-foreground">{replacementPhotos[index]?.name ?? ((truck.photos ?? vehicle?.photos ?? [])[index] ? "Uploaded — select to replace" : "Select image")}</span>
+                  <input type="file" accept="image/*" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; if (file) setReplacementPhotos((current) => ({ ...current, [index]: file })); }} />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Compliance documents</div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {TRUCK_DOCS.map((label, index) => (
+                <label key={label} className="cursor-pointer rounded-lg border border-border px-3 py-2 text-xs hover:border-signal/60">
+                  <span className="block font-semibold">{label}</span>
+                  <span className="text-muted-foreground">{replacementDocuments[index]?.name ?? ((truck.documents ?? vehicle?.documents ?? [])[index] ? "Uploaded — select to replace" : "Select document")}</span>
+                  <input type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => { const file = e.target.files?.[0]; if (file) setReplacementDocuments((current) => ({ ...current, [index]: file })); }} />
+                </label>
+              ))}
+            </div>
+          </div>
+          {editError && <p className="text-xs font-medium text-danger sm:col-span-2">{editError}</p>}
+          <div className="flex gap-2 sm:col-span-2">
             <button
-              onClick={save}
+              onClick={() => void save()}
+              disabled={saving}
               className="flex-1 rounded-md bg-signal py-2 text-[11px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
             >
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </button>
             <button
               onClick={() => setEditing(false)}
@@ -386,17 +511,23 @@ function AddTruckForm({
   onAdd: ReturnType<typeof useTamp>["addTruck"];
 }) {
   const { me } = useTamp();
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultAvailableTo = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
   const [form, setForm] = useState({
     registration: "",
     bodyType: "TAUTLINER" as BodyType,
     capacityKg: 30000,
-    location: PLACES.germiston as Place,
-    availableInDays: 2,
+    volumeCapacityM3: 60,
+    location: null as Place | null,
+    availableFrom: today,
+    availableTo: defaultAvailableTo,
     vin: "",
     make: "",
     model: "",
     year: new Date().getFullYear(),
+    licenceNumber: "",
     licenceExpiry: "",
+    alwaysAvailable: false,
   });
   const [photos, setPhotos] = useState<Record<string, { file: File; url: string }>>({});
   const [docs, setDocs] = useState<Record<string, File>>({});
@@ -422,6 +553,7 @@ function AddTruckForm({
       return setErr(`Vehicle year must be between 1950 and ${new Date().getFullYear() + 1}.`);
     }
     if (
+      !form.location ||
       !form.location.label.trim() ||
       !Number.isFinite(form.location.lat) ||
       !Number.isFinite(form.location.lng) ||
@@ -432,6 +564,14 @@ function AddTruckForm({
     ) {
       return setErr("Select a valid current location from the address suggestions.");
     }
+    if (!form.availableFrom || !form.availableTo) {
+      return setErr("Select the truck's availability start and end dates.");
+    }
+    if (form.availableTo < form.availableFrom) {
+      return setErr("Availability end date cannot be before the start date.");
+    }
+    if (!form.licenceNumber.trim()) return setErr("Enter the vehicle licence number.");
+    if (!form.licenceExpiry) return setErr("Select the vehicle licence expiry date.");
     const missingPhotos = TRUCK_PHOTOS.filter((p) => !photos[p]);
     if (missingPhotos.length) return setErr(`Add truck photos: ${missingPhotos.join(", ")}.`);
     const missingDocs = TRUCK_DOCS.filter((d) => !docs[d]);
@@ -452,9 +592,15 @@ function AddTruckForm({
         registration,
         bodyType: form.bodyType,
         payloadCapacityKg: form.capacityKg,
+        ...(form.volumeCapacityM3 > 0 ? { volumeCapacityM3: form.volumeCapacityM3 } : {}),
         currentLocation: form.location,
-        availableFrom: new Date(Date.now() + form.availableInDays * 864e5).toISOString(),
-        availableTo: new Date(Date.now() + (form.availableInDays + 7) * 864e5).toISOString(),
+        availableFrom: form.alwaysAvailable
+          ? new Date().toISOString()
+          : new Date(`${form.availableFrom}T00:00:00`).toISOString(),
+        availableTo: form.alwaysAvailable
+          ? new Date("2100-12-31T23:59:59Z").toISOString()
+          : new Date(`${form.availableTo}T23:59:59`).toISOString(),
+        alwaysAvailable: form.alwaysAvailable,
         preferredLanes: [],
         photos: uploadedPhotos.map((upload) => upload.url),
         documents: uploadedDocs.map((upload) => upload.url),
@@ -462,7 +608,8 @@ function AddTruckForm({
         ...(form.make.trim() ? { make: form.make.trim() } : {}),
         ...(form.model.trim() ? { model: form.model.trim() } : {}),
         year: form.year,
-        ...(form.licenceExpiry ? { licenceExpiry: form.licenceExpiry } : {}),
+        licenceNumber: form.licenceNumber.trim().toUpperCase(),
+        licenceExpiry: form.licenceExpiry,
       });
       toast.success("Truck registered", {
         id: toastId,
@@ -532,6 +679,15 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
+        <Field label="Vehicle licence number">
+          <input
+            value={form.licenceNumber}
+            onChange={(e) => setForm({ ...form, licenceNumber: e.target.value })}
+            placeholder="Licence / disc number"
+            required
+            className={inputCls}
+          />
+        </Field>
         <div className="col-span-2 sm:col-span-4">
           <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Body type
@@ -567,6 +723,15 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
+        <Field label="Volume capacity (m³)">
+          <input
+            type="number"
+            min={1}
+            value={form.volumeCapacityM3}
+            onChange={(e) => setForm({ ...form, volumeCapacityM3: Number(e.target.value) })}
+            className={inputCls}
+          />
+        </Field>
         <Field label="Current location">
           <AddressInput
             value={form.location}
@@ -574,6 +739,40 @@ function AddTruckForm({
             placeholder="Truck's base / current address…"
           />
         </Field>
+        <Field label="Available from">
+          <input
+            type="date"
+            min={today}
+            value={form.availableFrom}
+            disabled={form.alwaysAvailable}
+            onChange={(e) => setForm({ ...form, availableFrom: e.target.value })}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Available until">
+          <input
+            type="date"
+            min={form.availableFrom || today}
+            value={form.availableTo}
+            disabled={form.alwaysAvailable}
+            onChange={(e) => setForm({ ...form, availableTo: e.target.value })}
+            className={inputCls}
+          />
+        </Field>
+        <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-graphite px-3 py-2.5 text-sm sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={form.alwaysAvailable}
+            onChange={(e) => setForm({ ...form, alwaysAvailable: e.target.checked })}
+            className="size-4 accent-[var(--signal)]"
+          />
+          <span>
+            <span className="block font-semibold">Always available</span>
+            <span className="block text-xs text-muted-foreground">
+              Keep this truck open for matching whenever it is not reserved or on a trip.
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* Truck photos — Uber/Bolt require a shot of the actual vehicle per angle. */}

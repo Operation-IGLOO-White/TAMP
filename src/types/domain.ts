@@ -123,7 +123,13 @@ export interface LoadStop {
 
 export interface TruckPosting {
   vehicleId?: UUID;
+  licenceNumber?: string;
   licenceExpiry?: string | undefined;
+  alwaysAvailable?: boolean;
+  vin?: string;
+  make?: string;
+  model?: string;
+  year?: number;
   driverId?: string | undefined;
   photos?: string[];
   documents?: string[];
@@ -156,6 +162,7 @@ export interface Vehicle {
   bodyType: BodyType;
   payloadCapacityKg: number;
   volumeCapacityM3?: number;
+  licenceNumber?: string;
   licenceExpiry?: string;
   photos: string[];
   documents: string[];

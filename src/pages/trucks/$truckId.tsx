@@ -133,6 +133,10 @@ function TruckDetail() {
                 value={[vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || "Not provided"}
               />
               <Spec
+                label="Licence number"
+                value={truck.licenceNumber ?? vehicle?.licenceNumber ?? "Not provided"}
+              />
+              <Spec
                 label="Licence expiry"
                 value={truck.licenceExpiry ? new Date(truck.licenceExpiry).toLocaleDateString("en-ZA") : "Not provided"}
               />

@@ -24,6 +24,8 @@ export function assessFleetCompliance(
   const licenceDaysRemaining = Number.isFinite(expiry) ? Math.ceil((expiry - now) / DAY) : null;
   const documents = vehicle?.documents ?? truck.documents ?? [];
 
+  if (!truck.licenceNumber && !vehicle?.licenceNumber)
+    blockers.push("Vehicle licence number is missing");
   if (licenceDaysRemaining === null) blockers.push("Licence expiry date is missing");
   else if (licenceDaysRemaining < 0) blockers.push("Vehicle licence has expired");
   else if (licenceDaysRemaining <= 30)
