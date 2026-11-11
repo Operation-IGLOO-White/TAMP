@@ -54,6 +54,16 @@ export function truckRegistrationError(error: unknown) {
   if (normalized.includes("registration") && normalized.includes("conflict"))
     return "A truck with this registration is already registered.";
   if (normalized.includes("registration")) return "Check the registration number and try again.";
+  if (normalized.includes("licencenumber") || normalized.includes("licence number"))
+    return "Enter the vehicle licence number before saving.";
+  if (normalized.includes("licenceexpiry") || normalized.includes("licence expiry"))
+    return "Select a valid vehicle licence expiry date before saving.";
+  if (normalized.includes("bodytype") || normalized.includes("body type"))
+    return "Select a valid truck body type.";
+  if (normalized.includes("year"))
+    return "Enter a valid vehicle model year.";
+  if (normalized.includes("volumecapacitym3") || normalized.includes("volume capacity"))
+    return "Volume capacity must be a valid positive number, or left empty.";
   if (normalized.includes("payloadcapacitykg") || normalized.includes("payload capacity"))
     return "Payload capacity must be between 1 and 200,000 kg.";
   if (normalized.includes("currentlocation") || normalized.includes("current location"))

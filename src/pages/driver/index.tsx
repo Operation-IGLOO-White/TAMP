@@ -668,14 +668,14 @@ function LoadCard({
         selected ? "border-signal ring-1 ring-signal/40" : "border-border hover:border-signal/50"
       }`}
     >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
+      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <span className="flex min-w-0 items-start gap-2">
           <span className="grid size-8 place-items-center rounded-lg bg-steel/50 text-foreground">
             <Package className="size-4" />
           </span>
-          <span className="font-mono text-sm font-bold">#{load.id}</span>
+          <span className="min-w-0 break-all pt-0.5 font-mono text-sm font-bold leading-snug">#{load.id}</span>
         </span>
-        <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${meta.cls}`}>
+        <span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold leading-tight ${meta.cls}`}>
           {meta.label}
         </span>
       </div>

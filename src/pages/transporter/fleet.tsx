@@ -248,12 +248,15 @@ function TruckCard({
     if (!form.registration.trim()) return setEditError("Registration is required.");
     if (!form.licenceNumber.trim()) return setEditError("Vehicle licence number is required.");
     if (!form.licenceExpiry) return setEditError("Vehicle licence expiry date is required.");
+    if (!form.location?.label?.trim()) return setEditError("Select the truck's current location.");
     if (!form.alwaysAvailable && (!form.availableFrom || !form.availableTo))
       return setEditError("Select both availability dates.");
     if (!form.alwaysAvailable && form.availableTo < form.availableFrom)
       return setEditError("Availability end date cannot be before the start date.");
     if (form.vin && !/^[A-HJ-NPR-Z0-9]{17}$/i.test(form.vin))
       return setEditError("VIN must contain 17 valid letters and numbers.");
+    if (form.year < 1950 || form.year > new Date().getFullYear() + 1)
+      return setEditError("Enter a valid vehicle model year.");
     if (form.capacityKg <= 0 || form.capacityKg > 200000)
       return setEditError("Payload capacity must be between 1 and 200,000 kg.");
     setEditError("");
@@ -293,7 +296,7 @@ function TruckCard({
       documents,
       preferredLanes: form.dest
         ? [{ origin: form.location.label, destination: form.dest.label }]
-        : undefined,
+        : [],
       });
       setEditing(false);
       toast.success("Truck settings updated", { description: `${form.registration.toUpperCase()} was saved.` });
@@ -354,7 +357,12 @@ function TruckCard({
           <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground sm:col-span-2">
             Vehicle settings
           </div>
-          <Field label="Registration">
+          <p className="rounded-lg border border-signal/25 bg-signal/5 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
+            Required to save: registration, vehicle licence number, licence expiry, current location,
+            payload capacity and either an availability window or “Always available”. VIN is optional,
+            but must be exactly 17 valid characters when supplied.
+          </p>
+          <Field label="Registration *">
             <input value={form.registration} onChange={(e) => setForm({ ...form, registration: e.target.value })} className={inputCls} />
           </Field>
           <Field label="Body type">
@@ -371,7 +379,7 @@ function TruckCard({
           <Field label="Model">
             <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className={inputCls} />
           </Field>
-          <Field label="Year">
+          <Field label="Year *">
             <input type="number" min={1950} max={new Date().getFullYear() + 1} value={form.year} onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} className={inputCls} />
           </Field>
           <Field label="Vehicle licence number *">
@@ -392,7 +400,7 @@ function TruckCard({
               <option value="OFFLINE">Offline</option>
             </select>
           </Field>
-          <Field label="Payload capacity (kg)">
+          <Field label="Payload capacity (kg) *">
             <input
               type="number"
               value={form.capacityKg}
@@ -403,7 +411,7 @@ function TruckCard({
           <Field label="Volume capacity (m³)">
             <input type="number" min={0} value={form.volumeCapacityM3} onChange={(e) => setForm({ ...form, volumeCapacityM3: Number(e.target.value) })} className={inputCls} />
           </Field>
-          <Field label="Current location">
+          <Field label="Current location *">
             <AddressInput
               value={form.location}
               onSelect={(p) => setForm({ ...form, location: p })}
