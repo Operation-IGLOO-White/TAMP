@@ -11,6 +11,8 @@ import { formatMoney } from "@/lib/tamp-data";
 import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
+import { Link } from "@/lib/nav";
+import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import type { BodyType, Load, Place, TruckPosting, Vehicle } from "@/types/domain";
 
 const bodyTypes: BodyType[] = [
@@ -45,12 +47,16 @@ function FleetPage() {
     canManageFleet && searchParams.get("add") === "true",
   );
   const [query, setQuery] = useState("");
+  const activeOnly = searchParams.get("status") === "active";
 
   // Search across registration, body type, location and status.
   const filtered = useMemo(() => {
+    const inScope = activeOnly
+      ? trucks.filter((truck) => !["OFFLINE", "EXPIRED"].includes(truck.status))
+      : trucks;
     const q = query.trim().toLowerCase();
-    if (!q) return trucks;
-    return trucks.filter((t) =>
+    if (!q) return inScope;
+    return inScope.filter((t) =>
       [
         t.registration,
         BODY_TYPE_LABEL[t.bodyType],
@@ -62,7 +68,7 @@ function FleetPage() {
         .toLowerCase()
         .includes(q),
     );
-  }, [trucks, query]);
+  }, [activeOnly, trucks, query]);
 
   // Best-matching open load per truck (highest score it passes). Scored
   // server-side (src/fns/matching.ts) — one call per open load, scoring every
@@ -101,7 +107,7 @@ function FleetPage() {
   return (
     <AppShell>
       <PageHeader
-        title={isDriver ? "My Trucks" : "Fleet Register"}
+        title={isDriver ? "My Vehicles" : activeOnly ? "Active Vehicles" : "All Vehicles"}
         actions={canManageFleet ? (
           <button
             onClick={() => setAdding((a) => !a)}
@@ -131,6 +137,23 @@ function FleetPage() {
         </div>
       ) : (
         <>
+          <section className="grid grid-cols-2 gap-3 px-4 pt-4 sm:px-6 lg:grid-cols-4">
+            {[
+              { label: "Total fleet", value: trucks.length, tone: "text-foreground" },
+              { label: "Available", value: trucks.filter((truck) => truck.status === "AVAILABLE").length, tone: "text-positive" },
+              { label: "On assignment", value: trucks.filter((truck) => ["RESERVED", "ON_TRIP"].includes(truck.status)).length, tone: "text-signal" },
+              { label: "Needs attention", value: trucks.filter((truck) => ["OFFLINE", "EXPIRED"].includes(truck.status)).length, tone: "text-destructive" },
+            ].map((metric, index) => (
+              <article
+                key={metric.label}
+                className="animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-border bg-card p-4 shadow-sm duration-500"
+                style={{ animationDelay: `${index * 70}ms` }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{metric.label}</p>
+                <p className={`mt-2 font-mono text-2xl font-black ${metric.tone}`}>{metric.value}</p>
+              </article>
+            ))}
+          </section>
           <div className="px-4 pt-4 sm:px-6">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -309,6 +332,21 @@ function TruckCard({
         </div>
         <StatusChip status={truck.status === "AVAILABLE" ? "POSTED" : "IN_TRANSIT"} />
       </div>
+
+      <Link
+        to="/trucks/$truckId"
+        params={{ truckId: truck.id }}
+        className="group relative block h-40 overflow-hidden border-b border-border bg-gradient-to-br from-white via-[#f5f5f3] to-[#e8e8e4]"
+      >
+        <div className="absolute left-4 top-3 z-10 rounded-full bg-background/85 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-foreground backdrop-blur">
+          View vehicle profile
+        </div>
+        <img
+          src={truck.photos?.[0] ?? vehicle?.photos?.[0] ?? fleetVehicleAsset(truck)}
+          alt={`${truck.registration} vehicle`}
+          className="size-full object-contain p-3 transition duration-500 ease-out group-hover:scale-105 group-hover:-translate-y-1"
+        />
+      </Link>
 
       {/* Availability */}
       {editing ? (

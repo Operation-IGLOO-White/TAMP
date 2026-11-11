@@ -158,9 +158,16 @@ export default function DispatchPage() {
                     <p className="text-sm text-muted-foreground">
                       {assignment.note || "Review the route and accept this delivery assignment."}
                     </p>
+                    <textarea
+                      value={notes[trip.id] ?? ""}
+                      onChange={(e) => setNotes({ ...notes, [trip.id]: e.target.value })}
+                      placeholder="Reason for declining (required only if you decline)"
+                      maxLength={1000}
+                      className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-signal"
+                    />
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        disabled={busy === trip.id}
+                        disabled={busy === trip.id || !(notes[trip.id] ?? "").trim()}
                         onClick={() => void act(trip.id, "DECLINE")}
                         className="flex items-center justify-center gap-2 rounded-md border border-danger px-3 py-2 text-xs font-bold text-danger"
                       >

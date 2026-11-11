@@ -1,11 +1,13 @@
 
-import { AlertTriangle, CheckCircle2, Coins, Fuel, Plus, ShieldCheck, Wrench } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Coins, Fuel, Plus, ShieldCheck, Wrench } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { formatMoney } from "@/lib/tamp-data";
 import { assessFleetCompliance } from "@/lib/fleet-compliance";
 import { useTamp } from "@/context/TampContext";
+import { Link } from "@/lib/nav";
 import type { MaintenanceKind } from "@/types/domain";
 
 const KINDS: { value: MaintenanceKind; label: string }[] = [
@@ -26,8 +28,13 @@ const dayISO = (offsetDays = 0) =>
 function FleetOpsPage() {
   const { trucks, vehicles, fuelLogs, maintenance, addFuelLog, addMaintenance, completeMaintenance } =
     useTamp();
-  const updateTruck = useTamp().updateTruck;
-  const [tab, setTab] = useState<"compliance" | "maintenance" | "fuel" | "costs">("compliance");
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const initialTab = (["compliance", "maintenance", "fuel", "costs"].includes(requestedTab ?? "")
+    ? requestedTab
+    : "compliance") as "compliance" | "maintenance" | "fuel" | "costs";
+  const [tab, setTab] = useState(initialTab);
+  useEffect(() => setTab(initialTab), [initialTab]);
 
   const TABS = [
     { key: "compliance" as const, label: "Compliance", icon: ShieldCheck },
@@ -38,9 +45,9 @@ function FleetOpsPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Fleet & Compliance" />
+      <PageHeader title="Fleet Management" />
 
-      <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+      <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6 lg:px-8">
         {trucks.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-graphite/40 p-10 text-center text-sm text-muted-foreground">
             Add a truck first to track its licensing, maintenance and fuel.
@@ -63,7 +70,7 @@ function FleetOpsPage() {
             </div>
 
             {tab === "compliance" && (
-              <ComplianceTab trucks={trucks} vehicles={vehicles} maintenance={maintenance} onSet={updateTruck} />
+              <ComplianceTab trucks={trucks} vehicles={vehicles} maintenance={maintenance} />
             )}
             {tab === "maintenance" && (
               <MaintenanceTab
@@ -495,12 +502,10 @@ function ComplianceTab({
   trucks,
   vehicles,
   maintenance,
-  onSet,
 }: {
   trucks: ReturnType<typeof useTamp>["trucks"];
   vehicles: ReturnType<typeof useTamp>["vehicles"];
   maintenance: ReturnType<typeof useTamp>["maintenance"];
-  onSet: ReturnType<typeof useTamp>["updateTruck"];
 }) {
   const now = Date.now();
   const reports = trucks.map((truck) => ({
@@ -530,7 +535,7 @@ function ComplianceTab({
         </p>
       </div>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-border bg-graphite/60 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               <th className="px-4 py-2.5">Vehicle</th>
@@ -538,6 +543,7 @@ function ComplianceTab({
               <th className="px-3 py-2.5">Documents</th>
               <th className="px-3 py-2.5">Score</th>
               <th className="px-3 py-2.5">Compliance status</th>
+              <th className="px-3 py-2.5 text-right">Details</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -545,26 +551,19 @@ function ComplianceTab({
               const vehicle = vehicles.find((item) => item.id === t.vehicleId);
               const docs = vehicle?.documents ?? t.documents ?? [];
               return (
-                <tr key={t.id}>
+                <tr key={t.id} className="transition-colors hover:bg-steel/20">
                   <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2">
+                    <Link to="/trucks/$truckId" params={{ truckId: t.id }} className="flex items-center gap-2 hover:text-signal">
                       <BodyTypeIcon type={t.bodyType} className="size-5 text-muted-foreground" />
-                      <span className="font-mono font-semibold">{t.registration}</span>
-                    </span>
+                      <span><span className="block font-mono font-semibold">{t.registration}</span><span className="block text-[10px] text-muted-foreground">{[vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || t.bodyType.replaceAll("_", " ")}</span></span>
+                    </Link>
                   </td>
                   <td className="px-3 py-2.5">
-                    <input
-                      type="date"
-                      value={t.licenceExpiry ? t.licenceExpiry.slice(0, 10) : ""}
-                      onChange={(e) =>
-                        onSet(t.id, {
-                          licenceExpiry: e.target.value
-                            ? new Date(e.target.value).toISOString()
-                            : undefined,
-                        })
-                      }
-                      className="rounded-md border border-border bg-graphite px-2 py-1 text-xs outline-none focus:border-signal"
-                    />
+                    <span className="font-mono text-xs">
+                      {t.licenceExpiry
+                        ? new Date(t.licenceExpiry).toLocaleDateString("en-ZA")
+                        : "Not provided"}
+                    </span>
                   </td>
                   <td className="px-3 py-2.5 font-mono">{docs.length}/3</td>
                   <td className="px-3 py-2.5 font-mono font-bold">{report.score}%</td>
@@ -588,6 +587,11 @@ function ComplianceTab({
                       </div>
                     </div>
                   </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Link to="/trucks/$truckId" params={{ truckId: t.id }} className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide hover:border-signal hover:text-signal">
+                      Open truck <ArrowRight className="size-3" />
+                    </Link>
+                  </td>
                 </tr>
               );
             })}
@@ -595,7 +599,7 @@ function ComplianceTab({
         </table>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Licence dates are editable here. Replace expired documents from the Fleet Register.
+        Open a truck to review its complete specification, photographs, documents, assignments and service history.
       </p>
     </div>
   );

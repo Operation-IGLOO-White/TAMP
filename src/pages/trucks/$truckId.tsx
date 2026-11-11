@@ -1,8 +1,8 @@
 
 import { Link } from "@/lib/nav";
 import { useParams, useNavigate } from "react-router-dom";
-import { AlertTriangle, BadgeCheck, ExternalLink, FileText, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Activity, AlertTriangle, BadgeCheck, ExternalLink, FileText, Fuel, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus, Wrench } from "lucide-react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/tamp/AppShell";
@@ -18,12 +18,13 @@ import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import { assessFleetCompliance } from "@/lib/fleet-compliance";
 import { setVehicleVerification } from "@/fns/vehicles";
+import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import type { Party } from "@/types/domain";
 
 function TruckDetail() {
   const { truckId } = useParams<{ truckId: string }>();
   const navigateBack = useNavigate();
-  const { trucks, vehicles, maintenance, parties, matches, loads, trips, disputes, role, me, assignDriver, linkDriver } =
+  const { trucks, vehicles, maintenance, fuelLogs, parties, matches, loads, trips, disputes, role, me, assignDriver, linkDriver } =
     useTamp();
   const [verificationOverride, setVerificationOverride] = useState<"PENDING" | "VERIFIED" | "REJECTED" | null>(null);
   const [cancelLoadId, setCancelLoadId] = useState<string | null>(null);
@@ -73,6 +74,12 @@ function TruckDetail() {
     .filter((x): x is { trip: (typeof trips)[number]; load: (typeof loads)[number] } => x !== null);
   const activeJob = truckTrips.find((t) => isActiveTrip(t.trip.status));
   const pastJobs = truckTrips.filter((t) => !isActiveTrip(t.trip.status));
+  const truckFuel = fuelLogs.filter((log) => log.truckId === truck.id);
+  const fuelSpend = truckFuel.reduce((sum, log) => sum + log.cost.amount, 0);
+  const scheduledMaintenance = maintenance.filter(
+    (task) => task.truckId === truck.id && task.status === "SCHEDULED",
+  );
+  const operationalScore = truck.status === "ON_TRIP" ? 92 : truck.status === "AVAILABLE" ? 78 : 24;
 
   return (
     <AppShell>
@@ -96,6 +103,29 @@ function TruckDetail() {
         </span>
       </div>
 
+      <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-[#f7f7f4] via-white to-[#ecece7] px-5 py-6 text-black sm:px-8">
+        <div className="absolute -right-20 -top-24 size-72 rounded-full bg-signal/20 blur-3xl" />
+        <div className="relative grid items-center gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,.7fr)]">
+          <div className="animate-in fade-in slide-in-from-left-3 duration-500">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-black/55">
+              <span>Fleet intelligence</span><span className="size-1 rounded-full bg-signal" />
+              <span>{BODY_TYPE_LABEL[truck.bodyType]}</span>
+            </div>
+            <img
+              src={photos[0] ?? fleetVehicleAsset(truck)}
+              alt={`${truck.registration} profile`}
+              className="h-48 w-full object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,.18)] transition-transform duration-700 hover:scale-[1.03] sm:h-64"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
+            <RadialGauge label="Compliance" value={compliance.score} detail={compliance.level.replaceAll("_", " ")} icon={ShieldCheck} />
+            <RadialGauge label="Operational" value={operationalScore} detail={truck.status.replaceAll("_", " ")} icon={Activity} />
+            <RadialGauge label="Fuel records" value={Math.min(100, truckFuel.length * 12)} detail={`R ${fuelSpend.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`} icon={Fuel} />
+            <RadialGauge label="Maintenance" value={Math.max(0, 100 - scheduledMaintenance.length * 15)} detail={`${scheduledMaintenance.length} scheduled`} icon={Wrench} />
+          </div>
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[1fr_320px] lg:items-start">
         <div className="space-y-6">
           <Panel title="Specification">
@@ -104,6 +134,14 @@ function TruckDetail() {
               <Spec
                 label="Payload capacity"
                 value={`${(truck.payloadCapacityKg / 1000).toFixed(0)} t`}
+              />
+              <Spec
+                label="Volume capacity"
+                value={truck.volumeCapacityM3 ? `${truck.volumeCapacityM3} m³` : "Not provided"}
+              />
+              <Spec
+                label="Availability policy"
+                value={truck.alwaysAvailable ? "Always available between jobs" : "Scheduled window"}
               />
               <Spec
                 label="Current location"
@@ -127,10 +165,10 @@ function TruckDetail() {
                 }
               />
               <Spec label="Posted" value={`${daysSince(truck.createdAt)}d ago`} />
-              <Spec label="VIN" value={vehicle?.vin ?? "Not provided"} />
+              <Spec label="VIN" value={truck.vin ?? vehicle?.vin ?? "Not provided"} />
               <Spec
                 label="Vehicle"
-                value={[vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || "Not provided"}
+                value={[truck.year ?? vehicle?.year, truck.make ?? vehicle?.make, truck.model ?? vehicle?.model].filter(Boolean).join(" ") || "Not provided"}
               />
               <Spec
                 label="Licence number"
@@ -404,6 +442,24 @@ function Spec({ label, value }: { label: string; value: string }) {
         {label}
       </dt>
       <dd className="mt-0.5 text-sm font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function RadialGauge({ label, value, detail, icon: Icon }: { label: string; value: number; detail: string; icon: typeof ShieldCheck }) {
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div className="group rounded-2xl border border-black/10 bg-white/80 p-3 shadow-[0_10px_30px_rgba(20,20,20,.08)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(20,20,20,.14)]">
+      <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-black/50"><Icon className="size-3.5 text-signal" />{label}</div>
+      <div className="mt-3 flex items-center gap-3">
+        <div
+          className="relative grid size-16 shrink-0 place-items-center rounded-full transition-transform duration-500 group-hover:rotate-3"
+          style={{ background: `conic-gradient(#f5b800 ${safeValue * 3.6}deg, #e5e5df 0deg)` } as CSSProperties}
+        >
+          <div className="grid size-12 place-items-center rounded-full bg-white font-mono text-sm font-black">{safeValue}</div>
+        </div>
+        <div className="min-w-0"><div className="text-xs font-black">{detail}</div><div className="mt-1 text-[9px] uppercase tracking-wide text-black/45">Live fleet score</div></div>
+      </div>
     </div>
   );
 }

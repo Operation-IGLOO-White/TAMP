@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { fetchNotifications, markNotificationsRead as markServerRead } from "@/fns/notifications";
 import { HOME_BY_ROLE, PROFILE_BY_ROLE, ROLE_SHORT } from "@/lib/role-routes";
+import { playNotificationSound } from "@/lib/notification-sound";
 import {
   maintenanceAlerts,
   type Notification,
@@ -335,26 +336,6 @@ function NotificationsMenu() {
       )}
     </div>
   );
-}
-
-function playNotificationSound() {
-  try {
-    const AudioContextClass = window.AudioContext;
-    const context = new AudioContextClass();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.frequency.setValueAtTime(740, context.currentTime);
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.24);
-    oscillator.addEventListener("ended", () => void context.close());
-  } catch {
-    // Browsers may block audio until the account has interacted with the page.
-  }
 }
 
 function ProfileMenu() {

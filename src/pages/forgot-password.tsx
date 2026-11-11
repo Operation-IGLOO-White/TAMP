@@ -12,6 +12,7 @@ function ForgotPassword() {
   const [searchParams] = useSearchParams();
   const linkedEmail = searchParams.get("email") ?? "";
   const linkedCode = searchParams.get("code") ?? "";
+  const openedFromSecureLink = Boolean(linkedEmail && linkedCode);
   const [step, setStep] = useState<"email" | "reset" | "done">(
     linkedEmail && linkedCode ? "reset" : "email",
   );
@@ -92,8 +93,8 @@ function ForgotPassword() {
             <div>
               <h1 className="text-lg font-bold tracking-tight">Enter code & new password</h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                If an account exists for <span className="font-semibold text-foreground">{email}</span>, a
-                code is on its way.
+                {openedFromSecureLink ? "Create a private password for " : "If an account exists, enter the code sent to "}
+                <span className="font-semibold text-foreground">{email}</span>.
               </p>
             </div>
             {devCode && (
@@ -104,24 +105,27 @@ function ForgotPassword() {
                 </span>
               </div>
             )}
-            <Field label="6-digit code">
-              <input
-                inputMode="numeric"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                className={`${inputCls} text-center font-mono tracking-[0.4em]`}
-                placeholder="000000"
-                required
-                autoFocus
-              />
-            </Field>
+            {!openedFromSecureLink && (
+              <Field label="6-digit code">
+                <input
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  className={`${inputCls} text-center font-mono tracking-[0.4em]`}
+                  placeholder="000000"
+                  required
+                  autoFocus
+                />
+              </Field>
+            )}
             <Field label="New password">
               <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={inputCls}
                 autoComplete="new-password"
+                autoFocus={openedFromSecureLink}
                 required
               />
             </Field>

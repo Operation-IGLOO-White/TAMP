@@ -17,9 +17,15 @@ import {
   Send,
   MessageCircle,
   Building2,
+  ChevronDown,
+  CircleGauge,
+  Fuel,
+  Activity,
+  UserRoundCog,
 } from "lucide-react";
-import { useEffect, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
+import { playNotificationSound } from "@/lib/notification-sound";
 import type { Role } from "@/types/domain";
 
 type NavItem = {
@@ -27,6 +33,7 @@ type NavItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   exact?: boolean;
+  children?: NavItem[];
 };
 
 // Navigation only — analytics live on the dashboards, not the rail.
@@ -42,8 +49,20 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   TRANSPORTER: [
     { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true },
-    { to: "/transporter/fleet", label: "Fleet Register", icon: Truck },
-    { to: "/transporter/fleet-ops", label: "Fleet & Compliance", icon: Wrench },
+    {
+      to: "/transporter/fleet",
+      label: "Fleet Management",
+      icon: Truck,
+      children: [
+        { to: "/transporter/fleet", label: "All Vehicles", icon: Truck, exact: true },
+        { to: "/transporter/fleet?status=active", label: "Active Vehicles", icon: Activity },
+        { to: "/transporter/fleet-ops?tab=compliance", label: "Compliance", icon: ShieldCheck },
+        { to: "/transporter/fleet-ops?tab=maintenance", label: "Maintenance & Repairs", icon: Wrench },
+        { to: "/transporter/fleet-ops?tab=fuel", label: "Fuel & Telematics", icon: Fuel },
+        { to: "/transporter/fleet-ops?tab=costs", label: "Costs & Analytics", icon: CircleGauge },
+        { to: "/organisation", label: "Drivers Directory", icon: UserRoundCog },
+      ],
+    },
     { to: "/transporter/engagements", label: "Engagements", icon: RouteIcon },
     { to: "/transporter/dispatch", label: "Dispatch", icon: Send },
     { to: "/driver", label: "My Jobs", icon: PackageCheck },
@@ -75,6 +94,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
 export function Sidebar() {
   const { role, sidebarCollapsed, toggleSidebar } = useTamp();
   const nav = NAV_BY_ROLE[role];
+  const counts = useSidebarCounts();
+  const [fleetOpen, setFleetOpen] = useState(true);
 
   return (
     <aside
@@ -83,13 +104,34 @@ export function Sidebar() {
       }`}
     >
       <nav className="flex-1 space-y-0.5 p-2">
-        {nav.map(({ to, label, icon: Icon, exact }) => (
+        {nav.map(({ to, label, icon: Icon, exact, children }) => children ? (
+          <div key={to}>
+            <button
+              type="button"
+              onClick={() => setFleetOpen((open) => !open)}
+              title={sidebarCollapsed ? label : undefined}
+              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-steel/50 hover:text-foreground ${sidebarCollapsed ? "justify-center" : ""}`}
+            >
+              <Icon className="size-[18px] shrink-0" />
+              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform duration-200 ${fleetOpen ? "rotate-180" : ""}`} /></>}
+            </button>
+            {fleetOpen && !sidebarCollapsed && (
+              <div className="relative ml-5 space-y-0.5 border-l border-border py-1 pl-3">
+                {children.map(({ to: childTo, label: childLabel, icon: ChildIcon, exact: childExact }) => (
+                  <Link key={childTo} to={childTo} activeOptions={{ exact: childExact ?? false }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-steel/40 hover:text-foreground" activeProps={{ className: "!text-foreground !bg-steel/60" }}>
+                    <ChildIcon className="size-3.5" /><span className="truncate">{childLabel}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
           <Link
             key={to}
             to={to}
             activeOptions={{ exact: exact ?? false }}
             title={sidebarCollapsed ? label : undefined}
-            className={`group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-steel/50 hover:text-foreground ${
+            className={`group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-steel/50 hover:text-foreground ${
               sidebarCollapsed ? "justify-center" : ""
             }`}
             activeProps={{
@@ -98,6 +140,7 @@ export function Sidebar() {
           >
             <Icon className="size-[18px] shrink-0" />
             {!sidebarCollapsed && <span className="truncate">{label}</span>}
+            <NavCount count={counts[to] ?? 0} collapsed={sidebarCollapsed} />
           </Link>
         ))}
       </nav>
@@ -124,6 +167,8 @@ export function Sidebar() {
 
 export function MobileNavigation({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { role } = useTamp();
+  const counts = useSidebarCounts(false);
+  const [fleetOpen, setFleetOpen] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -141,7 +186,16 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
       <button className="absolute inset-0 bg-black/30" onClick={onClose} aria-label="Close menu" />
       <aside className="relative z-10 flex h-full w-[min(86vw,320px)] flex-col overflow-y-auto border-r border-border bg-sidebar p-3 text-foreground shadow-2xl animate-in slide-in-from-left duration-200">
         <nav className="space-y-0.5 pb-6">
-          {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact }) => (
+          {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact, children }) => children ? (
+            <div key={to}>
+              <button type="button" onClick={() => setFleetOpen((value) => !value)} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-muted-foreground">
+                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform ${fleetOpen ? "rotate-180" : ""}`} />
+              </button>
+              {fleetOpen && <div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon }) => (
+                <Link key={childTo} to={childTo} onClick={onClose} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-steel/40"><ChildIcon className="size-4" />{childLabel}</Link>
+              ))}</div>}
+            </div>
+          ) : (
             <Link
               key={to}
               to={to}
@@ -151,11 +205,73 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
               activeProps={{ className: "!bg-steel !text-foreground" }}
             >
               <Icon className="size-[18px]" />
-              {label}
+              <span className="flex-1">{label}</span>
+              <NavCount count={counts[to] ?? 0} collapsed={false} />
             </Link>
           ))}
         </nav>
       </aside>
     </div>
+  );
+}
+
+function useSidebarCounts(playSound = true): Record<string, number> {
+  const { role, me, matches, trips, dispatches } = useTamp();
+  const counts = useMemo(() => {
+    const latestDispatch = new Map<string, (typeof dispatches)[number]>();
+    for (const assignment of dispatches) {
+      const current = latestDispatch.get(assignment.tripId);
+      if (!current || new Date(assignment.offeredAt).getTime() > new Date(current.offeredAt).getTime()) {
+        latestDispatch.set(assignment.tripId, assignment);
+      }
+    }
+    const activeTrips = trips.filter((trip) => !["COMPLETED", "CANCELLED"].includes(trip.status));
+    if (role === "TRANSPORTER") {
+      const engagementCount = matches.filter((match) =>
+        ["SUGGESTED", "OFFERED", "ACCEPTED"].includes(match.status),
+      ).length;
+      const dispatchCount = trips.filter((trip) => {
+        if (trip.status !== "SCHEDULED") return false;
+        return latestDispatch.get(trip.id)?.status !== "ACCEPTED";
+      }).length;
+      return {
+        "/transporter/engagements": engagementCount,
+        "/transporter/dispatch": dispatchCount,
+        "/driver": activeTrips.length,
+      };
+    }
+    if (role === "DRIVER") {
+      const relevantTripIds = new Set(
+        [...latestDispatch.values()]
+          .filter((assignment) => assignment.driverId === me.id && assignment.status === "OFFERED")
+          .map((assignment) => assignment.tripId),
+      );
+      for (const trip of activeTrips) {
+        if (trip.assignedDriverId === me.id) relevantTripIds.add(trip.id);
+      }
+      return { "/driver": relevantTripIds.size };
+    }
+    return {};
+  }, [dispatches, matches, me.id, role, trips]);
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const previous = useRef<number | null>(null);
+  useEffect(() => {
+    if (playSound && previous.current !== null && total > previous.current) playNotificationSound();
+    previous.current = total;
+  }, [playSound, total]);
+  return counts;
+}
+
+function NavCount({ count, collapsed }: { count: number; collapsed: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`grid min-w-5 place-items-center rounded-full bg-signal px-1.5 py-0.5 text-[10px] font-black leading-none text-signal-foreground ${
+        collapsed ? "absolute right-0.5 top-0.5 min-w-4 px-1 text-[8px]" : "ml-auto"
+      }`}
+      aria-label={`${count} pending`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
