@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { fetchNotifications, markNotificationsRead as markServerRead } from "@/fns/notifications";
 import { HOME_BY_ROLE, PROFILE_BY_ROLE, ROLE_SHORT } from "@/lib/role-routes";
 import {
-  licenceAlerts,
   maintenanceAlerts,
   type Notification,
   notificationTarget,
@@ -235,7 +234,6 @@ function NotificationsMenu() {
     subjectId: n.subjectId ?? "",
   }));
   const notifications = [
-    ...licenceAlerts(trucks, notificationsReadAt[role]),
     ...maintenanceAlerts(maintenance, trucks, notificationsReadAt[role]),
     ...serverNotifs,
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());

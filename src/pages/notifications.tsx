@@ -8,7 +8,6 @@ import {
   markNotificationsRead as markServerRead,
 } from "@/fns/notifications";
 import {
-  licenceAlerts,
   maintenanceAlerts,
   type Notification,
   notificationTarget,
@@ -25,6 +24,7 @@ const toneDot: Record<Notification["tone"], string> = {
 function NotificationsPage() {
   const {
     role,
+    authParty,
     matches,
     trips,
     disputes,
@@ -38,7 +38,7 @@ function NotificationsPage() {
 
   // Server-side notification store (written on domain events).
   const { data: server = [] } = useQuery({
-    queryKey: ["notifications", role],
+    queryKey: ["notifications", authParty?.id, authParty?.activeOrganisationId],
     queryFn: () => fetchNotifications(50),
   });
   const serverNotifs: Notification[] = server.map((n) => ({
@@ -52,10 +52,9 @@ function NotificationsPage() {
     subjectId: n.subjectId ?? "",
   }));
 
-  // Licence + maintenance reminders stay client-derived — they're proactive
-  // schedule alerts, not domain events, so they aren't in the server store.
+  // Maintenance reminders remain client-derived. Licence reminders are created
+  // by the server so vehicle compliance data cannot leak across organisations.
   const derived = [
-    ...licenceAlerts(trucks, notificationsReadAt[role]),
     ...maintenanceAlerts(maintenance, trucks, notificationsReadAt[role]),
   ];
   const notifications = [...derived, ...serverNotifs].sort(
