@@ -106,15 +106,16 @@ function TruckDetail() {
       <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-[#f7f7f4] via-white to-[#ecece7] px-5 py-6 text-black sm:px-8">
         <div className="absolute -right-20 -top-24 size-72 rounded-full bg-signal/20 blur-3xl" />
         <div className="relative grid items-center gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,.7fr)]">
-          <div className="animate-in fade-in slide-in-from-left-3 duration-500">
+          <div className="relative animate-in fade-in slide-in-from-left-3 duration-500">
+            <div className="pointer-events-none absolute inset-x-[8%] bottom-5 h-12 rounded-[50%] bg-black/10 blur-2xl" />
             <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-black/55">
               <span>Fleet intelligence</span><span className="size-1 rounded-full bg-signal" />
               <span>{BODY_TYPE_LABEL[truck.bodyType]}</span>
             </div>
             <img
-              src={photos[0] ?? fleetVehicleAsset(truck)}
+              src={fleetVehicleAsset(truck)}
               alt={`${truck.registration} profile`}
-              className="h-48 w-full object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,.18)] transition-transform duration-700 hover:scale-[1.03] sm:h-64"
+              className="relative h-48 w-full object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,.2)] transition-transform duration-700 hover:-translate-y-1 hover:scale-[1.03] sm:h-64"
             />
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">

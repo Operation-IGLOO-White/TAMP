@@ -342,9 +342,9 @@ function TruckCard({
           View vehicle profile
         </div>
         <img
-          src={truck.photos?.[0] ?? vehicle?.photos?.[0] ?? fleetVehicleAsset(truck)}
+          src={fleetVehicleAsset(truck)}
           alt={`${truck.registration} vehicle`}
-          className="size-full object-contain p-3 transition duration-500 ease-out group-hover:scale-105 group-hover:-translate-y-1"
+          className="size-full object-contain p-2 pt-7 drop-shadow-[0_14px_12px_rgba(0,0,0,.18)] transition duration-500 ease-out group-hover:-translate-y-1 group-hover:scale-105"
         />
       </Link>
 
