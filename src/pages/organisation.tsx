@@ -1,9 +1,7 @@
 import {
   Building2,
   ClipboardList,
-  Copy,
   Gauge,
-  KeyRound,
   PackageOpen,
   Plus,
   Route,
@@ -93,11 +91,6 @@ export default function OrganisationPage() {
   const [email, setEmail] = useState("");
   const [memberName, setMemberName] = useState("");
   const [memberPhone, setMemberPhone] = useState("");
-  const [credentials, setCredentials] = useState<{
-    name: string;
-    email: string;
-    password: string;
-  } | null>(null);
   const memberRoles: OrganisationRole[] =
     carrierOrganisation
       ? canCreate
@@ -136,20 +129,15 @@ export default function OrganisationPage() {
           : {}),
       }),
     onSuccess: (result) => {
-      if (result.temporaryPassword) {
-        setCredentials({
-          name: memberName,
-          email,
-          password: result.temporaryPassword,
-        });
-      } else {
-        setCredentials(null);
-      }
       setEmail("");
       setMemberName("");
       setMemberPhone("");
       void refresh();
-      toast.success(result.created ? "Driver account created" : "Member added");
+      toast.success(result.created ? "Invitation email sent" : "Member added", {
+        description: result.created
+          ? "The driver will create a private password from the secure email link."
+          : undefined,
+      });
     },
     onError: (error) => toast.error("Could not add member", { description: error.message }),
   });
@@ -452,55 +440,9 @@ export default function OrganisationPage() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       {ROLE_HELP[selectedRole]}{" "}
                       {carrierOrganisation && selectedRole === "DRIVER"
-                        ? "If the email is new, TAMP creates the driver account and gives you a temporary password to share securely."
+                        ? "If the email is new, TAMP creates the driver account and emails a secure link for them to create their own password."
                         : "The person must first have a registered TAMP account."}
                     </p>
-                    {credentials && (
-                      <div className="mt-4 rounded-xl border border-signal/40 bg-signal/10 p-4 shadow-sm">
-                        <div className="flex items-start gap-3">
-                          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-signal text-signal-foreground">
-                            <KeyRound className="size-5" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-black">Save these driver credentials now</h4>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              This temporary password is displayed only once. Send it directly to {credentials.name}.
-                            </p>
-                            <dl className="mt-3 grid gap-2 rounded-lg border border-border bg-graphite p-3 text-xs sm:grid-cols-2">
-                              <div>
-                                <dt className="text-[10px] font-bold uppercase text-muted-foreground">Email</dt>
-                                <dd className="mt-1 break-all font-mono font-bold">{credentials.email}</dd>
-                              </div>
-                              <div>
-                                <dt className="text-[10px] font-bold uppercase text-muted-foreground">Temporary password</dt>
-                                <dd className="mt-1 break-all font-mono font-bold">{credentials.password}</dd>
-                              </div>
-                            </dl>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void navigator.clipboard.writeText(
-                                    `TAMP driver login\nEmail: ${credentials.email}\nTemporary password: ${credentials.password}`,
-                                  );
-                                  toast.success("Credentials copied");
-                                }}
-                                className="inline-flex min-h-9 items-center gap-2 rounded-md bg-foreground px-3 text-xs font-bold text-background"
-                              >
-                                <Copy className="size-3.5" /> Copy credentials
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCredentials(null)}
-                                className="min-h-9 rounded-md border border-border px-3 text-xs font-bold"
-                              >
-                                I saved them
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </form>
                 )}
                 <div className="divide-y divide-border">

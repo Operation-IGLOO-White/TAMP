@@ -25,7 +25,7 @@ export const addOrganisationMember = (input: {
   contactName?: string;
   phone?: string;
   createAccount?: boolean;
-}): Promise<{ ok: true; userId: string; created: boolean; temporaryPassword?: string }> =>
+}): Promise<{ ok: true; userId: string; created: boolean }> =>
   trpc.mutation("organisations.addMember", input);
 
 export const updateOrganisation = (organisationId: string, name: string) =>

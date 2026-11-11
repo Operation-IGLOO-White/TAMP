@@ -2,15 +2,21 @@
 import { Link, useNavigate } from "@/lib/nav";
 import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { requestPasswordReset, resetPassword } from "@/fns/auth";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
 import { BrandLogo } from "@/components/tamp/BrandLogo";
 
 function ForgotPassword() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<"email" | "reset" | "done">("email");
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [searchParams] = useSearchParams();
+  const linkedEmail = searchParams.get("email") ?? "";
+  const linkedCode = searchParams.get("code") ?? "";
+  const [step, setStep] = useState<"email" | "reset" | "done">(
+    linkedEmail && linkedCode ? "reset" : "email",
+  );
+  const [email, setEmail] = useState(linkedEmail);
+  const [code, setCode] = useState(linkedCode);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [devCode, setDevCode] = useState<string | undefined>();
@@ -35,7 +41,7 @@ function ForgotPassword() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (password.length < 6) return setError("Use a password of at least 6 characters.");
+    if (password.length < 8) return setError("Use a password of at least 8 characters.");
     if (password !== confirm) return setError("Passwords don't match.");
     setBusy(true);
     try {
@@ -50,7 +56,7 @@ function ForgotPassword() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-background p-6">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-graphite/90 p-6 shadow-2xl sm:p-8">
         <BrandLogo className="mb-8 h-12" priority />
 
         {step === "email" && (
@@ -60,7 +66,7 @@ function ForgotPassword() {
                 <KeyRound className="size-5 text-signal" /> Reset your password
               </h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                Enter your account email and we'll send you a 6-digit code.
+                Enter your account email and we'll send a secure reset button and one-time code.
               </p>
             </div>
             <Field label="Email">
