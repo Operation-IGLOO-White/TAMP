@@ -137,6 +137,7 @@ interface NewLoadInput {
   deliveryBy: string;
   specialRequirements?: string | undefined;
   stops?: LoadStop[];
+  recurrence?: NonNullable<Load["recurrence"]>;
 }
 
 interface NewPartyInput {
@@ -777,9 +778,17 @@ export function TampProvider({ children }: { children: ReactNode }) {
         };
         const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
         const available = state.trucks.filter((t) => t.status === "AVAILABLE");
-        const scored = (
-          await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
-        ).filter((m) => m.passed);
+        let scored: Awaited<ReturnType<typeof scoreLoadAgainstTrucks>> = [];
+        if (available.length > 0) {
+          try {
+            scored = (
+              await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
+            ).filter((m) => m.passed);
+          } catch {
+            // Posting is authoritative; suggestions can be recomputed by the server.
+            scored = [];
+          }
+        }
         const generated: Match[] = scored.map((m) => ({
           id: nextRef("MT"),
           loadId: id,
@@ -828,9 +837,16 @@ export function TampProvider({ children }: { children: ReactNode }) {
         };
         const ownerParty = state.parties.find((party) => party.id === load.ownerId)!;
         const available = state.trucks.filter((truck) => truck.status === "AVAILABLE");
-        const scored = (
-          await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
-        ).filter((match) => match.passed);
+        let scored: Awaited<ReturnType<typeof scoreLoadAgainstTrucks>> = [];
+        if (available.length > 0) {
+          try {
+            scored = (
+              await scoreLoadAgainstTrucks(load, available, state.parties, ownerParty)
+            ).filter((match) => match.passed);
+          } catch {
+            scored = [];
+          }
+        }
         const generated: Match[] = scored.map((match) => ({
           id: nextRef("MT"),
           loadId,

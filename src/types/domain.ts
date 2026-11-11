@@ -88,6 +88,18 @@ export interface Load {
   status: LoadStatus;
   createdAt: ISODate;
   stops?: LoadStop[];
+  recurrence?: LoadRecurrence;
+}
+
+export interface LoadRecurrence {
+  scheduleId: UUID;
+  frequency: "WEEKLY" | "SPECIFIC_DAYS";
+  daysOfWeek: number[]; // Monday = 0, Sunday = 6
+  nextPostAt: ISODate;
+  endsOn?: ISODate;
+  active: boolean;
+  isTemplate: boolean;
+  occurrenceDate?: ISODate;
 }
 
 export type LoadStopKind = "PICKUP" | "DROPOFF";

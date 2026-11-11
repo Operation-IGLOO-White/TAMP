@@ -1,25 +1,41 @@
 
 import { Link } from "@/lib/nav";
 import { useParams, useNavigate } from "react-router-dom";
-import { BadgeCheck, Loader2, MapPin, Star, UserPlus } from "lucide-react";
+import { AlertTriangle, BadgeCheck, ExternalLink, FileText, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { LaneRail } from "@/components/tamp/LaneRail";
 import { Panel } from "@/components/tamp/StatCard";
 import { StatusChip } from "@/components/tamp/StatusChip";
+import { IncidentDialog } from "@/components/tamp/IncidentDialog";
 import { findDriver } from "@/fns/parties";
 import { daysSince, estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
+import { assessFleetCompliance } from "@/lib/fleet-compliance";
+import { setVehicleVerification } from "@/fns/vehicles";
 import type { Party } from "@/types/domain";
 
 function TruckDetail() {
   const { truckId } = useParams<{ truckId: string }>();
   const navigateBack = useNavigate();
-  const { trucks, parties, matches, loads, trips, disputes, role, me, assignDriver, linkDriver } =
+  const { trucks, vehicles, maintenance, parties, matches, loads, trips, disputes, role, me, assignDriver, linkDriver } =
     useTamp();
+  const [verificationOverride, setVerificationOverride] = useState<"PENDING" | "VERIFIED" | "REJECTED" | null>(null);
+  const [cancelLoadId, setCancelLoadId] = useState<string | null>(null);
+  const verifyVehicle = useMutation({
+    mutationFn: (status: "PENDING" | "VERIFIED" | "REJECTED") =>
+      setVehicleVerification(truckId!, status),
+    onSuccess: (updated) => {
+      setVerificationOverride(updated.verification === "UNVERIFIED" ? "PENDING" : updated.verification);
+      toast.success(`Truck marked ${updated.verification.toLowerCase()}`);
+    },
+    onError: () => toast.error("Truck verification could not be saved"),
+  });
 
   const truck = trucks.find((t) => t.id === truckId);
 
@@ -34,6 +50,13 @@ function TruckDetail() {
   }
 
   const operator = parties.find((p) => p.id === truck.transporterId);
+  const storedVehicle = vehicles.find((vehicle) => vehicle.id === truck.vehicleId);
+  const vehicle = storedVehicle && verificationOverride
+    ? { ...storedVehicle, verification: verificationOverride }
+    : storedVehicle;
+  const compliance = assessFleetCompliance(truck, vehicle, maintenance);
+  const photos = vehicle?.photos?.length ? vehicle.photos : truck.photos ?? [];
+  const documents = vehicle?.documents?.length ? vehicle.documents : truck.documents ?? [];
   const driver = truck.driverId ? parties.find((p) => p.id === truck.driverId) : undefined;
   const isAdmin = role === "ADMIN";
   const canManageDriver = isAdmin || me.id === truck.transporterId;
@@ -104,7 +127,91 @@ function TruckDetail() {
                 }
               />
               <Spec label="Posted" value={`${daysSince(truck.createdAt)}d ago`} />
+              <Spec label="VIN" value={vehicle?.vin ?? "Not provided"} />
+              <Spec
+                label="Vehicle"
+                value={[vehicle?.year, vehicle?.make, vehicle?.model].filter(Boolean).join(" ") || "Not provided"}
+              />
+              <Spec
+                label="Licence expiry"
+                value={truck.licenceExpiry ? new Date(truck.licenceExpiry).toLocaleDateString("en-ZA") : "Not provided"}
+              />
+              <Spec label="Verification" value={verificationOverride ?? vehicle?.verification ?? "PENDING"} />
             </dl>
+          </Panel>
+
+          <Panel title="Compliance review">
+            <div className="space-y-5 p-4">
+              <div className="grid gap-3 sm:grid-cols-4">
+                <ComplianceStat label="Status" value={verificationOverride ?? vehicle?.verification ?? "PENDING"} />
+                <ComplianceStat label="Compliance" value={compliance.level.replaceAll("_", " ")} />
+                <ComplianceStat label="Score" value={`${compliance.score}%`} />
+                <ComplianceStat label="Documents" value={`${documents.length}/3`} />
+              </div>
+
+              {(compliance.blockers.length > 0 || compliance.warnings.length > 0) ? (
+                <div className="rounded-xl border border-border bg-graphite/50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                    <AlertTriangle className="size-4 text-signal" /> Compliance findings
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {[...compliance.blockers, ...compliance.warnings].map((message) => (
+                      <li key={message}>• {message}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-xl border border-positive/30 bg-positive/5 p-4 text-sm text-positive">
+                  <ShieldCheck className="size-5" /> All compliance checks passed.
+                </div>
+              )}
+
+              {isAdmin && (
+                <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+                  {(verificationOverride ?? vehicle?.verification ?? "PENDING") !== "REJECTED" && (
+                    <button type="button" disabled={verifyVehicle.isPending} onClick={() => verifyVehicle.mutate("REJECTED")} className="rounded-lg bg-danger/15 px-4 py-2 text-xs font-bold uppercase text-danger disabled:opacity-50">
+                      Reject truck
+                    </button>
+                  )}
+                  {(verificationOverride ?? vehicle?.verification ?? "PENDING") !== "VERIFIED" && (
+                    <button type="button" disabled={verifyVehicle.isPending || documents.length < 3 || photos.length === 0} onClick={() => verifyVehicle.mutate("VERIFIED")} className="rounded-lg bg-positive px-5 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">
+                      Verify truck
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <Panel title={`Truck photos (${photos.length})`}>
+            <div className="p-4">
+              {photos.length ? (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {photos.map((url, index) => (
+                    <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border border-border bg-graphite">
+                      <img src={url} alt={`${truck.registration} view ${index + 1}`} className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.03]" />
+                      <div className="flex items-center justify-between px-3 py-2 text-[10px] font-bold uppercase"><span className="inline-flex items-center gap-1"><Images className="size-3" /> View {index + 1}</span><ExternalLink className="size-3" /></div>
+                    </a>
+                  ))}
+                </div>
+              ) : <EmptyEvidence text="No truck photos were attached." />}
+            </div>
+          </Panel>
+
+          <Panel title={`Vehicle documents (${documents.length})`}>
+            <div className="p-4">
+              {documents.length ? (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {documents.map((url, index) => (
+                    <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-border bg-graphite p-3 hover:border-signal">
+                      <FileText className="size-5 shrink-0 text-signal" />
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold">{evidenceName(url, index)}</span>
+                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+                    </a>
+                  ))}
+                </div>
+              ) : <EmptyEvidence text="No vehicle documents were attached." />}
+            </div>
           </Panel>
 
           {activeJob && (
@@ -134,6 +241,17 @@ function TruckDetail() {
                     minute: "2-digit",
                   })}
                 </div>
+                {me.role === "TRANSPORTER" ? (
+                  <div className="mt-4 flex justify-end border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setCancelLoadId(activeJob.load.id)}
+                      className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-danger hover:bg-danger/20"
+                    >
+                      Cancel trip
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </Panel>
           )}
@@ -201,6 +319,12 @@ function TruckDetail() {
           </Panel>
         </aside>
       </div>
+      <IncidentDialog
+        loadId={cancelLoadId ?? ""}
+        open={cancelLoadId !== null}
+        initialMode="cancel"
+        onClose={() => setCancelLoadId(null)}
+      />
     </AppShell>
   );
 }
@@ -240,6 +364,33 @@ function PartyRow({
   ) : (
     <div className="flex items-center gap-3 px-4 py-4">{inner}</div>
   );
+}
+
+function ComplianceStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-graphite p-3">
+      <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-bold uppercase">{value}</div>
+    </div>
+  );
+}
+
+function EmptyEvidence({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+      {text}
+    </div>
+  );
+}
+
+function evidenceName(url: string, index: number) {
+  try {
+    return decodeURIComponent(
+      new URL(url, window.location.origin).pathname.split("/").pop() || `Document ${index + 1}`,
+    );
+  } catch {
+    return `Document ${index + 1}`;
+  }
 }
 
 function Spec({ label, value }: { label: string; value: string }) {
