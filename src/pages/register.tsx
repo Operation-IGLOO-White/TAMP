@@ -19,6 +19,7 @@ import { BrandLogo } from "@/components/tamp/BrandLogo";
 import { sendVerificationCode } from "@/fns/email";
 import { registerParty } from "@/fns/parties";
 import { checkSaMobile } from "@/fns/phone";
+import { userFacingError } from "@/lib/api-errors";
 import type { BodyType, OnboardingUserType, Place } from "@/types/domain";
 
 const PROVINCES = ["GP", "KZN", "WC", "EC", "FS", "NW", "LP", "MP", "NC"];
@@ -86,7 +87,7 @@ interface PwStrength {
 }
 function passwordStrength(pw: string): PwStrength {
   const checks = {
-    length: pw.length >= 8,
+    length: pw.length >= 12,
     lower: /[a-z]/.test(pw),
     upper: /[A-Z]/.test(pw),
     digit: /\d/.test(pw),
@@ -94,7 +95,7 @@ function passwordStrength(pw: string): PwStrength {
   };
   let score = Object.values(checks).filter(Boolean).length;
   // Very short passwords can never score well.
-  if (pw.length < 8) score = Math.min(score, 1);
+  if (pw.length < 12) score = Math.min(score, 1);
   score = Math.max(0, score - 1); // map 0..5 checks → 0..4
   const meta: { label: string; tone: string }[] = [
     { label: "Too weak", tone: "bg-danger" },
@@ -104,12 +105,24 @@ function passwordStrength(pw: string): PwStrength {
     { label: "Strong", tone: "bg-positive" },
   ];
   const hints: string[] = [];
-  if (!checks.length) hints.push("8+ characters");
+  if (!checks.length) hints.push("12+ characters");
   if (!checks.upper) hints.push("an uppercase letter");
   if (!checks.digit) hints.push("a number");
   if (!checks.symbol) hints.push("a symbol");
   return { score, label: meta[score]!.label, tone: meta[score]!.tone, hints };
 }
+
+function validPassword(password: string) {
+  return (
+    password.length >= 12 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password)
+  );
+}
+
+const PASSWORD_HELP =
+  "Use at least 12 characters, including an uppercase letter, a lowercase letter and a number.";
 
 function PasswordMeter({ password }: { password: string }) {
   if (!password) return null;
@@ -364,8 +377,8 @@ function Register() {
 
   const submitYou = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordStrength(you.password).score < 2) {
-      setPwError("Choose a stronger password — at least 8 characters with a mix of letters and numbers.");
+    if (!validPassword(you.password)) {
+      setPwError(PASSWORD_HELP);
       return;
     }
     if (you.password !== you.confirm) {
@@ -431,6 +444,12 @@ function Register() {
   const verifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
     setOtpError("");
+    if (!validPassword(you.password)) {
+      setOtpError(
+        "Your verification code is correct, but your password does not meet the security requirements. Select Edit details and create a stronger password.",
+      );
+      return;
+    }
     // The server verifies the code as part of registration.
     register.mutate();
   };
@@ -584,6 +603,7 @@ function Register() {
                   onChange={(e) => setYou({ ...you, password: e.target.value })}
                   className={inputCls}
                   autoComplete="new-password"
+                  minLength={12}
                   required
                 />
                 <PasswordMeter password={you.password} />
@@ -594,6 +614,7 @@ function Register() {
                   onChange={(e) => setYou({ ...you, confirm: e.target.value })}
                   className={inputCls}
                   autoComplete="new-password"
+                  minLength={12}
                   required
                 />
               </Field>
@@ -933,7 +954,7 @@ function Register() {
             {register.isError && (
               <p className="text-xs font-medium text-danger">
                 {register.error instanceof Error
-                  ? register.error.message
+                  ? userFacingError(register.error, "Registration failed. Please try again.")
                   : "Registration failed. Please try again."}
               </p>
             )}

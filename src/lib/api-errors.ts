@@ -24,6 +24,8 @@ export function userFacingError(error: unknown, fallback = "We could not complet
     return "Your verification needs attention. Review your profile documents or contact support.";
   if (status === 403) return "You do not have permission to perform this action.";
   if (status === 429) return "Too many attempts were made. Wait a moment and try again.";
+  if (/password.*(?:at least|min(?:imum)?).*12|password.*12 characters/i.test(raw))
+    return "Use a password of at least 12 characters with an uppercase letter, a lowercase letter and a number.";
   if (status === 502 || status === 503 || status === 504)
     return "The service is temporarily unavailable. Please try again shortly.";
   if (TECHNICAL_RESPONSE.test(raw))
