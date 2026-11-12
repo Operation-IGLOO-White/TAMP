@@ -22,6 +22,12 @@ import {
   Fuel,
   Activity,
   UserRoundCog,
+  PackageOpen,
+  RadioTower,
+  CalendarDays,
+  Repeat2,
+  Boxes,
+  Store,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
@@ -40,8 +46,35 @@ type NavItem = {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   FREIGHT_OWNER: [
     { to: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true },
-    { to: "/owner/board", label: "Freight Board", icon: ClipboardList },
-    { to: "/owner/history", label: "History", icon: History },
+    {
+      to: "/owner/shipments",
+      label: "Shipments",
+      icon: Boxes,
+      children: [
+        { to: "/owner/shipments", label: "All Shipments", icon: PackageOpen, exact: true },
+        { to: "/owner/shipments?view=active", label: "Active Shipments", icon: Activity },
+        { to: "/owner/shipments?view=scheduled", label: "Scheduled", icon: CalendarDays },
+        { to: "/owner/shipments?view=recurring", label: "Recurring Schedules", icon: Repeat2 },
+      ],
+    },
+    {
+      to: "/owner/board",
+      label: "Marketplace",
+      icon: Store,
+      children: [
+        { to: "/owner/board", label: "Freight Board", icon: ClipboardList, exact: true },
+        { to: "/owner/board?status=POSTED", label: "Matches & Offers", icon: RouteIcon },
+      ],
+    },
+    {
+      to: "/owner/control-tower",
+      label: "Operations",
+      icon: RadioTower,
+      children: [
+        { to: "/owner/control-tower", label: "Live Control Tower", icon: RadioTower, exact: true },
+        { to: "/owner/history", label: "Delivery History", icon: History },
+      ],
+    },
     { to: "/owner/billing", label: "Billing", icon: WalletCards },
     { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: "/organisation", label: "Organisation", icon: Building2 },
@@ -95,7 +128,7 @@ export function Sidebar() {
   const { role, sidebarCollapsed, toggleSidebar } = useTamp();
   const nav = NAV_BY_ROLE[role];
   const counts = useSidebarCounts();
-  const [fleetOpen, setFleetOpen] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   return (
     <aside
@@ -108,14 +141,14 @@ export function Sidebar() {
           <div key={to}>
             <button
               type="button"
-              onClick={() => setFleetOpen((open) => !open)}
+              onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))}
               title={sidebarCollapsed ? label : undefined}
               className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-steel/50 hover:text-foreground ${sidebarCollapsed ? "justify-center" : ""}`}
             >
               <Icon className="size-[18px] shrink-0" />
-              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform duration-200 ${fleetOpen ? "rotate-180" : ""}`} /></>}
+              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} /></>}
             </button>
-            {fleetOpen && !sidebarCollapsed && (
+            {(openGroups[to] ?? true) && !sidebarCollapsed && (
               <div className="relative ml-5 space-y-0.5 border-l border-border py-1 pl-3">
                 {children.map(({ to: childTo, label: childLabel, icon: ChildIcon, exact: childExact }) => (
                   <Link key={childTo} to={childTo} activeOptions={{ exact: childExact ?? false }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-steel/40 hover:text-foreground" activeProps={{ className: "!text-foreground !bg-steel/60" }}>
@@ -168,7 +201,7 @@ export function Sidebar() {
 export function MobileNavigation({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { role } = useTamp();
   const counts = useSidebarCounts(false);
-  const [fleetOpen, setFleetOpen] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -188,10 +221,10 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
         <nav className="space-y-0.5 pb-6">
           {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact, children }) => children ? (
             <div key={to}>
-              <button type="button" onClick={() => setFleetOpen((value) => !value)} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-muted-foreground">
-                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform ${fleetOpen ? "rotate-180" : ""}`} />
+              <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-muted-foreground">
+                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
               </button>
-              {fleetOpen && <div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon }) => (
+              {(openGroups[to] ?? true) && <div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon }) => (
                 <Link key={childTo} to={childTo} onClick={onClose} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-steel/40"><ChildIcon className="size-4" />{childLabel}</Link>
               ))}</div>}
             </div>

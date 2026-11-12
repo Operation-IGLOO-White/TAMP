@@ -1,8 +1,9 @@
 
 import { Link } from "@/lib/nav";
-import { AlertTriangle, Clock, Plus, RefreshCw, Star, Truck } from "lucide-react";
+import { AlertTriangle, Clock, Plus, RadioTower, RefreshCw, Star, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
+import { FleetMap } from "@/components/tamp/FleetMap";
 import { Panel } from "@/components/tamp/StatCard";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { TripProgress } from "@/components/tamp/TripProgress";
@@ -157,6 +158,25 @@ function OwnerDashboard() {
             />
             <NeedTile label="Ratings outstanding" count={unrated} icon={Star} toHistory />
           </div>
+        </Section>
+
+        {/* Live operational picture — a concise preview of the full control tower. */}
+        <Section title="Live control tower">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">Your cargo, live on the road</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                GPS positions, route progress and exceptions across every active shipment.
+              </p>
+            </div>
+            <Link
+              to="/owner/control-tower"
+              className="inline-flex items-center gap-2 self-start rounded-md border border-border bg-background px-3 py-2 text-[11px] font-bold uppercase tracking-wide transition-colors hover:border-signal hover:text-signal"
+            >
+              <RadioTower className="size-3.5" /> Open control tower
+            </Link>
+          </div>
+          <FleetMap loadIds={loads.map((load) => load.id)} className="shadow-sm" />
         </Section>
 
         {/* ② Cargo in motion */}

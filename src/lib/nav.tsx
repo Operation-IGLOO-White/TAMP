@@ -48,14 +48,20 @@ export function Link({
   className,
   ...rest
 }: LinkProps) {
-  const { pathname } = useLocation();
+  const { pathname, search: currentSearch } = useLocation();
   const href = buildHref(to, params, search);
-  const targetPath = href.split("?")[0] ?? href;
+  const [targetPath = href, targetQuery = ""] = href.split("?");
 
   const exact = activeOptions?.exact ?? false;
-  const isActive = exact
+  const targetParams = new URLSearchParams(targetQuery);
+  const currentParams = new URLSearchParams(currentSearch);
+  const queryMatches = targetQuery
+    ? [...targetParams.entries()].every(([key, value]) => currentParams.get(key) === value)
+    : !exact || currentParams.size === 0;
+  const pathMatches = exact
     ? pathname === targetPath
     : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
+  const isActive = pathMatches && queryMatches;
 
   const merged =
     isActive && activeProps?.className
