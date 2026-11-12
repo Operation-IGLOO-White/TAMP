@@ -1,7 +1,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@/lib/nav";
-import { Paperclip, Search, Star } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Paperclip, Search, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
@@ -32,6 +32,9 @@ const VERIFICATION_STATUSES: Party["verification"][] = [
   "REJECTED",
 ];
 
+type UserSortKey = "contactName" | "companyName" | "role" | "province" | "verification" | "rating" | "createdAt";
+type SortDirection = "asc" | "desc";
+
 function UsersPage() {
   // Parties come from the store (hydrated from Postgres); verification writes
   // straight through to Postgres and updates the local view.
@@ -44,19 +47,53 @@ function UsersPage() {
   });
   const [tab, setTab] = useState<Role | "ALL">("ALL");
   const [query, setQuery] = useState("");
+  const [company, setCompany] = useState("ALL");
+  const [sortKey, setSortKey] = useState<UserSortKey>("createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const companies = useMemo(
+    () => [...new Set(parties.map((party) => party.companyName).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [parties],
+  );
+
+  const changeSort = (key: UserSortKey) => {
+    if (sortKey === key) setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return parties.filter((p) => {
-      if (tab !== "ALL" && p.role !== tab) return false;
-      if (!q) return true;
-      return (
-        p.contactName.toLowerCase().includes(q) ||
-        p.companyName.toLowerCase().includes(q) ||
-        p.email.toLowerCase().includes(q)
-      );
-    });
-  }, [parties, tab, query]);
+    return parties
+      .filter((p) => {
+        if (tab !== "ALL" && p.role !== tab) return false;
+        if (company !== "ALL" && p.companyName !== company) return false;
+        if (!q) return true;
+        return (
+          p.contactName.toLowerCase().includes(q) ||
+          p.companyName.toLowerCase().includes(q) ||
+          p.email.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const values: Record<UserSortKey, [string | number, string | number]> = {
+          contactName: [a.contactName, b.contactName],
+          companyName: [a.companyName, b.companyName],
+          role: [ROLE_SHORT[a.role], ROLE_SHORT[b.role]],
+          province: [a.province, b.province],
+          verification: [a.verification, b.verification],
+          rating: [a.ratingAvg ?? -1, b.ratingAvg ?? -1],
+          createdAt: [new Date(a.createdAt).getTime(), new Date(b.createdAt).getTime()],
+        };
+        const [left, right] = values[sortKey];
+        const result = typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), undefined, { sensitivity: "base" });
+        return sortDirection === "asc" ? result : -result;
+      });
+  }, [parties, tab, query, company, sortKey, sortDirection]);
 
   return (
     <AppShell>
@@ -82,7 +119,19 @@ function UsersPage() {
             );
           })}
         </div>
-        <div className="relative ml-auto min-w-52">
+        <label className="relative ml-auto min-w-52">
+          <Building2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <select
+            value={company}
+            onChange={(event) => setCompany(event.target.value)}
+            aria-label="Filter users by company"
+            className="h-10 w-full appearance-none rounded-md border border-border bg-graphite pl-9 pr-8 text-sm outline-none focus:border-signal"
+          >
+            <option value="ALL">All companies</option>
+            {companies.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>
+        <div className="relative min-w-52">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
@@ -97,11 +146,12 @@ function UsersPage() {
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              <th className="px-6 py-3 font-bold">User</th>
-              <th className="px-3 py-3 font-bold">Role</th>
-              <th className="px-3 py-3 font-bold">Province</th>
-              <th className="px-3 py-3 font-bold">Verification</th>
-              <th className="px-3 py-3 font-bold">Rating</th>
+              <SortableHeader label="User" sortKey="contactName" current={sortKey} direction={sortDirection} onSort={changeSort} className="px-6" />
+              <SortableHeader label="Company" sortKey="companyName" current={sortKey} direction={sortDirection} onSort={changeSort} />
+              <SortableHeader label="Role" sortKey="role" current={sortKey} direction={sortDirection} onSort={changeSort} />
+              <SortableHeader label="Province" sortKey="province" current={sortKey} direction={sortDirection} onSort={changeSort} />
+              <SortableHeader label="Verification" sortKey="verification" current={sortKey} direction={sortDirection} onSort={changeSort} />
+              <SortableHeader label="Rating" sortKey="rating" current={sortKey} direction={sortDirection} onSort={changeSort} />
               <th className="px-6 py-3 font-bold">Contact</th>
             </tr>
           </thead>
@@ -129,10 +179,10 @@ function UsersPage() {
                           </span>
                         )}
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">{p.companyName}</div>
                     </div>
                   </Link>
                 </td>
+                <td className="px-3 py-3 text-xs font-medium">{p.companyName}</td>
                 <td className="px-3 py-3 text-xs font-semibold">{ROLE_SHORT[p.role]}</td>
                 <td className="px-3 py-3 text-xs text-muted-foreground">{p.province}</td>
                 <td className="px-3 py-3">
@@ -183,6 +233,24 @@ function UsersPage() {
         )}
       </div>
     </AppShell>
+  );
+}
+
+function SortableHeader({ label, sortKey, current, direction, onSort, className = "px-3" }: {
+  label: string;
+  sortKey: UserSortKey;
+  current: UserSortKey;
+  direction: SortDirection;
+  onSort: (key: UserSortKey) => void;
+  className?: string;
+}) {
+  const Icon = current !== sortKey ? ArrowUpDown : direction === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={`${className} py-3 font-bold`}>
+      <button type="button" onClick={() => onSort(sortKey)} className="inline-flex items-center gap-1.5 hover:text-foreground" aria-label={`Sort by ${label}`}>
+        {label}<Icon className={`size-3 ${current === sortKey ? "text-signal" : "opacity-50"}`} />
+      </button>
+    </th>
   );
 }
 

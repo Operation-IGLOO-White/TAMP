@@ -1,9 +1,11 @@
 import {
   Building2,
+  ArrowDownAZ,
   ClipboardList,
   Gauge,
   PackageOpen,
   Plus,
+  Search,
   Route,
   ShieldCheck,
   Trash2,
@@ -13,7 +15,8 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -33,6 +36,7 @@ import {
 } from "@/fns/organisations";
 import type {
   DispatchAssignment,
+  AuditEvent,
   Invoice,
   Load,
   Match,
@@ -66,7 +70,7 @@ const ROLE_HELP: Record<OrganisationRole, string> = {
 };
 
 export default function OrganisationPage() {
-  const { authParty, trucks, vehicles, loads, matches, trips, invoices, dispatches } = useTamp();
+  const { authParty, trucks, vehicles, loads, matches, trips, invoices, dispatches, audit } = useTamp();
   const queryClient = useQueryClient();
   const canCreate = authParty?.systemRole === "system_super_user";
   const canManageMembers =
@@ -76,8 +80,28 @@ export default function OrganisationPage() {
     queryKey: ["organisations"],
     queryFn: listOrganisations,
   });
+  const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const activeId = selectedId ?? authParty?.activeOrganisationId ?? organisations[0]?.id ?? null;
+  const [organisationQuery, setOrganisationQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [verificationFilter, setVerificationFilter] = useState("ALL");
+  const [organisationSort, setOrganisationSort] = useState<"name" | "newest" | "oldest">("name");
+  const visibleOrganisations = useMemo(() => {
+    const query = organisationQuery.trim().toLowerCase();
+    return organisations
+      .filter((organisation) => {
+        if (typeFilter !== "ALL" && organisation.type !== typeFilter) return false;
+        if (verificationFilter !== "ALL" && organisation.verification !== verificationFilter) return false;
+        return !query || organisation.name.toLowerCase().includes(query) || organisation.type.toLowerCase().includes(query);
+      })
+      .sort((a, b) => {
+        if (organisationSort === "newest") return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
+        if (organisationSort === "oldest") return new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime();
+        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      });
+  }, [organisations, organisationQuery, typeFilter, verificationFilter, organisationSort]);
+  const requestedOrganisationId = searchParams.get("organisationId");
+  const activeId = selectedId ?? requestedOrganisationId ?? authParty?.activeOrganisationId ?? organisations[0]?.id ?? null;
   const active = organisations.find((item) => item.id === activeId);
   const carrierOrganisation =
     active?.type === "CARRIER" ||
@@ -165,26 +189,67 @@ export default function OrganisationPage() {
 
   return (
     <AppShell>
-      <PageHeader title="Organisation" />
+      <PageHeader title={authParty?.role === "ADMIN" ? "Organisation Management" : "Organisation"} />
+      {authParty?.role === "ADMIN" && (
+        <div className="grid grid-cols-2 gap-3 border-b border-border p-4 sm:grid-cols-4 sm:p-5">
+          <OrganisationSummaryCard label="Organisations" value={organisations.length} />
+          <OrganisationSummaryCard label="Verified" value={organisations.filter((item) => item.verification === "VERIFIED").length} tone="positive" />
+          <OrganisationSummaryCard label="Awaiting review" value={organisations.filter((item) => item.verification === "PENDING" || item.verification === "UNVERIFIED").length} tone="signal" />
+          <OrganisationSummaryCard label="Rejected" value={organisations.filter((item) => item.verification === "REJECTED").length} tone="danger" />
+        </div>
+      )}
       <div className="grid gap-5 p-5 xl:grid-cols-[280px_1fr]">
         <aside className="rounded-lg border border-border bg-graphite p-3">
           <div className="mb-3 flex items-center gap-2 px-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
             <Building2 className="size-4" /> Organisations
           </div>
-          <div className="space-y-1">
-            {organisations.map((organisation) => (
+          {authParty?.role === "ADMIN" && (
+            <div className="mb-3 space-y-2 border-b border-border pb-3">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input value={organisationQuery} onChange={(event) => setOrganisationQuery(event.target.value)} placeholder="Search organisations" className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus:border-signal" />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filter organisation type" className="h-9 rounded-md border border-border bg-background px-2 text-[11px] outline-none">
+                  <option value="ALL">All types</option>
+                  <option value="CARGO_OWNER">Cargo owners</option>
+                  <option value="CARRIER">Carriers</option>
+                  <option value="BROKER">Brokers</option>
+                  <option value="DRIVER_NETWORK">Driver networks</option>
+                </select>
+                <select value={verificationFilter} onChange={(event) => setVerificationFilter(event.target.value)} aria-label="Filter verification" className="h-9 rounded-md border border-border bg-background px-2 text-[11px] outline-none">
+                  <option value="ALL">All statuses</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="VERIFIED">Verified</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="UNVERIFIED">Unverified</option>
+                </select>
+              </div>
+              <label className="relative block">
+                <ArrowDownAZ className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <select value={organisationSort} onChange={(event) => setOrganisationSort(event.target.value as typeof organisationSort)} aria-label="Sort organisations" className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-[11px] outline-none">
+                  <option value="name">Name A–Z</option>
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </label>
+            </div>
+          )}
+          <div className="max-h-[52vh] space-y-1 overflow-y-auto pr-1">
+            {visibleOrganisations.map((organisation) => (
               <button
                 key={organisation.id}
                 onClick={() => setSelectedId(organisation.id)}
                 className={`w-full rounded-md px-3 py-2 text-left ${organisation.id === activeId ? "bg-signal/10 ring-1 ring-signal/30" : "hover:bg-steel/40"}`}
               >
                 <div className="truncate text-sm font-bold">{organisation.name}</div>
-                <div className="mt-0.5 text-[10px] uppercase text-muted-foreground">
-                  {organisation.type.replaceAll("_", " ")}
-                  {organisation.id === authParty?.activeOrganisationId ? " · Active" : ""}
+                <div className="mt-1 flex items-center justify-between gap-2 text-[9px] font-bold uppercase text-muted-foreground">
+                  <span className="truncate">{organisation.type.replaceAll("_", " ")}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 ${organisation.verification === "VERIFIED" ? "bg-positive/15 text-positive" : organisation.verification === "REJECTED" ? "bg-danger/15 text-danger" : "bg-signal/15 text-signal"}`}>{organisation.verification}</span>
                 </div>
               </button>
             ))}
+            {visibleOrganisations.length === 0 && <p className="px-2 py-6 text-center text-xs text-muted-foreground">No organisations match these filters.</p>}
           </div>
           {canCreate && (
             <form
@@ -352,6 +417,7 @@ export default function OrganisationPage() {
                   trips={trips}
                   invoices={invoices}
                   dispatches={dispatches}
+                  audit={audit}
                 />
               )}
               <section className="rounded-lg border border-border bg-graphite">
@@ -518,7 +584,7 @@ export default function OrganisationPage() {
   );
 }
 
-type OversightTab = "overview" | "loads" | "trucks" | "engagements" | "finance";
+type OversightTab = "overview" | "members" | "loads" | "trucks" | "engagements" | "finance" | "audit";
 
 function AdminOrganisationOversight({
   organisation,
@@ -529,6 +595,7 @@ function AdminOrganisationOversight({
   trips,
   invoices,
   dispatches,
+  audit,
 }: {
   organisation: OrganisationSummary;
   members: (Party & { membershipId: string; isPrimary: boolean; roleIds: string[] })[];
@@ -538,6 +605,7 @@ function AdminOrganisationOversight({
   trips: Trip[];
   invoices: Invoice[];
   dispatches: DispatchAssignment[];
+  audit: AuditEvent[];
 }) {
   const [tab, setTab] = useState<OversightTab>("overview");
   const memberIds = new Set(members.map((member) => member.id));
@@ -560,16 +628,29 @@ function AdminOrganisationOversight({
       matchIds.has(invoice.matchId),
   );
   const orgDispatches = dispatches.filter((assignment) => tripIds.has(assignment.tripId));
+  const subjectIds = new Set([
+    ...memberIds,
+    ...loadIds,
+    ...truckIds,
+    ...matchIds,
+    ...tripIds,
+    ...orgInvoices.map((invoice) => invoice.id),
+  ]);
+  const orgAudit = audit
+    .filter((event) => memberIds.has(event.actorId) || subjectIds.has(event.subjectId))
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const activeTrips = orgTrips.filter(
     (trip) => !["COMPLETED", "CANCELLED"].includes(trip.status),
   );
   const totalBilled = orgInvoices.reduce((sum, invoice) => sum + invoice.total, 0);
   const tabs: { id: OversightTab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
+    { id: "members", label: "Members", count: members.length },
     { id: "loads", label: "Loads", count: orgLoads.length },
     { id: "trucks", label: "Trucks", count: orgTrucks.length },
     { id: "engagements", label: "Engagements", count: orgMatches.length },
     { id: "finance", label: "Finance", count: orgInvoices.length },
+    { id: "audit", label: "Audit", count: orgAudit.length },
   ];
 
   return (
@@ -634,6 +715,24 @@ function AdminOrganisationOversight({
           ])}
         />
       )}
+      {tab === "members" && (
+        <OversightTable
+          empty="This organisation has no members."
+          heads={["Member", "Email", "Organisation role", "Account", "Joined"]}
+          rows={members.map((member) => {
+            const roleNames = member.roleIds.map((roleId) =>
+              Object.entries(ROLE_IDS).find(([, id]) => id === roleId)?.[0]?.replaceAll("_", " ") ?? roleId,
+            );
+            return [
+              `${member.contactName}${member.isPrimary ? " · Primary admin" : ""}`,
+              member.email,
+              roleNames.join(", ") || "Member",
+              `${member.verification}${member.suspended ? " · SUSPENDED" : ""}`,
+              new Date(member.createdAt).toLocaleDateString("en-ZA"),
+            ];
+          })}
+        />
+      )}
       {tab === "trucks" && (
         <OversightTable
           empty="This organisation has no trucks."
@@ -678,11 +777,34 @@ function AdminOrganisationOversight({
           ])}
         />
       )}
+      {tab === "audit" && (
+        <OversightTable
+          empty="No audit activity has been recorded for this organisation."
+          heads={["Time", "Event", "Actor", "Subject", "Summary"]}
+          rows={orgAudit.map((event) => [
+            new Date(event.at).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" }),
+            event.eventType.replaceAll("_", " "),
+            members.find((member) => member.id === event.actorId)?.contactName ?? event.actorRole,
+            `${event.subjectType} · ${event.subjectId}`,
+            event.summary,
+          ])}
+        />
+      )}
 
       <div className="border-t border-border px-4 py-3 text-[10px] text-muted-foreground">
         {orgDispatches.length} dispatch assignment{orgDispatches.length === 1 ? "" : "s"} recorded for this organisation.
       </div>
     </section>
+  );
+}
+
+function OrganisationSummaryCard({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "positive" | "signal" | "danger" }) {
+  const toneClass = tone === "positive" ? "text-positive" : tone === "signal" ? "text-signal" : tone === "danger" ? "text-danger" : "text-foreground";
+  return (
+    <div className="app-surface p-4">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className={`mt-2 font-mono text-2xl font-black ${toneClass}`}>{value}</p>
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Link } from "@/lib/nav";
+import { Link, useNavigate } from "@/lib/nav";
 import {
   ClipboardList,
   History,
@@ -28,6 +28,8 @@ import {
   Repeat2,
   Boxes,
   Store,
+  ListChecks,
+  Settings,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
@@ -112,15 +114,47 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: "/driver/profile", label: "Profile", icon: User },
   ],
   ADMIN: [
-    { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-    { to: "/admin/users", label: "Users", icon: Users },
-    { to: "/admin/trucks", label: "Trucks", icon: Truck },
-    { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck },
+    {
+      to: "/admin",
+      label: "Platform",
+      icon: LayoutDashboard,
+      children: [
+        { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+        { to: "/admin/organisations", label: "Organisations", icon: Building2 },
+        { to: "/admin/users", label: "Users & Roles", icon: Users },
+      ],
+    },
+    {
+      to: "/admin/verification",
+      label: "Verification",
+      icon: ListChecks,
+      children: [
+        { to: "/admin/verification", label: "Verification Inbox", icon: ListChecks, exact: true },
+        { to: "/admin/verification?queue=trucks", label: "Truck Reviews", icon: Truck },
+        { to: "/admin/verification?queue=drivers", label: "Driver Reviews", icon: UserRoundCog },
+        { to: "/admin/verification?queue=documents", label: "Compliance Documents", icon: ShieldCheck },
+        { to: "/admin/trucks", label: "All Trucks", icon: Truck },
+      ],
+    },
+    {
+      to: "/admin/oversight",
+      label: "Operations",
+      icon: RadioTower,
+      children: [
+        { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck },
+        { to: "/messages", label: "Messages", icon: MessageCircle },
+      ],
+    },
     { to: "/admin/finance", label: "Finance", icon: WalletCards },
-    { to: "/admin/logs", label: "System Logs", icon: ScrollText },
-    { to: "/messages", label: "Messages", icon: MessageCircle },
-    { to: "/organisation", label: "Organisations", icon: Building2 },
-    { to: "/admin/profile", label: "Profile", icon: User },
+    {
+      to: "/admin/logs",
+      label: "System",
+      icon: Settings,
+      children: [
+        { to: "/admin/logs", label: "System Logs", icon: ScrollText },
+        { to: "/admin/profile", label: "Profile", icon: User },
+      ],
+    },
   ],
 };
 
@@ -128,6 +162,7 @@ export function Sidebar() {
   const { role, sidebarCollapsed, toggleSidebar } = useTamp();
   const nav = NAV_BY_ROLE[role];
   const counts = useSidebarCounts();
+  const navigate = useNavigate();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   return (
@@ -141,18 +176,20 @@ export function Sidebar() {
           <div key={to}>
             <button
               type="button"
-              onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))}
+              onClick={() => sidebarCollapsed
+                ? navigate({ to })
+                : setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))}
               title={sidebarCollapsed ? label : undefined}
               className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-steel/50 hover:text-foreground ${sidebarCollapsed ? "justify-center" : ""}`}
             >
               <Icon className="size-[18px] shrink-0" />
-              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} /></>}
+              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} /></>}
             </button>
             {(openGroups[to] ?? true) && !sidebarCollapsed && (
               <div className="relative ml-5 space-y-0.5 border-l border-border py-1 pl-3">
                 {children.map(({ to: childTo, label: childLabel, icon: ChildIcon, exact: childExact }) => (
                   <Link key={childTo} to={childTo} activeOptions={{ exact: childExact ?? false }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-steel/40 hover:text-foreground" activeProps={{ className: "!text-foreground !bg-steel/60" }}>
-                    <ChildIcon className="size-3.5" /><span className="truncate">{childLabel}</span>
+                    <ChildIcon className="size-3.5" /><span className="min-w-0 flex-1 truncate">{childLabel}</span><NavCount count={counts[childTo] ?? 0} collapsed={false} />
                   </Link>
                 ))}
               </div>
@@ -222,10 +259,10 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
           {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact, children }) => children ? (
             <div key={to}>
               <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-muted-foreground">
-                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><ChevronDown className={`size-4 transition-transform ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
+                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
               </button>
               {(openGroups[to] ?? true) && <div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon }) => (
-                <Link key={childTo} to={childTo} onClick={onClose} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-steel/40"><ChildIcon className="size-4" />{childLabel}</Link>
+                <Link key={childTo} to={childTo} onClick={onClose} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-steel/40"><ChildIcon className="size-4" /><span className="min-w-0 flex-1 truncate">{childLabel}</span><NavCount count={counts[childTo] ?? 0} collapsed={false} /></Link>
               ))}</div>}
             </div>
           ) : (
@@ -249,7 +286,7 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
 }
 
 function useSidebarCounts(playSound = true): Record<string, number> {
-  const { role, me, matches, trips, dispatches } = useTamp();
+  const { role, me, matches, trips, dispatches, parties, trucks, vehicles, disputes } = useTamp();
   const counts = useMemo(() => {
     const latestDispatch = new Map<string, (typeof dispatches)[number]>();
     for (const assignment of dispatches) {
@@ -284,8 +321,25 @@ function useSidebarCounts(playSound = true): Record<string, number> {
       }
       return { "/driver": relevantTripIds.size };
     }
+    if (role === "ADMIN") {
+      const pendingUsers = parties.filter((party) => party.verification === "PENDING" || party.verification === "UNVERIFIED").length;
+      const pendingTrucks = trucks.filter((truck) => {
+        const vehicle = vehicles.find((item) => item.id === truck.vehicleId);
+        return !vehicle || vehicle.verification === "PENDING" || vehicle.verification === "UNVERIFIED";
+      }).length;
+      const pendingDrivers = parties.filter((party) => party.role === "DRIVER" && party.verification !== "VERIFIED").length;
+      const documentReviews = trucks.filter((truck) => !truck.licenceNumber || !truck.licenceExpiry || (truck.documents?.length ?? 0) < 3).length;
+      const openOversight = disputes.filter((dispute) => dispute.status === "OPEN" || dispute.status === "UNDER_REVIEW").length;
+      return {
+        "/admin/verification": pendingUsers + pendingTrucks + documentReviews,
+        "/admin/verification?queue=trucks": pendingTrucks,
+        "/admin/verification?queue=drivers": pendingDrivers,
+        "/admin/verification?queue=documents": documentReviews,
+        "/admin/oversight": openOversight,
+      };
+    }
     return {};
-  }, [dispatches, matches, me.id, role, trips]);
+  }, [dispatches, matches, me.id, role, trips, parties, trucks, vehicles, disputes]);
   const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
   const previous = useRef<number | null>(null);
   useEffect(() => {
