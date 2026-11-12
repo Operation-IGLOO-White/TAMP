@@ -30,6 +30,7 @@ import {
   Store,
   ListChecks,
   Settings,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useTamp } from "@/context/TampContext";
@@ -121,7 +122,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       children: [
         { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
         { to: "/admin/organisations", label: "Organisations", icon: Building2 },
-        { to: "/admin/users", label: "Users & Roles", icon: Users },
+        { to: "/admin/users", label: "Users", icon: Users },
+        { to: "/admin/access-control", label: "Access Control", icon: ShieldCheck },
       ],
     },
     {
@@ -142,6 +144,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       icon: RadioTower,
       children: [
         { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck },
+        { to: "/admin/matching", label: "Matching Engine", icon: SlidersHorizontal },
         { to: "/messages", label: "Messages", icon: MessageCircle },
       ],
     },

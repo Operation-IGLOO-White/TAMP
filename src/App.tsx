@@ -46,6 +46,8 @@ const Page40 = lazy(() => import("@/pages/transporter/drivers/$driverId"));
 const Page41 = lazy(() => import("@/pages/owner/shipments"));
 const Page42 = lazy(() => import("@/pages/owner/control-tower"));
 const Page43 = lazy(() => import("@/pages/admin/verification"));
+const Page44 = lazy(() => import("@/pages/admin/access-control"));
+const Page45 = lazy(() => import("@/pages/admin/matching"));
 
 export default function App() {
   return (
@@ -337,6 +339,22 @@ export default function App() {
               element={
                 <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "ADMIN"]}>
                   <Page37 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/matching"
+              element={
+                <RequireRole role={"ADMIN"} permission="platform.admin">
+                  <Page45 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/access-control"
+              element={
+                <RequireRole role={"ADMIN"} permission="organisations.members.manage">
+                  <Page44 />
                 </RequireRole>
               }
             />
