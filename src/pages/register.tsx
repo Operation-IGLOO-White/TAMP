@@ -600,10 +600,14 @@ function Register() {
               <Field label="Password">
                 <PasswordInput
                   value={you.password}
-                  onChange={(e) => setYou({ ...you, password: e.target.value })}
-                  className={inputCls}
+                  onChange={(e) => {
+                    setYou({ ...you, password: e.target.value });
+                    if (pwError) setPwError("");
+                  }}
+                  className={`${inputCls} ${pwError ? "border-danger focus:border-danger" : ""}`}
                   autoComplete="new-password"
-                  minLength={12}
+                  aria-invalid={Boolean(pwError)}
+                  aria-describedby={pwError ? "registration-password-error" : undefined}
                   required
                 />
                 <PasswordMeter password={you.password} />
@@ -611,15 +615,27 @@ function Register() {
               <Field label="Confirm password">
                 <PasswordInput
                   value={you.confirm}
-                  onChange={(e) => setYou({ ...you, confirm: e.target.value })}
-                  className={inputCls}
+                  onChange={(e) => {
+                    setYou({ ...you, confirm: e.target.value });
+                    if (pwError) setPwError("");
+                  }}
+                  className={`${inputCls} ${pwError ? "border-danger focus:border-danger" : ""}`}
                   autoComplete="new-password"
-                  minLength={12}
+                  aria-invalid={Boolean(pwError)}
+                  aria-describedby={pwError ? "registration-password-error" : undefined}
                   required
                 />
               </Field>
             </div>
-            {pwError && <p className="text-xs font-medium text-danger">{pwError}</p>}
+            {pwError && (
+              <div
+                id="registration-password-error"
+                role="alert"
+                className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2.5 text-xs font-medium leading-relaxed text-danger"
+              >
+                {pwError}
+              </div>
+            )}
             <button type="submit" className={btnCls}>
               {lastDataStep === "you" ? "Continue to email verification" : "Continue"}
             </button>
