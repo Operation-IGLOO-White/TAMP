@@ -63,13 +63,22 @@ export type LocationSharingState =
 const GPS_PREFERENCE = "tamp:driver-gps-enabled";
 
 export function useDriverLocationSharing(tripIds: string[]) {
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(GPS_PREFERENCE) === "true");
+  const [enabled, setEnabled] = useState(false);
   const [state, setState] = useState<LocationSharingState>("idle");
   const [error, setError] = useState("");
   const [lastSentAt, setLastSentAt] = useState<string | null>(null);
   const [accuracyM, setAccuracyM] = useState<number | null>(null);
   const lastSent = useRef(0);
   const stableIds = tripIds.slice().sort().join("|");
+
+  // Active driver work always enables tracking. The browser/OS still presents
+  // its one-time location permission prompt, but the driver never has to find
+  // and press a separate "Start GPS" control inside TAMP.
+  useEffect(() => {
+    if (!stableIds) return;
+    localStorage.setItem(GPS_PREFERENCE, "true");
+    setEnabled(true);
+  }, [stableIds]);
 
   const start = useCallback(() => {
     localStorage.setItem(GPS_PREFERENCE, "true");

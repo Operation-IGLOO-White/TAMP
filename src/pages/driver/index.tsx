@@ -192,7 +192,7 @@ function DriverJobs() {
             ? "GPS error"
             : locationSharing.state === "requesting"
               ? "Finding GPS"
-              : "Start GPS";
+              : "GPS standby";
 
   const counts = {
     all: jobs.length,
@@ -232,9 +232,7 @@ function DriverJobs() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <h1 className="text-xl font-extrabold tracking-tight">My jobs</h1>
               {activeTripIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={locationSharing.enabled ? locationSharing.stop : locationSharing.start}
+                <div
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
                     locationSharing.state === "sharing"
                       ? "bg-positive/15 text-positive"
@@ -242,15 +240,11 @@ function DriverJobs() {
                         ? "bg-danger/15 text-danger"
                         : "bg-signal/15 text-signal"
                   }`}
-                  title={
-                    locationSharing.enabled
-                      ? "Stop sharing your location"
-                      : "Share your location for your active assigned trip"
-                  }
+                  title="Location sharing is automatic while you have active work"
                 >
                   <Radio className="size-3" />
                   {gpsLabel}
-                </button>
+                </div>
               )}
             </div>
             {activeTripIds.length > 0 && locationSharing.error && (
@@ -433,6 +427,14 @@ function DriverJobs() {
         (() => {
           // Follow the live trip so navigation updates as the trip advances.
           const live = jobs.find((j) => j.trip.id === mapJob.trip.id) ?? mapJob;
+          const currentStop = live.load.stops?.[
+            Math.min(live.trip.currentStopIndex ?? 0, Math.max(0, (live.load.stops?.length ?? 1) - 1))
+          ]?.place;
+          const goingToPickup = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP"].includes(live.trip.status);
+          const navDestination = currentStop ?? (goingToPickup ? live.load.origin : live.load.destination);
+          const destinationCoords = `${navDestination.lat},${navDestination.lng}`;
+          const wazeUrl = `https://waze.com/ul?ll=${encodeURIComponent(destinationCoords)}&navigate=yes&utm_source=tamp`;
+          const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationCoords)}&travelmode=driving&dir_action=navigate&utm_source=tamp&utm_campaign=driver_navigation`;
           return (
             <div
               className="fixed inset-0 z-50 flex flex-col bg-black/60 p-0 sm:p-6"
@@ -445,7 +447,7 @@ function DriverJobs() {
                 className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden border-border bg-graphite shadow-2xl sm:rounded-2xl sm:border"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-bold uppercase">
                       {mapNav
@@ -456,13 +458,25 @@ function DriverJobs() {
                       {live.trip.id} · {mapNav ? "in-app navigation" : "live route"}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setMapJob(null)}
-                    aria-label="Close map"
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-steel/50 hover:text-foreground"
-                  >
-                    <X className="size-5" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {mapNav && (
+                      <>
+                        <a href={wazeUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase text-foreground hover:border-signal">
+                          Waze
+                        </a>
+                        <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase text-foreground hover:border-signal">
+                          Google
+                        </a>
+                      </>
+                    )}
+                    <button
+                      onClick={() => setMapJob(null)}
+                      aria-label="Close map"
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-steel/50 hover:text-foreground"
+                    >
+                      <X className="size-5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                   {mapNav ? (

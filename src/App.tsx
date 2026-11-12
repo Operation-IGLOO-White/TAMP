@@ -41,6 +41,8 @@ const Page35 = lazy(() => import("@/pages/admin/finance"));
 const Page36 = lazy(() => import("@/pages/dispatch"));
 const Page37 = lazy(() => import("@/pages/messages"));
 const Page38 = lazy(() => import("@/pages/organisation"));
+const Page39 = lazy(() => import("@/pages/transporter/drivers/index"));
+const Page40 = lazy(() => import("@/pages/transporter/drivers/$driverId"));
 
 export default function App() {
   return (
@@ -222,6 +224,22 @@ export default function App() {
               element={
                 <RequireRole role={"TRANSPORTER"}>
                   <Page26 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/transporter/drivers"
+              element={
+                <RequireRole role={"TRANSPORTER"} permission="organisations.read">
+                  <Page39 />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/transporter/drivers/:driverId"
+              element={
+                <RequireRole role={"TRANSPORTER"} permission="organisations.read">
+                  <Page40 />
                 </RequireRole>
               }
             />

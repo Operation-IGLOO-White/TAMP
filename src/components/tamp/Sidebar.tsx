@@ -60,7 +60,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
         { to: "/transporter/fleet-ops?tab=maintenance", label: "Maintenance & Repairs", icon: Wrench },
         { to: "/transporter/fleet-ops?tab=fuel", label: "Fuel & Telematics", icon: Fuel },
         { to: "/transporter/fleet-ops?tab=costs", label: "Costs & Analytics", icon: CircleGauge },
-        { to: "/organisation", label: "Drivers Directory", icon: UserRoundCog },
+        { to: "/transporter/drivers", label: "Drivers Directory", icon: UserRoundCog },
       ],
     },
     { to: "/transporter/engagements", label: "Engagements", icon: RouteIcon },
