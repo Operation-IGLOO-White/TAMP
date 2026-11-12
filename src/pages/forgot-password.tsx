@@ -20,7 +20,6 @@ function ForgotPassword() {
   const [code, setCode] = useState(linkedCode);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [devCode, setDevCode] = useState<string | undefined>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +29,7 @@ function ForgotPassword() {
     setBusy(true);
     try {
       const res = await requestPasswordReset(email.trim());
-      setDevCode(res.devCode);
+      if (res.devCode) setCode(res.devCode);
       setStep("reset");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't send a code. Try again.");
@@ -42,7 +41,7 @@ function ForgotPassword() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (password.length < 8) return setError("Use a password of at least 8 characters.");
+    if (password.length < 12) return setError("Use a password of at least 12 characters.");
     if (password !== confirm) return setError("Passwords don't match.");
     setBusy(true);
     try {
@@ -67,7 +66,7 @@ function ForgotPassword() {
                 <KeyRound className="size-5 text-signal" /> Reset your password
               </h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                Enter your account email and we'll send a secure reset button and one-time code.
+                Enter your account email and we'll send a secure, single-use reset link.
               </p>
             </div>
             <Field label="Email">
@@ -91,33 +90,16 @@ function ForgotPassword() {
         {step === "reset" && (
           <form onSubmit={submit} className="space-y-4">
             <div>
-              <h1 className="text-lg font-bold tracking-tight">Enter code & new password</h1>
+              <h1 className="text-lg font-bold tracking-tight">Choose a new password</h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                {openedFromSecureLink ? "Create a private password for " : "If an account exists, enter the code sent to "}
+                {openedFromSecureLink ? "Create a private password for " : "If an account exists, open the secure link sent to "}
                 <span className="font-semibold text-foreground">{email}</span>.
               </p>
             </div>
-            {devCode && (
-              <div className="rounded-md border border-dashed border-signal/50 bg-signal/5 px-3 py-2 text-center text-[11px] text-muted-foreground">
-                Dev mode — code:{" "}
-                <span className="font-mono text-base font-bold tracking-widest text-foreground">
-                  {devCode}
-                </span>
-              </div>
-            )}
             {!openedFromSecureLink && (
-              <Field label="6-digit code">
-                <input
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  className={`${inputCls} text-center font-mono tracking-[0.4em]`}
-                  placeholder="000000"
-                  required
-                  autoFocus
-                />
-              </Field>
+              <p className="rounded-lg border border-signal/30 bg-signal/5 p-3 text-xs text-muted-foreground">
+                Check your inbox and open the password-reset link to continue.
+              </p>
             )}
             <Field label="New password">
               <PasswordInput
@@ -125,7 +107,7 @@ function ForgotPassword() {
                 onChange={(e) => setPassword(e.target.value)}
                 className={inputCls}
                 autoComplete="new-password"
-                autoFocus={openedFromSecureLink}
+                autoFocus
                 required
               />
             </Field>

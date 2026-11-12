@@ -16,6 +16,7 @@ import { useTamp } from "@/context/TampContext";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
 import { BrandLogo } from "@/components/tamp/BrandLogo";
 import type { Party } from "@/types/domain";
+import { verifyMfa } from "@/fns/auth";
 
 const OAUTH_ERRORS: Record<string, string> = {
   google_not_configured: "Google sign-in isn't configured yet.",
@@ -30,6 +31,8 @@ function Landing() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaEmail, setMfaEmail] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -78,9 +81,28 @@ function Landing() {
     setBusy(true);
     try {
       const party = await login(email.trim(), password);
+      if ("mfaRequired" in party) {
+        setMfaEmail(party.email);
+        setMfaCode(party.devCode ?? "");
+        setNotice("Enter the administrator security code sent to your email.");
+        setBusy(false);
+        return;
+      }
       goHome(party); // busy stays true — the overlay carries us to the dashboard
     } catch {
       setError("Invalid email or password.");
+      setBusy(false);
+    }
+  };
+
+  const confirmMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      goHome(await verifyMfa(mfaEmail, mfaCode.trim()));
+    } catch {
+      setError("That security code is invalid or has expired.");
       setBusy(false);
     }
   };
@@ -162,13 +184,17 @@ function Landing() {
 
         <section className="login-reveal login-delay-2 flex items-center justify-center lg:justify-end">
           <form
-            onSubmit={signIn}
+            onSubmit={mfaEmail ? confirmMfa : signIn}
             className="login-card w-full max-w-[510px] rounded-[28px] border border-white/20 p-6 shadow-2xl sm:p-9 lg:p-11"
           >
             <div className="mb-8">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Sign in</h2>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                {mfaEmail ? "Security check" : "Sign in"}
+              </h2>
               <p className="mt-2 text-sm text-white/58">
-                Welcome back. Enter your TAMP account details.
+                {mfaEmail
+                  ? `Enter the six-digit code sent to ${mfaEmail}.`
+                  : "Welcome back. Enter your TAMP account details."}
               </p>
             </div>
 
@@ -179,7 +205,7 @@ function Landing() {
             )}
 
             <div className="space-y-5">
-              <label className="block">
+              {!mfaEmail && <label className="block">
                 <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
                   Email
                 </span>
@@ -195,8 +221,8 @@ function Landing() {
                     required
                   />
                 </span>
-              </label>
-              <label className="block">
+              </label>}
+              {!mfaEmail && <label className="block">
                 <span className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
                   Password
                   <Link
@@ -217,7 +243,26 @@ function Landing() {
                     required
                   />
                 </span>
-              </label>
+              </label>}
+
+              {mfaEmail && (
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
+                    Security code
+                  </span>
+                  <input
+                    value={mfaCode}
+                    onChange={(event) =>
+                      setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className={`${inputCls} text-center font-mono text-lg tracking-[.4em]`}
+                    required
+                    autoFocus
+                  />
+                </label>
+              )}
 
               {error && (
                 <p
@@ -234,7 +279,7 @@ function Landing() {
                 className="login-submit group flex w-full items-center justify-center gap-3 rounded-xl bg-signal py-3.5 text-sm font-extrabold uppercase tracking-[0.12em] text-signal-foreground shadow-[0_12px_34px_rgba(235,170,0,.2)] transition-all duration-300 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_18px_40px_rgba(235,170,0,.3)] disabled:translate-y-0 disabled:opacity-70"
               >
                 {busy && <Loader2 className="size-4 animate-spin" />}
-                {busy ? "Signing in…" : "Sign in"}
+                {busy ? "Signing in…" : mfaEmail ? "Verify and sign in" : "Sign in"}
                 {!busy && (
                   <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
                 )}

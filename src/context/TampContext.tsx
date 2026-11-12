@@ -176,7 +176,7 @@ interface Store extends State {
   me: Party;
   authParty: Party | null; // the logged-in account (null until login)
   authReady: boolean; // false until the session check resolves
-  login: (email: string, password: string) => Promise<Party>;
+  login: (email: string, password: string) => ReturnType<typeof authLogin>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<Party | null>;
   setRole: (r: Role) => void;
@@ -642,6 +642,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
 
       login: async (email, password) => {
         const party = await authLogin(email, password);
+        if ("mfaRequired" in party) return party;
         authRef.current = party;
         setAuth({ party, ready: true });
         setState((s) => ({ ...s, role: party.role }));

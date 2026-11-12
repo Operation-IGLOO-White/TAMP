@@ -2,8 +2,13 @@
 import { trpc } from "@/lib/trpc";
 import type { Party } from "@/types/domain";
 
-export const login = (email: string, password: string): Promise<Party> =>
+export type MfaChallenge = { mfaRequired: true; email: string; devCode?: string };
+
+export const login = (email: string, password: string): Promise<Party | MfaChallenge> =>
   trpc.mutation("auth.login", { email, password });
+
+export const verifyMfa = (email: string, code: string): Promise<Party> =>
+  trpc.mutation("auth.verifyMfa", { email, code });
 
 export const fetchMe = (): Promise<Party | null> => trpc.query("auth.me");
 

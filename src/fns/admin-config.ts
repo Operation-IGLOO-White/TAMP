@@ -19,7 +19,11 @@ async function request<Result>(url: string, init?: RequestInit): Promise<Result>
   const response = await fetch(url, {
     ...init,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      "X-TAMP-Request": "1",
+      ...(init?.headers ?? {}),
+    },
   });
   if (!response.ok) {
     let detail = "The platform configuration could not be updated.";
