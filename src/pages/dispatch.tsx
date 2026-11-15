@@ -1,252 +1,199 @@
-import { CheckCircle2, Clock3, Route, Truck, UserCheck, UserPlus, XCircle } from "lucide-react";
+import {
+  AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, MapPin,
+  RefreshCw, Route, Search, Send, Truck, UserPlus, Users, XCircle,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
+import { Avatar } from "@/components/tamp/Avatar";
 import { useTamp } from "@/context/TampContext";
-import { listOrganisationMembers } from "@/fns/organisations";
+import { listOrganisationMembers, type OrganisationMember } from "@/fns/organisations";
+import type { DispatchAssignment, Load, Party, Trip, TruckPosting } from "@/types/domain";
+
+type Job = { trip: Trip; load: Load; truck: TruckPosting; assignment: DispatchAssignment | undefined };
+type Queue = "NEEDS_DRIVER" | "OFFERED" | "ACCEPTED" | "EXCEPTION";
+type Range = "TODAY" | "7_DAYS" | "ALL";
+
+const activeStatuses = new Set(["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP", "LOADED", "IN_TRANSIT", "AT_DROPOFF"]);
+const queues: Record<Queue, { title: string; hint: string; style: string }> = {
+  NEEDS_DRIVER: { title: "Needs a driver", hint: "Assign before pickup", style: "border-danger/40 bg-danger/5" },
+  OFFERED: { title: "Awaiting response", hint: "Driver offer sent", style: "border-signal/50 bg-signal/5" },
+  ACCEPTED: { title: "Ready to operate", hint: "Driver accepted", style: "border-positive/40 bg-positive/5" },
+  EXCEPTION: { title: "Needs attention", hint: "Declined or cancelled", style: "border-warning/50 bg-warning/5" },
+};
 
 export default function DispatchPage() {
-  const { me, authParty, trips, matches, loads, trucks, parties, dispatches, updateDispatch } =
-    useTamp();
+  const tamp = useTamp();
+  const { me, authParty, trips, matches, loads, trucks, parties, dispatches, updateDispatch } = tamp;
+  const carrierMode = authParty?.permissions?.includes("dispatch.manage") ?? false;
+  const organisationId = authParty?.activeOrganisationId ?? null;
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const carrierMode = authParty?.permissions?.includes("dispatch.manage") ?? false;
-  const organisationId = authParty?.activeOrganisationId ?? null;
-  const { data: organisationMembers = [] } = useQuery({
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [range, setRange] = useState<Range>("7_DAYS");
+
+  const { data: members = [], isFetching, refetch } = useQuery({
     queryKey: ["organisation-members", organisationId],
     queryFn: () => listOrganisationMembers(organisationId!),
     enabled: carrierMode && Boolean(organisationId),
   });
-  const organisationDrivers = organisationMembers.filter(
-    (member) => member.roleIds.includes("ROLE-DRIVER") && member.verification === "VERIFIED",
-  );
-  const jobs = useMemo(
-    () =>
-      trips
-        .filter((trip) => trip.status === "SCHEDULED")
-        .map((trip) => {
-          const match = matches.find((item) => item.id === trip.matchId);
-          const load = loads.find((item) => item.id === match?.loadId);
-          const truck = trucks.find((item) => item.id === match?.truckPostingId);
-          const assignment = [...dispatches].reverse().find((item) => item.tripId === trip.id);
-          return { trip, load, truck, assignment };
-        })
-        .filter(
-          (job) => job.load && job.truck && (carrierMode || job.assignment?.driverId === me.id),
-        ),
-    [carrierMode, dispatches, loads, matches, me.id, trips, trucks],
-  );
-  const act = async (
-    tripId: string,
-    action: "ASSIGN" | "ACCEPT" | "DECLINE" | "CANCEL",
-    driverEmail?: string,
-  ) => {
-    setBusy(tripId);
-    await updateDispatch(tripId, action, {
-      ...(driverEmail || emails[tripId] ? { driverEmail: driverEmail ?? emails[tripId] } : {}),
-      ...(notes[tripId] ? { note: notes[tripId] } : {}),
+  const drivers = useMemo(() => members.filter((m) => m.roleIds.includes("ROLE-DRIVER") && m.verification === "VERIFIED" && !m.suspended), [members]);
+
+  const jobs = useMemo<Job[]>(() => trips
+    .filter((trip) => activeStatuses.has(trip.status))
+    .map((trip) => {
+      const match = matches.find((m) => m.id === trip.matchId);
+      const load = loads.find((l) => l.id === match?.loadId);
+      const truck = trucks.find((t) => t.id === match?.truckPostingId);
+      const assignment = [...dispatches].reverse().find((d) => d.tripId === trip.id);
+      return load && truck ? { trip, load, truck, assignment } : null;
+    })
+    .filter((job): job is Job => Boolean(job))
+    .filter((job) => carrierMode || job.assignment?.driverId === me.id)
+    .sort((a, b) => +new Date(a.load.pickupWindow.from) - +new Date(b.load.pickupWindow.from)),
+  [carrierMode, dispatches, loads, matches, me.id, trips, trucks]);
+
+  const visible = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    const week = new Date(today); week.setDate(today.getDate() + 7);
+    const needle = query.trim().toLowerCase();
+    return jobs.filter((job) => {
+      const pickup = new Date(job.load.pickupWindow.from);
+      const inRange = range === "ALL" || (range === "TODAY" ? pickup >= today && pickup < tomorrow : pickup >= today && pickup < week);
+      if (!inRange) return false;
+      if (!needle) return true;
+      const driver = findDriver(job.assignment?.driverId, members, parties);
+      return [job.load.reference, job.load.id, job.trip.id, job.truck.registration, job.load.origin.label, job.load.destination.label, driver?.contactName].filter(Boolean).join(" ").toLowerCase().includes(needle);
     });
-    setBusy(null);
+  }, [jobs, members, parties, query, range]);
+
+  const driverConflicts = useMemo(() => conflicts(jobs, "driver"), [jobs]);
+  const truckConflicts = useMemo(() => conflicts(jobs, "truck"), [jobs]);
+  const workingDrivers = new Set(jobs.filter((j) => j.assignment?.status === "ACCEPTED").map((j) => j.assignment!.driverId));
+  const usedTrucks = new Set(jobs.map((j) => j.truck.id));
+
+  const act = async (tripId: string, action: "ASSIGN" | "ACCEPT" | "DECLINE" | "CANCEL", driverEmail?: string) => {
+    setBusy(tripId);
+    try {
+      const ok = await updateDispatch(tripId, action, {
+        ...(driverEmail || emails[tripId] ? { driverEmail: driverEmail ?? emails[tripId] } : {}),
+        ...(notes[tripId]?.trim() ? { note: notes[tripId].trim() } : {}),
+      });
+      if (ok) { setExpanded(null); setNotes((old) => ({ ...old, [tripId]: "" })); }
+    } finally { setBusy(null); }
   };
 
-  return (
-    <AppShell>
-      <PageHeader title={carrierMode ? "Dispatch Board" : "Job Offers"} />
-      <div className="space-y-5 bg-background p-4 sm:p-6">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Metric label="Scheduled jobs" value={jobs.length} icon={Route} />
-          <Metric
-            label="Awaiting driver"
-            value={jobs.filter((j) => !j.assignment || j.assignment.status === "OFFERED").length}
-            icon={Clock3}
-          />
-          <Metric
-            label="Accepted"
-            value={jobs.filter((j) => j.assignment?.status === "ACCEPTED").length}
-            icon={UserCheck}
-          />
+  if (!carrierMode) return <DriverOffers jobs={jobs} meId={me.id} notes={notes} setNotes={setNotes} busy={busy} act={act} />;
+
+  const counts = (queue: Queue) => jobs.filter((j) => queueFor(j) === queue).length;
+  return <AppShell>
+    <PageHeader title="Dispatch Control Centre" actions={
+      <button onClick={() => void refetch()} disabled={isFetching} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-bold hover:border-signal disabled:opacity-50">
+        <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+      </button>} />
+    <main className="space-y-5 bg-background p-4 sm:p-6">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Metric label="Operational jobs" value={jobs.length} icon={Route} />
+        <Metric label="Needs driver" value={counts("NEEDS_DRIVER")} icon={UserPlus} alert />
+        <Metric label="Awaiting response" value={counts("OFFERED")} icon={Clock3} />
+        <Metric label="Ready" value={counts("ACCEPTED")} icon={CheckCircle2} />
+        <Metric label="Conflicts" value={new Set([...driverConflicts, ...truckConflicts]).size} icon={AlertTriangle} alert />
+      </section>
+
+      <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="min-w-0 space-y-4">
+          <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm lg:flex-row">
+            <label className="relative flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search load, route, truck or driver…" className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-3 text-sm outline-none focus:border-signal" /></label>
+            <div className="flex rounded-xl border border-border bg-background p-1">{(["TODAY", "7_DAYS", "ALL"] as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase ${range === item ? "bg-signal text-signal-foreground" : "text-muted-foreground"}`}>{item === "7_DAYS" ? "7 days" : item.toLowerCase()}</button>)}</div>
+          </div>
+          <Schedule jobs={jobs} />
+          <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
+            {(Object.keys(queues) as Queue[]).map((queue) => <QueueColumn key={queue} queue={queue} jobs={visible.filter((j) => queueFor(j) === queue)} drivers={drivers} members={members} parties={parties} emails={emails} notes={notes} setEmails={setEmails} setNotes={setNotes} busy={busy} expanded={expanded} setExpanded={setExpanded} driverConflicts={driverConflicts} truckConflicts={truckConflicts} act={act} />)}
+          </div>
         </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {jobs.map(({ trip, load, truck, assignment }) => (
-            <article
-              key={trip.id}
-              className="overflow-hidden rounded-xl border border-border bg-graphite"
-            >
-              <div className="flex items-start justify-between gap-3 border-b border-border p-4">
-                <div>
-                  <div className="font-mono text-xs font-bold">
-                    {load!.id} · {trip.id}
-                  </div>
-                  <h2 className="mt-1 font-black">
-                    {load!.origin.label} → {load!.destination.label}
-                  </h2>
-                </div>
-                <Badge status={assignment?.status ?? "NEEDS_DRIVER"} />
-              </div>
-              <div className="space-y-4 p-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <Info label="Vehicle" value={truck!.registration} icon={Truck} />
-                  <Info
-                    label="Driver"
-                    value={
-                      parties.find((p) => p.id === assignment?.driverId)?.contactName ??
-                      "Unassigned"
-                    }
-                    icon={UserCheck}
-                  />
-                </div>
-                {carrierMode ? (
-                  <>
-                    {assignment?.status === "ACCEPTED" ? (
-                      <button
-                        disabled={busy === trip.id}
-                        onClick={() => void act(trip.id, "CANCEL")}
-                        className="w-full rounded-md border border-danger px-3 py-2 text-xs font-bold text-danger"
-                      >
-                        Cancel assignment
-                      </button>
-                    ) : (
-                      <div className="space-y-2">
-                        <button
-                          disabled={busy === trip.id || me.verification !== "VERIFIED"}
-                          onClick={() => void act(trip.id, "ASSIGN", me.email)}
-                          className="flex w-full items-center justify-center gap-2 rounded-md border border-signal bg-signal/10 px-3 py-2 text-xs font-bold text-foreground hover:bg-signal/20 disabled:opacity-40"
-                        >
-                          <UserCheck className="size-4" /> Drive this job myself
-                        </button>
-                        <div className="text-center text-[10px] font-bold uppercase text-muted-foreground">
-                          or assign another driver
-                        </div>
-                        <select
-                          value={emails[trip.id] ?? ""}
-                          onChange={(e) => setEmails({ ...emails, [trip.id]: e.target.value })}
-                          className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                        >
-                          <option value="">Select an organisation driver</option>
-                          {organisationDrivers.map((driver) => (
-                            <option key={driver.id} value={driver.email}>
-                              {driver.contactName}
-                            </option>
-                          ))}
-                        </select>
-                        {organisationDrivers.length === 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            No verified drivers are attached to this organisation. Add a driver
-                            under Organisation before dispatching this job.
-                          </p>
-                        )}
-                        <textarea
-                          value={notes[trip.id] ?? ""}
-                          onChange={(e) => setNotes({ ...notes, [trip.id]: e.target.value })}
-                          placeholder="Instructions for the driver (optional)"
-                          className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                        />
-                        <button
-                          disabled={busy === trip.id || !(emails[trip.id] ?? "").includes("@")}
-                          onClick={() => void act(trip.id, "ASSIGN")}
-                          className="flex w-full items-center justify-center gap-2 rounded-md bg-signal px-3 py-2 text-xs font-bold text-signal-foreground disabled:opacity-40"
-                        >
-                          <UserPlus className="size-4" />
-                          {assignment ? "Reassign driver" : "Offer job to driver"}
-                        </button>
-                      </div>
-                    )}
-                  </>
-                ) : assignment?.status === "OFFERED" ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      {assignment.note || "Review the route and accept this delivery assignment."}
-                    </p>
-                    <textarea
-                      value={notes[trip.id] ?? ""}
-                      onChange={(e) => setNotes({ ...notes, [trip.id]: e.target.value })}
-                      placeholder="Reason for declining (required only if you decline)"
-                      maxLength={1000}
-                      className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-signal"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        disabled={busy === trip.id || !(notes[trip.id] ?? "").trim()}
-                        onClick={() => void act(trip.id, "DECLINE")}
-                        className="flex items-center justify-center gap-2 rounded-md border border-danger px-3 py-2 text-xs font-bold text-danger"
-                      >
-                        <XCircle className="size-4" />
-                        Decline
-                      </button>
-                      <button
-                        disabled={busy === trip.id}
-                        onClick={() => void act(trip.id, "ACCEPT")}
-                        className="flex items-center justify-center gap-2 rounded-md bg-positive px-3 py-2 text-xs font-bold text-white"
-                      >
-                        <CheckCircle2 className="size-4" />
-                        Accept job
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="rounded-md bg-positive/10 p-3 text-sm font-semibold text-positive">
-                    Assignment accepted. This job is now available in My Jobs.
-                  </p>
-                )}
-              </div>
-              {assignment?.timeline?.length ? (
-                <div className="border-t border-border px-4 py-3 text-[11px] text-muted-foreground">
-                  Latest: {assignment.timeline.at(-1)?.status.replaceAll("_", " ")} ·{" "}
-                  {new Date(assignment.timeline.at(-1)!.at).toLocaleString("en-ZA")}
-                </div>
-              ) : null}
-            </article>
-          ))}
-          {!jobs.length && (
-            <div className="rounded-xl border border-dashed border-border bg-graphite p-12 text-center text-sm text-muted-foreground xl:col-span-2">
-              {carrierMode
-                ? "No scheduled jobs need dispatching."
-                : "No driver offers are waiting for you."}
-            </div>
-          )}
-        </div>
-      </div>
-    </AppShell>
-  );
+        <aside className="space-y-4">
+          <Resources drivers={drivers} workingDrivers={workingDrivers} trucks={trucks} usedTrucks={usedTrucks} />
+          <Attention jobs={jobs} driverConflicts={driverConflicts} truckConflicts={truckConflicts} />
+        </aside>
+      </section>
+    </main>
+  </AppShell>;
 }
-function Metric({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: number;
-  icon: typeof Route;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-graphite p-4">
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        <Icon className="size-4 text-signal" />
-      </div>
-      <div className="mt-2 text-3xl font-black">{value}</div>
-    </div>
-  );
+
+type ColumnProps = {
+  queue: Queue; jobs: Job[]; drivers: OrganisationMember[]; members: OrganisationMember[]; parties: Party[];
+  emails: Record<string, string>; notes: Record<string, string>;
+  setEmails: Dispatch<SetStateAction<Record<string, string>>>; setNotes: Dispatch<SetStateAction<Record<string, string>>>;
+  busy: string | null; expanded: string | null; setExpanded: Dispatch<SetStateAction<string | null>>;
+  driverConflicts: Set<string>; truckConflicts: Set<string>;
+  act: (id: string, action: "ASSIGN" | "ACCEPT" | "DECLINE" | "CANCEL", email?: string) => Promise<void>;
+};
+function QueueColumn(p: ColumnProps) {
+  const meta = queues[p.queue];
+  return <section className={`min-w-0 rounded-2xl border ${meta.style}`}>
+    <div className="flex items-center justify-between border-b border-border/70 p-4"><span><span className="block text-sm font-black">{meta.title}</span><span className="text-[10px] text-muted-foreground">{meta.hint}</span></span><span className="grid size-8 place-items-center rounded-full bg-background font-mono text-sm font-black shadow-sm">{p.jobs.length}</span></div>
+    <div className="space-y-3 p-3">{p.jobs.map((job) => <JobCard key={job.trip.id} job={job} {...p} />)}{p.jobs.length === 0 && <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-8 text-center text-xs text-muted-foreground">No jobs in this queue.</div>}</div>
+  </section>;
 }
-function Info({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Truck }) {
-  return (
-    <div className="rounded-lg bg-steel/25 p-3">
-      <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-        <Icon className="size-3" />
-        {label}
-      </div>
-      <div className="mt-1 truncate text-sm font-semibold">{value}</div>
-    </div>
-  );
+
+function JobCard(p: ColumnProps & { job: Job }) {
+  const { job } = p; const { trip, load, truck, assignment } = job;
+  const driver = findDriver(assignment?.driverId, p.members, p.parties);
+  const open = p.expanded === trip.id; const late = +new Date(load.pickupWindow.from) < Date.now() && trip.status === "SCHEDULED";
+  return <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <button onClick={() => p.setExpanded(open ? null : trip.id)} className="w-full p-3 text-left">
+      <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate font-mono text-[10px] text-muted-foreground">{load.reference || load.id}</div><div className="mt-1 text-sm font-black">{truck.registration}</div></div><Badge queue={p.queue} /></div>
+      <div className="mt-3 space-y-2"><RouteRow label={shortPlace(load.origin.label)} /><RouteRow label={shortPlace(load.destination.label)} end /></div>
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[10px]"><Small label="Pickup" value={formatDate(load.pickupWindow.from)} danger={late} /><Small label="Driver" value={driver?.contactName ?? "Unassigned"} /></div>
+      {(late || p.driverConflicts.has(trip.id) || p.truckConflicts.has(trip.id)) && <div className="mt-3 flex flex-wrap gap-1">{late && <Warning text="Pickup overdue" />}{p.driverConflicts.has(trip.id) && <Warning text="Driver conflict" />}{p.truckConflicts.has(trip.id) && <Warning text="Truck conflict" />}</div>}
+      <div className="mt-3 flex justify-between text-[9px] font-bold uppercase text-muted-foreground"><span>{trip.status.replaceAll("_", " ")}</span><span className="flex items-center gap-1 text-foreground">Manage <ChevronRight className={`size-3 ${open ? "rotate-90" : ""}`} /></span></div>
+    </button>
+    {open && <div className="space-y-3 border-t border-border bg-background/60 p-3">
+      <div className="grid grid-cols-2 gap-2"><SmallBox label="Trip" value={trip.id} /><SmallBox label="Distance" value={`${load.distanceKm.toLocaleString("en-ZA")} km`} /></div>
+      {assignment?.note && <p className="rounded-lg bg-steel/30 p-2 text-xs text-muted-foreground">{assignment.note}</p>}
+      {p.queue !== "ACCEPTED" ? <>
+        <select value={p.emails[trip.id] ?? ""} onChange={(e) => p.setEmails((old) => ({ ...old, [trip.id]: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs"><option value="">Select verified driver</option>{p.drivers.map((d) => <option key={d.id} value={d.email}>{d.contactName}</option>)}</select>
+        <textarea value={p.notes[trip.id] ?? ""} onChange={(e) => p.setNotes((old) => ({ ...old, [trip.id]: e.target.value }))} placeholder="Pickup or route instructions (optional)" className="min-h-20 w-full rounded-lg border border-border bg-background p-3 text-xs outline-none focus:border-signal" />
+        <button disabled={p.busy === trip.id || !(p.emails[trip.id] ?? "").includes("@")} onClick={() => void p.act(trip.id, "ASSIGN")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-signal text-xs font-black uppercase text-signal-foreground disabled:opacity-40"><Send className="size-3.5" />{assignment ? "Reassign and send" : "Send driver offer"}</button>
+        {p.drivers.length === 0 && <p className="text-[10px] text-danger">Add and verify a driver under Organisation first.</p>}
+      </> : <button disabled={p.busy === trip.id} onClick={() => void p.act(trip.id, "CANCEL")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-danger/40 text-xs font-bold text-danger"><XCircle className="size-4" />Cancel assignment</button>}
+      {assignment?.timeline?.length ? <div className="border-t border-border pt-2 text-[10px] text-muted-foreground">Latest: {assignment.timeline.at(-1)?.status.replaceAll("_", " ")} · {new Date(assignment.timeline.at(-1)!.at).toLocaleString("en-ZA")}</div> : null}
+    </div>}
+  </article>;
 }
-function Badge({ status }: { status: string }) {
-  const good = status === "ACCEPTED";
-  return (
-    <span
-      className={`rounded px-2 py-1 text-[9px] font-bold ${good ? "bg-positive/10 text-positive" : status === "OFFERED" ? "bg-warning/15 text-warning" : "bg-steel text-muted-foreground"}`}
-    >
-      {status.replaceAll("_", " ")}
-    </span>
-  );
+
+function Schedule({ jobs }: { jobs: Job[] }) {
+  const days = Array.from({ length: 7 }, (_, i) => { const start = new Date(); start.setHours(0,0,0,0); start.setDate(start.getDate()+i); const end = new Date(start); end.setDate(end.getDate()+1); return { start, jobs: jobs.filter((j) => +new Date(j.load.pickupWindow.from) >= +start && +new Date(j.load.pickupWindow.from) < +end) }; });
+  return <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"><div className="flex items-center gap-2 border-b border-border px-4 py-3"><CalendarDays className="size-4 text-signal" /><h2 className="text-sm font-black">Seven-day dispatch plan</h2></div><div className="grid grid-cols-7 divide-x divide-border overflow-x-auto">{days.map((day,i) => <div key={day.start.toISOString()} className="min-w-[88px] p-3 text-center"><div className="text-[9px] font-bold uppercase text-muted-foreground">{i===0 ? "Today" : day.start.toLocaleDateString("en-ZA",{weekday:"short"})}</div><div className="mt-1 font-mono text-lg font-black">{day.start.getDate()}</div><div className="mt-2 flex justify-center gap-1">{day.jobs.slice(0,4).map((j)=><span key={j.trip.id} className={`size-2 rounded-full ${queueFor(j)==="ACCEPTED"?"bg-positive":queueFor(j)==="OFFERED"?"bg-signal":"bg-danger"}`} />)}{!day.jobs.length && <span className="text-[10px] text-muted-foreground">—</span>}</div><div className="mt-1 text-[9px] text-muted-foreground">{day.jobs.length} jobs</div></div>)}</div></section>;
 }
+
+function Resources({ drivers, workingDrivers, trucks, usedTrucks }: { drivers: OrganisationMember[]; workingDrivers: Set<string>; trucks: TruckPosting[]; usedTrucks: Set<string> }) {
+  return <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"><div className="border-b border-border p-4"><div className="flex items-center gap-2"><Users className="size-4 text-signal" /><h2 className="text-sm font-black">Resources</h2></div><p className="mt-1 text-[10px] text-muted-foreground">Current organisation availability</p></div><div className="grid grid-cols-2 divide-x divide-border border-b border-border"><Resource label="Drivers free" value={drivers.filter((d)=>!workingDrivers.has(d.id)).length}/><Resource label="Trucks free" value={trucks.filter((t)=>t.status==="AVAILABLE"&&!usedTrucks.has(t.id)).length}/></div><div className="space-y-2 p-3"><div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Verified drivers</div>{drivers.slice(0,6).map((d)=><div key={d.id} className="flex items-center gap-2 rounded-lg bg-steel/20 p-2"><Avatar party={d} size="sm"/><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{d.contactName}</div><div className="text-[9px] text-muted-foreground">{workingDrivers.has(d.id)?"Assigned":"Available"}</div></div><span className={`size-2 rounded-full ${workingDrivers.has(d.id)?"bg-signal":"bg-positive"}`}/></div>)}{!drivers.length&&<p className="rounded-lg border border-dashed border-border p-3 text-center text-xs text-muted-foreground">No verified drivers.</p>}<div className="grid grid-cols-3 gap-2 pt-2"><Tiny label="Available" value={trucks.filter(t=>t.status==="AVAILABLE").length}/><Tiny label="On trip" value={trucks.filter(t=>t.status==="ON_TRIP").length}/><Tiny label="Reserved" value={trucks.filter(t=>t.status==="RESERVED").length}/></div></div></section>;
+}
+
+function Attention({ jobs, driverConflicts, truckConflicts }: { jobs: Job[]; driverConflicts: Set<string>; truckConflicts: Set<string> }) {
+  const rows = [{label:"Pickup overdue",value:jobs.filter(j=>j.trip.status==="SCHEDULED"&&+new Date(j.load.pickupWindow.from)<Date.now()).length},{label:"Declined/cancelled",value:jobs.filter(j=>queueFor(j)==="EXCEPTION").length},{label:"Driver conflicts",value:driverConflicts.size},{label:"Truck conflicts",value:truckConflicts.size}];
+  return <section className="rounded-2xl border border-border bg-card p-4 shadow-sm"><div className="flex items-center gap-2"><AlertTriangle className="size-4 text-signal"/><h2 className="text-sm font-black">Attention required</h2></div><div className="mt-3 divide-y divide-border">{rows.map(r=><div key={r.label} className="flex justify-between py-2.5 text-xs"><span className="text-muted-foreground">{r.label}</span><span className={`font-mono font-black ${r.value?"text-danger":"text-positive"}`}>{r.value}</span></div>)}</div></section>;
+}
+
+function DriverOffers({ jobs, meId, notes, setNotes, busy, act }: { jobs: Job[]; meId: string; notes: Record<string,string>; setNotes: Dispatch<SetStateAction<Record<string,string>>>; busy:string|null; act:(id:string,a:"ASSIGN"|"ACCEPT"|"DECLINE"|"CANCEL")=>Promise<void> }) {
+  const mine=jobs.filter(j=>j.assignment?.driverId===meId);
+  return <AppShell><PageHeader title="Job Offers"/><main className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">{mine.map(j=><article key={j.trip.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm"><div className="font-mono text-[10px] text-muted-foreground">{j.load.reference}</div><h2 className="mt-1 font-black">{j.load.origin.label} → {j.load.destination.label}</h2><div className="mt-2 text-xs text-muted-foreground">{j.truck.registration} · {formatDate(j.load.pickupWindow.from)}</div>{j.assignment?.status==="OFFERED"?<div className="mt-4 space-y-3"><p className="text-sm text-muted-foreground">{j.assignment.note||"Review and accept this assignment."}</p><textarea value={notes[j.trip.id]??""} onChange={e=>setNotes(o=>({...o,[j.trip.id]:e.target.value}))} placeholder="Reason required if declining" className="min-h-20 w-full rounded-lg border border-border p-3 text-sm"/><div className="grid grid-cols-2 gap-2"><button disabled={busy===j.trip.id||!(notes[j.trip.id]??"").trim()} onClick={()=>void act(j.trip.id,"DECLINE")} className="min-h-11 rounded-lg border border-danger font-bold text-danger disabled:opacity-40">Decline</button><button disabled={busy===j.trip.id} onClick={()=>void act(j.trip.id,"ACCEPT")} className="rounded-lg bg-positive font-bold text-white">Accept job</button></div></div>:<p className="mt-4 rounded-lg bg-positive/10 p-3 text-sm font-semibold text-positive">Accepted. This job is in My Jobs.</p>}</article>)}{!mine.length&&<div className="rounded-2xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground lg:col-span-2">No job offers are waiting.</div>}</main></AppShell>;
+}
+
+function queueFor(j:Job):Queue { if(j.assignment?.status==="ACCEPTED")return"ACCEPTED";if(j.assignment?.status==="OFFERED")return"OFFERED";if(["DECLINED","CANCELLED"].includes(j.assignment?.status??""))return"EXCEPTION";return"NEEDS_DRIVER"; }
+function conflicts(jobs:Job[],resource:"driver"|"truck"){const out=new Set<string>();jobs.forEach((a,i)=>{const id=resource==="driver"?a.assignment?.driverId:a.truck.id;if(!id||(resource==="driver"&&a.assignment?.status!=="ACCEPTED"))return;jobs.slice(i+1).forEach(b=>{const bid=resource==="driver"?b.assignment?.driverId:b.truck.id;if(resource==="driver"&&b.assignment?.status!=="ACCEPTED")return;if(id===bid&&+new Date(a.load.pickupWindow.from)<=+new Date(b.load.deliveryBy)&&+new Date(b.load.pickupWindow.from)<=+new Date(a.load.deliveryBy)){out.add(a.trip.id);out.add(b.trip.id);}})});return out;}
+function findDriver(id:string|undefined,members:OrganisationMember[],parties:Party[]){return members.find(m=>m.id===id)??parties.find(p=>p.id===id)}
+function formatDate(value:string){return new Date(value).toLocaleString("en-ZA",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+function shortPlace(v:string){return v.split(",").slice(0,2).join(",")}
+function Metric({label,value,icon:Icon,alert=false}:{label:string;value:number;icon:typeof Route;alert?:boolean}){return <article className={`rounded-2xl border bg-card p-4 shadow-sm ${alert&&value?"border-danger/40":"border-border"}`}><div className="flex justify-between"><span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span><Icon className={`size-4 ${alert&&value?"text-danger":"text-signal"}`}/></div><div className="mt-2 font-mono text-2xl font-black">{value}</div></article>}
+function Badge({queue}:{queue:Queue}){const s=queue==="ACCEPTED"?"bg-positive/15 text-positive":queue==="OFFERED"?"bg-signal/20":queue==="EXCEPTION"?"bg-warning/20 text-warning":"bg-danger/10 text-danger";return <span className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black uppercase ${s}`}>{queue==="ACCEPTED"?"Ready":queue.replaceAll("_"," ")}</span>}
+function RouteRow({label,end=false}:{label:string;end?:boolean}){return <div className="flex min-w-0 items-center gap-2"><MapPin className={`size-3 shrink-0 ${end?"text-foreground":"text-signal"}`}/><span className="truncate text-[11px] text-muted-foreground">{label}</span></div>}
+function Small({label,value,danger=false}:{label:string;value:string;danger?:boolean}){return <div><div className="uppercase text-muted-foreground">{label}</div><div className={`mt-0.5 truncate font-bold ${danger?"text-danger":""}`}>{value}</div></div>}
+function Warning({text}:{text:string}){return <span className="rounded-full bg-danger/10 px-2 py-1 text-[8px] font-bold uppercase text-danger">{text}</span>}
+function SmallBox({label,value}:{label:string;value:string}){return <div className="rounded-lg bg-steel/25 p-2"><div className="text-[8px] font-bold uppercase text-muted-foreground">{label}</div><div className="mt-1 truncate font-mono text-[10px] font-bold">{value}</div></div>}
+function Resource({label,value}:{label:string;value:number}){return <div className="p-3 text-center"><div className="font-mono text-xl font-black">{value}</div><div className="text-[9px] uppercase text-muted-foreground">{label}</div></div>}
+function Tiny({label,value}:{label:string;value:number}){return <div className="rounded-lg bg-steel/25 p-2"><div className="font-mono text-sm font-black">{value}</div><div className="text-[8px] uppercase text-muted-foreground">{label}</div></div>}
