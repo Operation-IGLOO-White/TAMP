@@ -220,7 +220,19 @@ function NotificationsMenu() {
             ? {
                 action: {
                   label: "View job",
-                  onClick: () => navigate({ to: "/transporter/engagements" }),
+                  onClick: () => {
+                    queryClient.setQueryData<typeof server>(
+                      ["notifications", authParty?.id, authParty?.activeOrganisationId],
+                      (items) =>
+                        items?.map((item) =>
+                          item.id === notification.id ? { ...item, unread: false } : item,
+                        ),
+                    );
+                    void markServerRead([notification.id]).catch(() =>
+                      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+                    );
+                    navigate({ to: "/transporter/engagements" });
+                  },
                 },
               }
             : {}),
@@ -251,7 +263,24 @@ function NotificationsMenu() {
     );
   };
 
-  const go = (n: (typeof notifications)[number]) => {
+  const go = async (n: (typeof notifications)[number]) => {
+    if (n.unread) {
+      const isServerNotification = server.some((item) => item.id === n.id);
+      if (isServerNotification) {
+        queryClient.setQueryData<typeof server>(
+          ["notifications", authParty?.id, authParty?.activeOrganisationId],
+          (items) => items?.map((item) => (item.id === n.id ? { ...item, unread: false } : item)),
+        );
+        try {
+          await markServerRead([n.id]);
+        } catch {
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        }
+      } else {
+        // Locally-derived maintenance alerts share a read timestamp.
+        markNotificationsRead();
+      }
+    }
     const target = notificationTarget(role, n, { matches, trips, disputes });
     setOpen(false);
     if (target.kind === "load")
@@ -296,7 +325,7 @@ function NotificationsMenu() {
             {notifications.slice(0, 8).map((n) => (
               <li key={n.id}>
                 <button
-                  onClick={() => go(n)}
+                  onClick={() => void go(n)}
                   className={`flex w-full min-w-0 gap-2.5 px-3.5 py-3 text-left hover:bg-steel/40 sm:gap-3 sm:px-4 ${
                     n.unread ? "bg-signal/5" : ""
                   }`}

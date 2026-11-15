@@ -70,7 +70,23 @@ function NotificationsPage() {
     },
   });
 
-  const go = (n: Notification) => {
+  const go = async (n: Notification) => {
+    if (n.unread) {
+      const isServerNotification = server.some((item) => item.id === n.id);
+      if (isServerNotification) {
+        queryClient.setQueryData<typeof server>(
+          ["notifications", authParty?.id, authParty?.activeOrganisationId],
+          (items) => items?.map((item) => (item.id === n.id ? { ...item, unread: false } : item)),
+        );
+        try {
+          await markServerRead([n.id]);
+        } catch {
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        }
+      } else {
+        markNotificationsRead();
+      }
+    }
     const target = notificationTarget(role, n, { matches, trips, disputes });
     if (target.kind === "load")
       navigate({ to: "/owner/loads/$loadId", params: { loadId: target.loadId } });
@@ -111,7 +127,7 @@ function NotificationsPage() {
             {notifications.map((n) => (
               <li key={n.id}>
                 <button
-                  onClick={() => go(n)}
+                  onClick={() => void go(n)}
                   className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-steel/40 ${
                     n.unread ? "bg-signal/5" : ""
                   }`}

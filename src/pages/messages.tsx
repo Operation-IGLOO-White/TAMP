@@ -1,6 +1,7 @@
 import { ArrowLeft, Circle, FileText, MessageCircle, Paperclip, Send, Truck } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import {
   listConversations,
@@ -11,6 +12,7 @@ import {
 } from "@/fns/messages";
 import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
+import { userFacingError } from "@/lib/api-errors";
 import type { TripConversation, TripMessage } from "@/types/domain";
 
 export default function MessagesPage() {
@@ -27,7 +29,9 @@ export default function MessagesPage() {
   const [connection, setConnection] = useState<"connecting" | "live" | "reconnecting">(
     "connecting",
   );
-  const bottom = useRef<HTMLDivElement>(null);
+  const messageViewport = useRef<HTMLDivElement>(null);
+  const shouldScrollToBottom = useRef(true);
+  const isNearBottom = useRef(true);
   useEffect(() => {
     let active = true;
     const refresh = () =>
@@ -68,6 +72,7 @@ export default function MessagesPage() {
     };
     const receive = (message: TripMessage) => {
       if (!active || message.conversationId !== selectedId) return;
+      if (isNearBottom.current || message.senderId === me.id) shouldScrollToBottom.current = true;
       setMessages((items) => mergeMessages(items, [message]));
       setConversations((items) =>
         items.map((item) =>
@@ -86,7 +91,11 @@ export default function MessagesPage() {
     const refreshMessages = () =>
       void listMessages(selectedId)
         .then((items) => {
-          if (active) setMessages((current) => mergeMessages(current, items));
+          if (active)
+            setMessages((current) => {
+              if (current.length === 0 && items.length > 0) shouldScrollToBottom.current = true;
+              return mergeMessages(current, items);
+            });
         })
         .catch(() => {});
     const connect = () => {
@@ -116,6 +125,8 @@ export default function MessagesPage() {
     };
 
     setMessages([]);
+    isNearBottom.current = true;
+    shouldScrollToBottom.current = true;
     setConnection("connecting");
     refreshMessages();
     void markConversationRead(selectedId)
@@ -134,7 +145,16 @@ export default function MessagesPage() {
       socket?.close();
     };
   }, [me.id, selectedId]);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
+  useEffect(() => {
+    if (!shouldScrollToBottom.current) return;
+    const viewport = messageViewport.current;
+    if (!viewport) return;
+    shouldScrollToBottom.current = false;
+    requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+      isNearBottom.current = true;
+    });
+  }, [messages]);
   const selected = conversations.find((item) => item.id === selectedId);
   const load = loads.find((item) => item.id === selected?.loadId);
   const participantNames = useMemo(
@@ -153,6 +173,7 @@ export default function MessagesPage() {
     setBusy(true);
     try {
       const sent = await sendMessage(selectedId, text.trim(), attachment ?? undefined);
+      shouldScrollToBottom.current = true;
       setMessages((items) =>
         items.some((item) => item.id === sent.id) ? items : [...items, sent],
       );
@@ -169,6 +190,10 @@ export default function MessagesPage() {
       );
       setText("");
       setAttachment(null);
+    } catch (error) {
+      toast.error("Message was not sent", {
+        description: userFacingError(error, "Check your connection and try sending again."),
+      });
     } finally {
       setBusy(false);
     }
@@ -274,7 +299,15 @@ export default function MessagesPage() {
                 </div>
                 <p className="mt-1 hidden text-xs text-muted-foreground lg:block">{participantNames}</p>
               </header>
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:p-4">
+              <div
+                ref={messageViewport}
+                onScroll={(event) => {
+                  const viewport = event.currentTarget;
+                  isNearBottom.current =
+                    viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 80;
+                }}
+                className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-background px-3 py-4 sm:p-4"
+              >
                 {messages.map((message) =>
                   message.kind === "SYSTEM" ? (
                     <div
@@ -321,7 +354,6 @@ export default function MessagesPage() {
                     </div>
                   ),
                 )}
-                <div ref={bottom} />
               </div>
               <footer
                 className={`border-t border-border px-3 pt-3 ${
@@ -336,7 +368,13 @@ export default function MessagesPage() {
                     <button onClick={() => setAttachment(null)}>Remove</button>
                   </div>
                 )}
-                <div className="flex min-w-0 gap-2">
+                <form
+                  className="flex min-w-0 gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void submit();
+                  }}
+                >
                   <label className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-md border border-border">
                     <Paperclip className="size-4" />
                     <input
@@ -350,6 +388,10 @@ export default function MessagesPage() {
                         try {
                           const uploaded = await uploadFile(file, "MESSAGE");
                           setAttachment({ url: uploaded.url, name: uploaded.filename });
+                        } catch (error) {
+                          toast.error("Attachment could not be uploaded", {
+                            description: userFacingError(error, "Try selecting the file again."),
+                          });
                         } finally {
                           setBusy(false);
                           event.target.value = "";
@@ -371,14 +413,14 @@ export default function MessagesPage() {
                     className="min-h-10 min-w-0 flex-1 resize-none rounded-md border border-border px-3 py-2 text-sm"
                   />
                   <button
+                    type="submit"
                     aria-label="Send message"
                     disabled={busy || (!text.trim() && !attachment)}
-                    onClick={() => void submit()}
                     className="grid size-10 place-items-center rounded-md bg-signal text-signal-foreground disabled:opacity-40"
                   >
                     <Send className="size-4" />
                   </button>
-                </div>
+                </form>
               </footer>
             </>
           ) : (
