@@ -187,7 +187,11 @@ function DriverJobs() {
     note?: string,
   ) => {
     setDispatchBusy(tripId);
-    const saved = await updateDispatch(tripId, action, note ? { note } : undefined);
+    const dispatchId = latestDispatchByTrip.get(tripId)?.id;
+    const saved = await updateDispatch(tripId, action, {
+      ...(dispatchId ? { dispatchId } : {}),
+      ...(note ? { note } : {}),
+    });
     setDispatchBusy(null);
     if (saved && action === "DECLINE") {
       setDeclineTripId(null);

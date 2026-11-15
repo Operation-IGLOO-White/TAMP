@@ -228,7 +228,7 @@ interface Store extends State {
   updateDispatch: (
     tripId: string,
     action: DispatchAction,
-    options?: { driverEmail?: string; note?: string },
+    options?: { driverEmail?: string; note?: string; dispatchId?: string },
   ) => Promise<boolean>;
   rateLoad: (loadId: string, stars: 1 | 2 | 3 | 4 | 5, comment: string, tags: string[]) => void;
   flagDispute: (loadId: string, category: DisputeCategory, description: string) => void;
