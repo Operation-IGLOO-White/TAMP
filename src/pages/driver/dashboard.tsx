@@ -246,7 +246,7 @@ function DriverVehicleHero({ truck, active }: { truck: TruckPosting; active: boo
           <img
             src={fleetVehicleAsset(truck)}
             alt={`${truck.bodyType.replaceAll("_", " ").toLowerCase()} ${truck.registration}`}
-            className="relative z-10 h-36 w-full animate-[float_5s_ease-in-out_infinite] object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,0.55)] transition-transform duration-500 group-hover:scale-[1.04] sm:h-48"
+            className="relative z-10 h-36 w-full object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,0.55)] transition-transform duration-500 group-hover:scale-[1.04] sm:h-48"
           />
         </div>
       </div>

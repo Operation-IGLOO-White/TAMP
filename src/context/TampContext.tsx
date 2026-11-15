@@ -1372,7 +1372,9 @@ export function TampProvider({ children }: { children: ReactNode }) {
 
       updateDispatch: async (tripId, action, options = {}) => {
         try {
-          await flushPending();
+          // Dispatch responses are authoritative server commands. Flushing the
+          // legacy snapshot first can include unrelated fleet state that a
+          // driver is correctly not allowed to edit, blocking ACCEPT/DECLINE.
           await runDispatchAction(tripId, action, options);
           await hydrateDomain();
           return true;
