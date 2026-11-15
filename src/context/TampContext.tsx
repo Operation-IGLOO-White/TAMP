@@ -20,6 +20,7 @@ import {
   advanceTripCmd,
   cancelTripCmd,
   confirmMatchCmd,
+  requestJobCmd,
   reportIncidentCmd,
   type PodInput,
   type OperationalIncidentKind,
@@ -196,7 +197,7 @@ interface Store extends State {
   ) => Promise<void>;
   assignDriver: (truckId: string, driverId: string) => void;
   linkDriver: (truckId: string, driver: Party) => void;
-  requestJob: (load: Load, truckId: string, score: number) => void;
+  requestJob: (load: Load, truckId: string, score: number, proof: OfferProof) => Promise<void>;
   acceptRequest: (loadId: string, truckId: string, proof: OfferProof) => Promise<void>;
   withdrawRequest: (loadId: string, truckId: string) => void;
   reserveBackhaul: (truckId: string, loadId: string) => void;
@@ -1197,45 +1198,16 @@ export function TampProvider({ children }: { children: ReactNode }) {
       // Carrier requests an open job (from Engagements): records an OFFERED
       // match (awaiting the cargo owner's approval) — no trip yet. The load is
       // materialised into the store so the owner can see and act on the request.
-      requestJob: (load, truckId, score) =>
-        setState((s) => {
-          const truck = s.trucks.find((t) => t.id === truckId);
-          if (!truck || truck.status !== "AVAILABLE") return s;
-          if (
-            s.matches.some(
-              (m) => m.loadId === load.id && m.truckPostingId === truckId && m.status === "OFFERED",
-            )
-          )
-            return s;
-          const now = new Date().toISOString();
-          const loads = s.loads.some((l) => l.id === load.id) ? s.loads : [{ ...load }, ...s.loads];
-          const match: Match = {
-            id: nextRef("MT"),
-            loadId: load.id,
-            truckPostingId: truckId,
-            score,
-            breakdown: [],
-            hardFilterResults: [],
-            status: "OFFERED",
-            initiatedBy: "TRANSPORTER",
-            expiresAt: new Date(Date.now() + 864e5).toISOString(),
-            createdAt: now,
-          };
-          return {
-            ...s,
-            loads,
-            matches: [match, ...s.matches],
-            audit: log(
-              s.audit,
-              "JOB_REQUESTED",
-              truck.transporterId,
-              "TRANSPORTER",
-              "LOAD",
-              load.id,
-              `${truck.registration} requested ${load.id} (${load.origin.label} → ${load.destination.label}) — awaiting owner approval.`,
-            ),
-          };
-        }),
+      requestJob: async (load, truckId, _score, proof) => {
+        try {
+          await flushPending();
+          await requestJobCmd(load.id, truckId, proof);
+          await hydrateDomain();
+        } catch (err) {
+          reportSaveError(err);
+          throw err;
+        }
+      },
 
       // Authoritative: the owner approves a carrier request against the reviewed
       // offer. The carrier must confirm that exact revision before a trip opens.

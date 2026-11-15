@@ -247,6 +247,7 @@ function EngagementsPage() {
                   review.opportunity.load,
                   review.opportunity.truck.id,
                   review.opportunity.score,
+                  proof,
                 )
           }
         />

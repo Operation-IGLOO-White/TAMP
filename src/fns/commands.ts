@@ -35,6 +35,13 @@ export const prepareOfferCmd = (
     ...(deadheadRouteToken ? { deadheadRouteToken } : {}),
   });
 
+export const requestJobCmd = (
+  loadId: string,
+  truckId: string,
+  proof: OfferProof,
+): Promise<{ ok: true; matchId: string }> =>
+  trpc.mutation("commands.requestJob", { loadId, truckId, ...proof });
+
 export const acceptMatchCmd = (
   loadId: string,
   truckId: string,
