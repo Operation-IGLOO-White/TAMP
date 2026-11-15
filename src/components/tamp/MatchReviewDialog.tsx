@@ -36,6 +36,7 @@ export function MatchReviewDialog({
   const [routes, setRoutes] = useState<RouteState | null>(null);
   const [offer, setOffer] = useState<MatchOffer | null>(null);
   const [error, setError] = useState("");
+  const [termsError, setTermsError] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [routeAttempt, setRouteAttempt] = useState(0);
@@ -52,6 +53,7 @@ export function MatchReviewDialog({
     setOffer(null);
     setAgreed(false);
     setError("");
+    setTermsError("");
     Promise.all([
       computeRoute(truck.currentLocation, load.origin),
       computeRoute(
@@ -63,12 +65,26 @@ export function MatchReviewDialog({
       .then(async ([deadhead, journey]) => {
         if (cancelled) return;
         if (!journey) throw new Error("No freight route was returned");
-        const prepared = await prepareOfferCmd(
-          load.id,
-          truck.id,
-          journey.routeToken,
-          deadhead?.routeToken,
-        );
+        // Render the computed route immediately. Preparing the bilateral offer
+        // is a separate authorised operation and must not make a valid map
+        // disappear when the match/account needs attention.
+        setRoutes({ deadhead, journey });
+        let prepared: MatchOffer;
+        try {
+          prepared = await prepareOfferCmd(
+            load.id,
+            truck.id,
+            journey.routeToken,
+            deadhead?.routeToken,
+          );
+        } catch (cause) {
+          if (!cancelled) {
+            const message = cause instanceof Error ? cause.message : "The match terms could not be prepared.";
+            setTermsError(message);
+            console.error("Match terms preparation failed", cause);
+          }
+          return;
+        }
         if (cancelled) return;
         setOffer(prepared);
         setRoutes({
@@ -76,12 +92,15 @@ export function MatchReviewDialog({
           journey: prepared.routeQuote.journey,
         });
       })
-      .catch(() =>
-        !cancelled &&
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        console.error("Match route calculation failed", cause);
         setError(
-          "The route service did not respond. Retry the calculation or contact support if it continues.",
-        ),
-      );
+          cause instanceof Error && cause.message
+            ? cause.message
+            : "The route service did not respond. Retry the calculation or contact support if it continues.",
+        );
+      });
     return () => {
       cancelled = true;
     };
@@ -257,6 +276,25 @@ export function MatchReviewDialog({
               <div className="flex justify-between rounded-lg border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground">
                 <span>Offer revision {offer.revision}</span>
                 <span>Expires {new Date(offer.expiresAt).toLocaleTimeString("en-ZA")}</span>
+              </div>
+            )}
+
+            {termsError && (
+              <div className="rounded-lg border border-danger/35 bg-danger/10 p-3 text-xs">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-foreground">The route is ready, but acceptance is unavailable</div>
+                    <p className="mt-1 text-muted-foreground">{termsError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setRouteAttempt((attempt) => attempt + 1)}
+                      className="mt-2 inline-flex items-center gap-1.5 font-bold uppercase text-signal"
+                    >
+                      <RefreshCw className="size-3.5" /> Retry terms
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

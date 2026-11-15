@@ -68,6 +68,7 @@ export function useDriverLocationSharing(tripIds: string[]) {
   const [error, setError] = useState("");
   const [lastSentAt, setLastSentAt] = useState<string | null>(null);
   const [accuracyM, setAccuracyM] = useState<number | null>(null);
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
   const lastSent = useRef(0);
   const stableIds = tripIds.slice().sort().join("|");
 
@@ -110,6 +111,7 @@ export function useDriverLocationSharing(tripIds: string[]) {
       timeout: 20_000,
     };
     const report = (fix: GeolocationPosition) => {
+      setPosition({ lat: fix.coords.latitude, lng: fix.coords.longitude });
       const current = Date.now();
       if (current - lastSent.current < 8_000) return;
       lastSent.current = current;
@@ -166,5 +168,5 @@ export function useDriverLocationSharing(tripIds: string[]) {
     };
   }, [enabled, stableIds]);
 
-  return { state, enabled, start, stop, error, lastSentAt, accuracyM };
+  return { state, enabled, start, stop, error, lastSentAt, accuracyM, position };
 }

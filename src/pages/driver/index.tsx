@@ -20,7 +20,7 @@ import {
   Radio,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
@@ -33,6 +33,11 @@ import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { useTamp } from "@/context/TampContext";
 import type { Load, Party, Trip, TruckPosting } from "@/types/domain";
 import { useDriverLocationSharing } from "@/hooks/useLiveTracking";
+import {
+  consumeExternalNavigationReturn,
+  openExternalNavigation,
+} from "@/lib/external-navigation";
+import { toast } from "sonner";
 
 interface Job {
   trip: Trip;
@@ -99,6 +104,7 @@ function DriverJobs() {
   const [declineTripId, setDeclineTripId] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
+  const leftForExternalNavigation = useRef(false);
 
   const openMap = (job: Job, navMode = false) => {
     setMapJob(job);
@@ -214,6 +220,28 @@ function DriverJobs() {
             : locationSharing.state === "requesting"
               ? "Finding GPS"
               : "GPS standby";
+
+  useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState === "hidden") {
+        leftForExternalNavigation.current = true;
+        return;
+      }
+      if (!leftForExternalNavigation.current) return;
+      const provider = consumeExternalNavigationReturn();
+      leftForExternalNavigation.current = false;
+      if (!provider) return;
+      toast.success(`Back in TAMP from ${provider === "waze" ? "Waze" : "Google Maps"}`, {
+        description: "Your active trip and TAMP location sharing are still running.",
+      });
+    };
+    document.addEventListener("visibilitychange", handleReturn);
+    window.addEventListener("focus", handleReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", handleReturn);
+      window.removeEventListener("focus", handleReturn);
+    };
+  }, []);
 
   const counts = {
     all: jobs.length,
@@ -456,9 +484,7 @@ function DriverJobs() {
           ]?.place;
           const goingToPickup = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP"].includes(live.trip.status);
           const navDestination = currentStop ?? (goingToPickup ? live.load.origin : live.load.destination);
-          const destinationCoords = `${navDestination.lat},${navDestination.lng}`;
-          const wazeUrl = `https://waze.com/ul?ll=${encodeURIComponent(destinationCoords)}&navigate=yes&utm_source=tamp`;
-          const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationCoords)}&travelmode=driving&dir_action=navigate&utm_source=tamp&utm_campaign=driver_navigation`;
+          const externalDestination = { lat: navDestination.lat, lng: navDestination.lng };
           return (
             <div
               className="fixed inset-0 z-50 flex flex-col bg-black/60 p-0 sm:p-6"
@@ -485,12 +511,12 @@ function DriverJobs() {
                   <div className="flex shrink-0 items-center gap-1.5">
                     {mapNav && (
                       <>
-                        <a href={wazeUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase text-foreground hover:border-signal">
+                        <button type="button" onClick={() => openExternalNavigation("waze", externalDestination, locationSharing.position)} className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase text-foreground hover:border-signal">
                           Waze
-                        </a>
-                        <a href={googleMapsUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase text-foreground hover:border-signal">
+                        </button>
+                        <button type="button" onClick={() => openExternalNavigation("google", externalDestination, locationSharing.position)} className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold uppercase text-foreground hover:border-signal">
                           Google
-                        </a>
+                        </button>
                       </>
                     )}
                     <button
