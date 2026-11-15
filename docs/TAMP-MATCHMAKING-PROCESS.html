@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TAMP Matchmaking Process</title>
+  <style>
+    :root { --ice-red:#b00000; --ink:#353846; --muted:#666a74; --line:#a7a7a7; --soft:#f5f5f6; --green:#18794e; --amber:#9a6700; }
+    * { box-sizing:border-box; }
+    @page { size: Letter; margin: 15mm 18mm 17mm; }
+    body { margin:0; background:#ececef; color:var(--ink); font-family:Arial, Helvetica, sans-serif; font-size:10.5pt; line-height:1.55; }
+    .document { width:216mm; margin:18px auto; background:white; box-shadow:0 8px 30px rgba(0,0,0,.12); }
+    .page { position:relative; min-height:279mm; padding:19mm 24mm 22mm; page-break-after:always; overflow:hidden; }
+    .page:last-child { page-break-after:auto; }
+    .page::before, .page::after { content:""; position:absolute; left:24mm; right:24mm; height:2.4mm; background:var(--ice-red); }
+    .page::before { top:13mm; } .page::after { bottom:10mm; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin:9mm 0 8mm; }
+    .ice-mark { display:flex; align-items:center; gap:10px; }
+    .ice-symbol { width:43px; height:43px; border:7px solid var(--ice-red); border-right-color:#171717; border-bottom-color:#171717; border-radius:50%; display:grid; place-items:center; color:#171717; font-size:25px; font-weight:900; line-height:1; }
+    .ice-name { color:#111; font-weight:900; font-size:14px; letter-spacing:.05em; line-height:1.05; }
+    .ice-name small { display:block; color:#555; font-size:6px; letter-spacing:.32em; margin-top:3px; }
+    .company { text-align:right; font-size:8.5pt; color:var(--muted); line-height:1.35; }
+    .company strong { display:block; color:var(--ink); font-size:10pt; }
+    .meta { font-size:7.5pt; line-height:1.35; margin-bottom:10mm; }
+    .subject { border-bottom:1px solid #777; padding-bottom:4mm; margin-bottom:7mm; font-size:11pt; }
+    h1 { margin:0 0 5mm; font-size:22pt; color:#20232c; line-height:1.15; }
+    h2 { margin:7mm 0 4mm; color:var(--ice-red); font-size:12pt; text-decoration:underline; }
+    h3 { margin:5mm 0 2mm; font-size:10.5pt; color:#272a33; }
+    p { margin:0 0 3mm; }
+    ul, ol { margin:2mm 0 4mm 5mm; padding-left:5mm; }
+    li { margin:1.2mm 0; }
+    .lead { font-size:11.5pt; line-height:1.65; }
+    .note { border-left:4px solid var(--ice-red); background:#f8f4f4; padding:3.5mm 4mm; margin:4mm 0; }
+    .callout { border:1px solid #d7d7db; border-radius:4px; background:var(--soft); padding:4mm; margin:4mm 0; }
+    .callout strong { color:var(--ice-red); }
+    table { width:100%; border-collapse:collapse; margin:3mm 0 5mm; font-size:8.8pt; page-break-inside:avoid; }
+    th { background:#ececef; color:#242730; text-align:left; font-weight:700; }
+    th, td { border:1px solid #c8c8cc; padding:2.2mm 2.5mm; vertical-align:top; }
+    .score th:first-child, .score td:first-child { width:38%; }
+    .score td:last-child { text-align:center; font-weight:bold; }
+    .flow { display:grid; gap:2.5mm; margin:4mm 0 5mm; }
+    .flow-step { display:grid; grid-template-columns:10mm 1fr; gap:3mm; align-items:start; border:1px solid #d2d2d6; border-radius:5px; padding:3mm; background:#fff; }
+    .flow-step .number { width:8mm; height:8mm; border-radius:50%; background:var(--ice-red); color:#fff; display:grid; place-items:center; font-weight:bold; font-size:8pt; }
+    .flow-step strong { display:block; margin-bottom:.5mm; }
+    .arrow { text-align:center; color:var(--ice-red); font-size:15pt; line-height:1; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:5mm; }
+    .role-card { border-top:3px solid var(--ice-red); background:var(--soft); padding:4mm; }
+    .status { display:inline-block; border-radius:99px; padding:1mm 2.5mm; font-size:7.5pt; font-weight:bold; text-transform:uppercase; }
+    .posted { background:#ececef; } .offered { background:#fff2c7; color:#775500; } .accepted { background:#dff3e8; color:var(--green); } .confirmed { background:#b00000; color:white; }
+    .formula { font-family:"Courier New",monospace; font-weight:bold; background:#24262d; color:#fff; border-radius:4px; padding:4mm; margin:3mm 0; }
+    .footer-label { position:absolute; bottom:13.5mm; right:24mm; font-size:6.5pt; color:#777; }
+    .page-number { position:absolute; bottom:13.5mm; left:24mm; font-size:6.5pt; color:#777; }
+    .check { color:var(--green); font-weight:bold; }
+    @media print {
+      body { background:white; }
+      .document { width:auto; margin:0; box-shadow:none; }
+      .page { min-height:auto; height:246mm; }
+    }
+  </style>
+</head>
+<body>
+<main class="document">
+  <section class="page">
+    <header class="header">
+      <div class="ice-mark"><div class="ice-symbol">&lt;</div><div class="ice-name">INDUSTRIAL<small>COMPUTING ENGINEERING</small></div></div>
+      <div class="company"><strong>ICE - Industrial Computing Engineering (Pty) Ltd</strong>1059, Francis Baard<br />Hatfield<br />+27(11) 933-3838<br />bdo@ice4po.co.za</div>
+    </header>
+    <div class="meta"><strong>Date:</strong> 15 November 2026<br /><strong>Version:</strong> 1.0<br /><strong>Class:</strong> Internal Document</div>
+    <div class="subject"><strong>Subject :</strong> TAMP Matchmaking Process — Cargo Owners and Truck Owners</div>
+    <h1>TAMP Matchmaking Process</h1>
+    <p class="lead">This document explains how TAMP identifies compatible loads and trucks, how either party may initiate an engagement, and how mutual acceptance becomes an operational trip.</p>
+    <div class="note"><strong>Core principle:</strong> A match is not a job assignment. TAMP requires agreement from both the Cargo Owner and Truck Owner before a trip is created.</div>
+    <h2>1. Purpose and Scope</h2>
+    <p>The matchmaking process connects a verified Cargo Owner's posted load with a verified Truck Owner's available vehicle. It covers:</p>
+    <ul>
+      <li>Mandatory eligibility and compliance checks;</li>
+      <li>Transparent scoring and ranking of eligible trucks;</li>
+      <li>Cargo Owner-initiated and Truck Owner-initiated engagements;</li>
+      <li>Mutual confirmation, reservation, dispatch and driver assignment; and</li>
+      <li>Notifications, expiry and audit records.</li>
+    </ul>
+    <h2>2. Parties</h2>
+    <div class="two-col">
+      <div class="role-card"><strong>Cargo Owner</strong><p>Creates the load, reviews matching trucks, accepts a suggested truck or approves a carrier request.</p></div>
+      <div class="role-card"><strong>Truck Owner</strong><p>Maintains available trucks, reviews matching loads, requests work or confirms a Cargo Owner's selection.</p></div>
+    </div>
+    <span class="page-number">Page 1 of 6</span><span class="footer-label">TAMP · Matchmaking Process · Internal</span>
+  </section>
+
+  <section class="page">
+    <header class="header"><div class="ice-mark"><div class="ice-symbol">&lt;</div><div class="ice-name">INDUSTRIAL<small>COMPUTING ENGINEERING</small></div></div><div class="company"><strong>ICE - Industrial Computing Engineering (Pty) Ltd</strong>TAMP Internal Process Document</div></header>
+    <h2>3. Preconditions for Matchmaking</h2>
+    <p>A load and truck enter matchmaking only when the following foundational conditions are satisfied.</p>
+    <table>
+      <thead><tr><th>Area</th><th>Cargo Owner / Load</th><th>Truck Owner / Vehicle</th></tr></thead>
+      <tbody>
+        <tr><td>Identity</td><td>Organisation verified and active.</td><td>Carrier organisation verified and active.</td></tr>
+        <tr><td>Operational state</td><td>Load is posted and not cancelled, completed or committed.</td><td>Truck status is Available and it is not reserved or on another trip.</td></tr>
+        <tr><td>Capacity</td><td>Weight and cargo requirements supplied.</td><td>Payload capacity is equal to or greater than load weight.</td></tr>
+        <tr><td>Equipment</td><td>Suitable body types are determined from cargo type.</td><td>Truck body type is suitable for the cargo.</td></tr>
+        <tr><td>Schedule</td><td>Pickup window and delivery time supplied.</td><td>Truck availability overlaps the pickup schedule.</td></tr>
+        <tr><td>Compliance</td><td>Required owner documents remain valid.</td><td>Vehicle licence, compliance documents and required insurance remain valid.</td></tr>
+        <tr><td>Location</td><td>Valid pickup coordinates selected.</td><td>Current truck location is valid and within the configured maximum radius.</td></tr>
+      </tbody>
+    </table>
+    <h2>4. Matching Engine Sequence</h2>
+    <div class="flow">
+      <div class="flow-step"><span class="number">1</span><div><strong>Load is published</strong>TAMP records the route, cargo, weight, body-type requirements and schedule.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">2</span><div><strong>Candidate trucks are collected</strong>Only currently available trucks are considered.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">3</span><div><strong>Hard filters are applied</strong>Capacity, body type, schedule, radius and compliance rules must pass. A hard-filter failure cannot be repaired by a high score.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">4</span><div><strong>Eligible trucks are scored</strong>Each qualifying truck receives a transparent score out of 100.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">5</span><div><strong>Suggestions are ranked</strong>Eligible matches meeting the configured minimum score are presented as actionable opportunities.</div></div>
+    </div>
+    <div class="callout"><strong>Default suggestion threshold:</strong> 70/100. The Platform Administrator may change this value in Matching Engine Controls. The same live configuration must be used on both Cargo Owner and Truck Owner screens.</div>
+    <span class="page-number">Page 2 of 6</span><span class="footer-label">TAMP · Matchmaking Process · Internal</span>
+  </section>
+
+  <section class="page">
+    <header class="header"><div class="ice-mark"><div class="ice-symbol">&lt;</div><div class="ice-name">INDUSTRIAL<small>COMPUTING ENGINEERING</small></div></div><div class="company"><strong>ICE - Industrial Computing Engineering (Pty) Ltd</strong>TAMP Internal Process Document</div></header>
+    <h2>5. Match Score</h2>
+    <p>The score ranks trucks that already passed every mandatory safeguard. The standard score has five components:</p>
+    <table class="score">
+      <thead><tr><th>Component</th><th>What it measures</th><th>Maximum</th></tr></thead>
+      <tbody>
+        <tr><td>Pickup proximity</td><td>Distance between the truck's current position and load collection point.</td><td>30</td></tr>
+        <tr><td>Capacity fit</td><td>Whether the truck can carry the load and how efficiently its payload is utilised.</td><td>25</td></tr>
+        <tr><td>Pickup timing</td><td>Overlap between truck availability and the pickup window.</td><td>20</td></tr>
+        <tr><td>Preferred lane</td><td>Alignment between the truck's saved lane/destination and the load route.</td><td>15</td></tr>
+        <tr><td>Carrier rating</td><td>The carrier's verified platform rating and operating history.</td><td>10</td></tr>
+        <tr><th colspan="2">Total</th><th>100</th></tr>
+      </tbody>
+    </table>
+    <div class="formula">MATCH SCORE = PROXIMITY + CAPACITY + TIMING + LANE + RATING</div>
+    <h3>Timing example</h3>
+    <p>If a truck is available from 06:00–10:00 and the pickup window is 09:00–13:00, the common time is 09:00–10:00: one hour.</p>
+    <div class="formula">TIMING POINTS = 20 × (OVERLAP HOURS ÷ PICKUP-WINDOW HOURS)<br />20 × (1 ÷ 4) = 5 TIMING POINTS</div>
+    <h3>Example shown in Fleet Register</h3>
+    <p>A truck may display a best matching load with a score of <strong>67.97/100</strong>. This means the truck passed the hard filters and this is its best current load, but it is <strong>2.03 points below</strong> the default automatic suggestion threshold of 70.</p>
+    <div class="note"><strong>Required user experience:</strong> The card must explain why it is not actionable. Example: “Score 67.97 — requires 70. Improve proximity, availability or preferred lane.”</div>
+    <h2>6. Match Visibility</h2>
+    <table>
+      <thead><tr><th>Result</th><th>System behaviour</th></tr></thead>
+      <tbody>
+        <tr><td>Hard filter failed</td><td>Not actionable. The failure reason should be visible to the authorised user.</td></tr>
+        <tr><td>Eligible but below threshold</td><td>May be shown as an informational best match, with the score gap explained.</td></tr>
+        <tr><td>Eligible and at/above threshold</td><td>Shown as an actionable suggestion to the relevant party.</td></tr>
+      </tbody>
+    </table>
+    <span class="page-number">Page 3 of 6</span><span class="footer-label">TAMP · Matchmaking Process · Internal</span>
+  </section>
+
+  <section class="page">
+    <header class="header"><div class="ice-mark"><div class="ice-symbol">&lt;</div><div class="ice-name">INDUSTRIAL<small>COMPUTING ENGINEERING</small></div></div><div class="company"><strong>ICE - Industrial Computing Engineering (Pty) Ltd</strong>TAMP Internal Process Document</div></header>
+    <h2>7. Process A — Cargo Owner Initiates</h2>
+    <div class="flow">
+      <div class="flow-step"><span class="number">1</span><div><strong>Cargo Owner posts the load</strong>Status becomes <span class="status posted">Posted</span>.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">2</span><div><strong>TAMP generates suggested trucks</strong>The Cargo Owner reviews score, route, vehicle, capacity, compliance and carrier information.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">3</span><div><strong>Cargo Owner selects “Accept Match”</strong>The selected truck is proposed to its owner. This does not yet create a trip.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">4</span><div><strong>Truck Owner reviews the proposal</strong>The proposal appears under Engagements → Awaiting Your Confirmation.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">5</span><div><strong>Truck Owner confirms or declines</strong>Confirming records the carrier's agreement to the same load, truck, schedule and rate revision.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">6</span><div><strong>Trip is created</strong>Status becomes <span class="status confirmed">Confirmed</span>. The truck is reserved and the trip moves to Dispatch.</div></div>
+    </div>
+    <h3>If the Truck Owner declines</h3>
+    <ul>
+      <li>The decline reason is recorded in the audit trail.</li>
+      <li>The load remains open if its schedule has not expired.</li>
+      <li>The Cargo Owner may review another eligible truck.</li>
+      <li>No trip or driver assignment is created.</li>
+    </ul>
+    <div class="note"><strong>Control:</strong> A Cargo Owner selecting a truck is an invitation to engage, not unilateral dispatch authority.</div>
+    <span class="page-number">Page 4 of 6</span><span class="footer-label">TAMP · Matchmaking Process · Internal</span>
+  </section>
+
+  <section class="page">
+    <header class="header"><div class="ice-mark"><div class="ice-symbol">&lt;</div><div class="ice-name">INDUSTRIAL<small>COMPUTING ENGINEERING</small></div></div><div class="company"><strong>ICE - Industrial Computing Engineering (Pty) Ltd</strong>TAMP Internal Process Document</div></header>
+    <h2>8. Process B — Truck Owner Initiates</h2>
+    <div class="flow">
+      <div class="flow-step"><span class="number">1</span><div><strong>Truck Owner keeps a truck available</strong>The current location, payload, body type, availability and preferred lane are maintained in Fleet Register.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">2</span><div><strong>TAMP displays matching loads</strong>Actionable opportunities meeting the configured minimum appear under Engagements → Job Opportunities.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">3</span><div><strong>Truck Owner selects “Request Job”</strong>An <span class="status offered">Offered</span> request is recorded and sent to the Cargo Owner. No trip exists yet.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">4</span><div><strong>Cargo Owner reviews the carrier request</strong>The Cargo Owner reviews the truck, score, compliance, rate and route, then approves or rejects it.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">5</span><div><strong>Truck Owner confirms the approved engagement</strong>The carrier confirms the final accepted revision so neither party is bound to changed terms without review.</div></div>
+      <div class="arrow">↓</div>
+      <div class="flow-step"><span class="number">6</span><div><strong>Trip is created</strong>The load and truck become committed and the job enters Dispatch.</div></div>
+    </div>
+    <h3>Request controls</h3>
+    <ul>
+      <li>A truck may request only while it remains Available.</li>
+      <li>Duplicate active requests for the same load and truck are prevented.</li>
+      <li>A request expires after the configured response period (currently designed as 24 hours).</li>
+      <li>The Truck Owner may withdraw a pending request before Cargo Owner approval.</li>
+      <li>Rejected or expired requests do not reserve the truck.</li>
+    </ul>
+    <div class="callout"><strong>Fleet Register improvement:</strong> “Best Matching Load” should provide View Match and Request Job actions when eligible, and a clear disabled explanation when below the live threshold.</div>
+    <span class="page-number">Page 5 of 6</span><span class="footer-label">TAMP · Matchmaking Process · Internal</span>
+  </section>
+
+  <section class="page">
+    <header class="header"><div class="ice-mark"><div class="ice-symbol">&lt;</div><div class="ice-name">INDUSTRIAL<small>COMPUTING ENGINEERING</small></div></div><div class="company"><strong>ICE - Industrial Computing Engineering (Pty) Ltd</strong>TAMP Internal Process Document</div></header>
+    <h2>9. Match and Trip Statuses</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Meaning</th><th>Next responsible party/action</th></tr></thead>
+      <tbody>
+        <tr><td><span class="status posted">Posted</span></td><td>Load is open for matching.</td><td>Either party may initiate an eligible engagement.</td></tr>
+        <tr><td>Suggested</td><td>System-generated candidate; no party has committed.</td><td>Cargo Owner may accept, or Truck Owner may request.</td></tr>
+        <tr><td><span class="status offered">Offered</span></td><td>Truck Owner requested the job.</td><td>Cargo Owner approves or rejects.</td></tr>
+        <tr><td><span class="status accepted">Accepted</span></td><td>One party accepted; final carrier confirmation is outstanding.</td><td>Truck Owner confirms the reviewed engagement.</td></tr>
+        <tr><td><span class="status confirmed">Confirmed</span></td><td>Both parties agreed. A trip exists.</td><td>Truck Owner assigns a verified driver.</td></tr>
+        <tr><td>Scheduled</td><td>Trip is ready for dispatch or awaiting driver acceptance.</td><td>Dispatcher and driver.</td></tr>
+        <tr><td>In Transit</td><td>Driver started and GPS/trip events are active.</td><td>Driver progresses the trip; both organisations monitor.</td></tr>
+        <tr><td>Delivered</td><td>Delivery and proof-of-delivery workflow completed.</td><td>Settlement, rating and closure.</td></tr>
+      </tbody>
+    </table>
+    <h2>10. Notifications and Audit</h2>
+    <ul>
+      <li>Cargo Owners receive notifications for new carrier requests, confirmations, declines and trip events belonging to their organisation.</li>
+      <li>Truck Owners receive notifications for accepted trucks, engagement approvals, expiring offers and driver responses belonging to their organisation.</li>
+      <li>Drivers receive only job offers and trips assigned to them.</li>
+      <li>Every request, acceptance, rejection, confirmation, withdrawal and expiry records the actor, organisation, date/time and relevant identifiers.</li>
+    </ul>
+    <h2>11. Acceptance Checklist</h2>
+    <table>
+      <tbody>
+        <tr><td class="check">✓</td><td>Both initiation paths are available and understandable.</td></tr>
+        <tr><td class="check">✓</td><td>No trip is created until both parties agree.</td></tr>
+        <tr><td class="check">✓</td><td>The same administrator-configured threshold is used on every screen.</td></tr>
+        <tr><td class="check">✓</td><td>Below-threshold and hard-filter failures show user-friendly reasons.</td></tr>
+        <tr><td class="check">✓</td><td>Confirmed work reserves the truck and moves to Dispatch.</td></tr>
+        <tr><td class="check">✓</td><td>Notifications and data remain restricted to the relevant organisation.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><strong>Summary:</strong> TAMP is a bilateral marketplace. The engine recommends; the Cargo Owner and Truck Owner decide; Dispatch begins only after mutual confirmation.</div>
+    <span class="page-number">Page 6 of 6</span><span class="footer-label">TAMP · Matchmaking Process · Internal</span>
+  </section>
+</main>
+</body>
+</html>

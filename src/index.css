@@ -146,6 +146,53 @@
   }
 }
 
+@keyframes route-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.route-page-enter {
+  animation: route-page-enter 180ms var(--ease-out-expo) both;
+  will-change: opacity, transform;
+}
+
+.route-change-indicator {
+  position: fixed;
+  z-index: 9998;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.route-change-indicator span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--signal);
+  transform: translateX(-100%);
+  transition: transform 360ms var(--ease-out-expo);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--signal) 70%, transparent);
+}
+
+.route-change-indicator--visible {
+  opacity: 1;
+}
+
+.route-change-indicator--visible span {
+  transform: translateX(0);
+}
+
 .route-loading-track {
   position: fixed;
   z-index: 9999;
@@ -283,6 +330,24 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  button:not(:disabled):active,
+  a:active {
+    filter: brightness(0.97);
   }
 
   input,

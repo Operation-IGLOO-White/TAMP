@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useLocation } from "react-router-dom";
 import { useTamp } from "@/context/TampContext";
 import { playNotificationSound } from "@/lib/notification-sound";
 import type { Role } from "@/types/domain";
@@ -166,7 +167,13 @@ export function Sidebar() {
   const nav = NAV_BY_ROLE[role];
   const counts = useSidebarCounts();
   const navigate = useNavigate();
+  const location = useLocation();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const activeGroup = nav.find((item) => item.children?.some((child) => navItemActive(child, location.pathname, location.search)));
+    if (activeGroup) setOpenGroups((current) => ({ ...current, [activeGroup.to]: true }));
+  }, [location.pathname, location.search, nav]);
 
   return (
     <aside
@@ -177,26 +184,35 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 p-2">
         {nav.map(({ to, label, icon: Icon, exact, children }) => children ? (
           <div key={to}>
+            {(() => {
+              const groupActive = children.some((child) => navItemActive(child, location.pathname, location.search));
+              const groupOpen = openGroups[to] ?? true;
+              return <>
             <button
               type="button"
               onClick={() => sidebarCollapsed
                 ? navigate({ to })
-                : setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))}
+                : setOpenGroups((current) => ({ ...current, [to]: !groupOpen }))}
               title={sidebarCollapsed ? label : undefined}
-              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-steel/50 hover:text-foreground ${sidebarCollapsed ? "justify-center" : ""}`}
+              aria-expanded={!sidebarCollapsed ? groupOpen : undefined}
+              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-[color,background-color,transform] duration-150 hover:bg-steel/50 hover:text-foreground active:scale-[0.99] ${groupActive ? "bg-steel/70 text-foreground" : "text-muted-foreground"} ${sidebarCollapsed ? "justify-center" : ""}`}
             >
               <Icon className="size-[18px] shrink-0" />
-              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} /></>}
+              {!sidebarCollapsed && <><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform duration-200 ${groupOpen ? "rotate-180" : ""}`} /></>}
             </button>
-            {(openGroups[to] ?? true) && !sidebarCollapsed && (
+            {!sidebarCollapsed && <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${groupOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+              <div className="min-h-0 overflow-hidden">
               <div className="relative ml-5 space-y-0.5 border-l border-border py-1 pl-3">
                 {children.map(({ to: childTo, label: childLabel, icon: ChildIcon, exact: childExact }) => (
-                  <Link key={childTo} to={childTo} activeOptions={{ exact: childExact ?? false }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-steel/40 hover:text-foreground" activeProps={{ className: "!text-foreground !bg-steel/60" }}>
+                  <Link key={childTo} to={childTo} activeOptions={{ exact: childExact ?? false }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-steel/40 hover:text-foreground active:translate-x-0.5" activeProps={{ className: "!text-foreground !bg-steel/60" }}>
                     <ChildIcon className="size-3.5" /><span className="min-w-0 flex-1 truncate">{childLabel}</span><NavCount count={counts[childTo] ?? 0} collapsed={false} />
                   </Link>
                 ))}
               </div>
-            )}
+              </div>
+            </div>}
+            </>;
+            })()}
           </div>
         ) : (
           <Link
@@ -204,7 +220,7 @@ export function Sidebar() {
             to={to}
             activeOptions={{ exact: exact ?? false }}
             title={sidebarCollapsed ? label : undefined}
-            className={`group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-steel/50 hover:text-foreground ${
+            className={`group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-steel/50 hover:text-foreground active:scale-[0.99] ${
               sidebarCollapsed ? "justify-center" : ""
             }`}
             activeProps={{
@@ -242,6 +258,7 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
   const { role } = useTamp();
   const counts = useSidebarCounts(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const location = useLocation();
 
   useEffect(() => {
     if (!open) return;
@@ -261,12 +278,12 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
         <nav className="space-y-0.5 pb-6">
           {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact, children }) => children ? (
             <div key={to}>
-              <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))} className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-muted-foreground">
-                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
+              <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))} className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition-colors ${children.some((child) => navItemActive(child, location.pathname, location.search)) ? "bg-steel/70 text-foreground" : "text-muted-foreground"}`}>
+                <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
               </button>
-              {(openGroups[to] ?? true) && <div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon }) => (
-                <Link key={childTo} to={childTo} onClick={onClose} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-steel/40"><ChildIcon className="size-4" /><span className="min-w-0 flex-1 truncate">{childLabel}</span><NavCount count={counts[childTo] ?? 0} collapsed={false} /></Link>
-              ))}</div>}
+              <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${(openGroups[to] ?? true) ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}><div className="min-h-0 overflow-hidden"><div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon, exact: childExact }) => (
+                <Link key={childTo} to={childTo} onClick={onClose} activeOptions={{ exact: childExact ?? false }} activeProps={{ className: "!bg-steel/60 !text-foreground" }} className="flex min-h-10 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-steel/40"><ChildIcon className="size-4" /><span className="min-w-0 flex-1 truncate">{childLabel}</span><NavCount count={counts[childTo] ?? 0} collapsed={false} /></Link>
+              ))}</div></div></div>
             </div>
           ) : (
             <Link
@@ -286,6 +303,17 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
       </aside>
     </div>
   );
+}
+
+function navItemActive(item: NavItem, pathname: string, search: string) {
+  const [targetPath, targetQuery = ""] = item.to.split("?");
+  const pathMatches = item.exact
+    ? pathname === targetPath
+    : pathname === targetPath || pathname.startsWith(`${targetPath}/`);
+  if (!pathMatches) return false;
+  if (!targetQuery) return item.exact ? !search : true;
+  const current = new URLSearchParams(search);
+  return [...new URLSearchParams(targetQuery)].every(([key, value]) => current.get(key) === value);
 }
 
 function useSidebarCounts(playSound = true): Record<string, number> {

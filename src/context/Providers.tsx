@@ -24,10 +24,32 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <TampProvider>
         {showNav && <TopNav />}
+        <RouteChangeIndicator />
         {children}
         <PwaManager />
         <AppToaster />
       </TampProvider>
     </QueryClientProvider>
+  );
+}
+
+/** Gives every navigation immediate feedback, including already-cached routes. */
+function RouteChangeIndicator() {
+  const { pathname, search } = useLocation();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(true);
+    const timer = window.setTimeout(() => setVisible(false), 420);
+    return () => window.clearTimeout(timer);
+  }, [pathname, search]);
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`route-change-indicator ${visible ? "route-change-indicator--visible" : ""}`}
+    >
+      <span />
+    </div>
   );
 }

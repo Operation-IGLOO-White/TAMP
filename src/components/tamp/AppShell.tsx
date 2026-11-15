@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 
 /**
@@ -6,10 +7,23 @@ import { Sidebar } from "./Sidebar";
  * column. Pages provide their own sticky header and body inside `children`.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const { pathname, search } = useLocation();
+  const contentRef = useRef<HTMLElement>(null);
+
+  // Each module starts at the top. Keeping the scroll inside the content rail
+  // avoids the browser briefly restoring the previous module's scroll offset.
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [pathname, search]);
+
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background">
       <Sidebar />
-      <section className="flex-1 min-w-0 overflow-y-auto">{children}</section>
+      <section ref={contentRef} className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
+        <div key={`${pathname}${search}`} className="route-page-enter min-h-full">
+          {children}
+        </div>
+      </section>
     </div>
   );
 }

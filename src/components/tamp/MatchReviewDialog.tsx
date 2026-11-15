@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, MapPin, Truck, X } from "lucide-react";
+import { AlertTriangle, Loader2, MapPin, RefreshCw, Truck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Map as MlMap, Marker as MlMarker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -38,6 +38,7 @@ export function MatchReviewDialog({
   const [error, setError] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [routeAttempt, setRouteAttempt] = useState(0);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -75,11 +76,18 @@ export function MatchReviewDialog({
           journey: prepared.routeQuote.journey,
         });
       })
-      .catch(() => !cancelled && setError("The route could not be calculated. Try again shortly."));
+      .catch(() =>
+        !cancelled &&
+        setError(
+          "The route service did not respond. Retry the calculation or contact support if it continues.",
+        ),
+      );
     return () => {
       cancelled = true;
     };
-  }, [load, truck]);
+  }, [load, truck, routeAttempt]);
+
+  const estimatedRoute = routes?.journey.provider === "estimated";
 
   useEffect(() => {
     if (!routes || !mapContainer.current) return;
@@ -194,8 +202,15 @@ export function MatchReviewDialog({
                   <AlertTriangle className="mx-auto mb-2 size-7 text-danger" />
                   <p className="text-sm font-semibold">{error}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Acceptance stays disabled until a route is available.
+                    No acceptance has been recorded. You can safely retry.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => setRouteAttempt((attempt) => attempt + 1)}
+                    className="mx-auto mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-signal px-4 text-xs font-black uppercase text-signal-foreground hover:brightness-105"
+                  >
+                    <RefreshCw className="size-4" /> Retry route
+                  </button>
                 </div>
               </div>
             )}
@@ -259,8 +274,18 @@ export function MatchReviewDialog({
             </div>
 
             <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-[11px] leading-relaxed text-muted-foreground">
-              OpenStreetMap restrictions are used where available. The driver remains responsible
-              for road signs, clearances, weight limits and safe operation.
+              {estimatedRoute ? (
+                <>
+                  <strong className="text-foreground">Estimated route:</strong> the live road-routing
+                  service is temporarily unavailable. Distance and duration use a conservative
+                  straight-line road estimate. Confirm the operational route before dispatch.
+                </>
+              ) : (
+                <>
+                  OpenStreetMap restrictions are used where available. The driver remains responsible
+                  for road signs, clearances, weight limits and safe operation.
+                </>
+              )}
             </div>
 
             <label className="flex cursor-pointer items-start gap-2 text-xs">
@@ -270,7 +295,10 @@ export function MatchReviewDialog({
                 onChange={(event) => setAgreed(event.target.checked)}
                 className="mt-0.5 size-4 accent-[var(--signal)]"
               />
-              <span>I agree to the displayed route, vehicle, cargo, pickup window and rate.</span>
+              <span>
+                I agree to the displayed {estimatedRoute ? "estimated " : ""}route, vehicle, cargo,
+                pickup window and rate.
+              </span>
             </label>
           </div>
         </div>
