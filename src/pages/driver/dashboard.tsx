@@ -1,6 +1,6 @@
 
 import { Link } from "@/lib/nav";
-import { BellRing, MapPin, PackageCheck, Star, TrendingUp, Truck } from "lucide-react";
+import { BellRing, Gauge, MapPin, PackageCheck, Star, TrendingUp, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { StatusChip } from "@/components/tamp/StatusChip";
@@ -8,6 +8,8 @@ import { TripRouteMap } from "@/components/tamp/TripRouteMap";
 import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
+import { fleetVehicleAsset } from "@/lib/fleet-assets";
+import type { TruckPosting } from "@/types/domain";
 
 function DriverDashboard() {
   const { me, trucks, matches, loads, trips, dispatches, disputes } = useTamp();
@@ -25,6 +27,7 @@ function DriverDashboard() {
   const active = jobs.filter((j) => isActiveTrip(j.trip.status));
   const done = jobs.filter((j) => !isActiveTrip(j.trip.status));
   const current = active[0];
+  const assignedTruck = current?.truck ?? trucks.find((truck) => truck.driverId === me.id) ?? trucks[0];
 
   const onTime = done.filter((j) => {
     const delivered = j.trip.events.find((e) => e.status === "DELIVERED")?.at;
@@ -53,6 +56,8 @@ function DriverDashboard() {
       />
 
       <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+        {assignedTruck && <DriverVehicleHero truck={assignedTruck} active={Boolean(current)} />}
+
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           <Stat label="Active jobs" value={String(active.length)} icon={<Truck className="size-4" />} />
@@ -207,3 +212,59 @@ function Meta({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export default DriverDashboard;
+
+function DriverVehicleHero({ truck, active }: { truck: TruckPosting; active: boolean }) {
+  return (
+    <section className="group relative isolate overflow-hidden rounded-[1.75rem] border border-signal/25 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 text-white shadow-[0_22px_55px_-28px_rgba(0,0,0,0.8)]">
+      <div className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-signal/25 blur-3xl transition-transform duration-700 group-hover:scale-125" />
+      <div className="pointer-events-none absolute -bottom-24 left-1/4 h-40 w-72 rounded-full bg-amber-400/10 blur-3xl" />
+      <div className="relative grid min-h-[210px] items-center gap-2 px-5 py-5 sm:grid-cols-[0.9fr_1.25fr] sm:px-7 sm:py-6">
+        <div className="z-10 min-w-0">
+          <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.24em] text-amber-300">
+            <span className={`size-2 rounded-full ${active ? "animate-pulse bg-emerald-400" : "bg-amber-400"}`} />
+            {active ? "Your active vehicle" : "Your assigned vehicle"}
+          </div>
+          <h2 className="mt-2 font-mono text-2xl font-black tracking-tight sm:text-3xl">
+            {truck.registration}
+          </h2>
+          <p className="mt-1 text-xs font-semibold text-white/60">
+            {truck.year ? `${truck.year} ` : ""}{truck.make ?? "TAMP Fleet"}{truck.model ? ` ${truck.model}` : ""}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <VehiclePill icon={<Truck className="size-3" />} text={truck.bodyType.replaceAll("_", " ")} />
+            <VehiclePill icon={<Gauge className="size-3" />} text={`${(truck.payloadCapacityKg / 1000).toFixed(0)}t capacity`} />
+            <VehiclePill
+              icon={<MapPin className="size-3" />}
+              text={truck.status.replaceAll("_", " ")}
+            />
+          </div>
+        </div>
+
+        <div className="relative -mb-3 mt-2 flex min-h-32 items-center justify-center sm:-mb-6 sm:mt-0 sm:min-h-44">
+          <div className="absolute left-1/2 top-1/2 h-28 w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-gradient-to-r from-transparent via-signal/35 to-transparent blur-2xl" />
+          <div className="absolute bottom-4 h-5 w-4/5 rounded-[50%] bg-black/70 blur-lg sm:bottom-5" />
+          <img
+            src={fleetVehicleAsset(truck)}
+            alt={`${truck.bodyType.replaceAll("_", " ").toLowerCase()} ${truck.registration}`}
+            className="relative z-10 h-36 w-full animate-[float_5s_ease-in-out_infinite] object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,0.55)] transition-transform duration-500 group-hover:scale-[1.04] sm:h-48"
+          />
+        </div>
+      </div>
+      <div className="relative flex items-center justify-between border-t border-white/10 bg-white/[0.035] px-5 py-2.5 text-[10px] sm:px-7">
+        <span className="font-semibold text-white/55">Assigned to you by your fleet</span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-bold uppercase tracking-wide text-amber-300">
+          {active ? "On duty" : "Fleet vehicle"}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function VehiclePill({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white/75 backdrop-blur-md">
+      <span className="text-amber-300">{icon}</span>
+      {text}
+    </span>
+  );
+}
