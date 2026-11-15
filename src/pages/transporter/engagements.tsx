@@ -31,6 +31,7 @@ type Opportunity = {
 
 function EngagementsPage() {
   const {
+    authParty,
     loads,
     matches,
     trips,
@@ -42,6 +43,7 @@ function EngagementsPage() {
     requestJob,
     withdrawRequest,
   } = useTamp();
+  const canManageMatches = authParty?.permissions?.includes("matches.manage") ?? false;
   const [review, setReview] = useState<{ opportunity: Opportunity; kind: "confirm" | "request" } | null>(null);
 
   const availableTrucks = useMemo(
@@ -137,6 +139,16 @@ function EngagementsPage() {
       <PageHeader title="Engagements" />
 
       <div className="mx-auto max-w-6xl space-y-10 p-4 sm:p-6 lg:p-8">
+        {!canManageMatches && (
+          <div className="rounded-xl border border-signal/40 bg-signal/10 p-4 text-sm">
+            <div className="font-bold">Engagements are currently read-only</div>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {authParty?.verification !== "VERIFIED"
+                ? "Your account must be verified before you can request, confirm, decline or withdraw work."
+                : "Your organisation role does not include match-management rights. Ask an organisation administrator or platform administrator to enable them."}
+            </p>
+          </div>
+        )}
         {/* Snapshot strip */}
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
           <StatTile label="To confirm" value={confirmable.length} tone="signal" />
@@ -168,8 +180,8 @@ function EngagementsPage() {
                   key={`${o.load.id}-${o.truck.id}`}
                   opp={o}
                   kind="confirm"
-                  onAct={() => setReview({ opportunity: o, kind: "confirm" })}
-                  onDecline={() => declineMatch(o.load.id, o.truck.id)}
+                  onAct={canManageMatches ? () => setReview({ opportunity: o, kind: "confirm" }) : undefined}
+                  onDecline={canManageMatches ? () => declineMatch(o.load.id, o.truck.id) : undefined}
                 />
               ))}
             </div>
@@ -189,7 +201,7 @@ function EngagementsPage() {
                   key={`${o.load.id}-${o.truck.id}`}
                   opp={o}
                   kind="requested"
-                  onWithdraw={() => withdrawRequest(o.load.id, o.truck.id)}
+                  onWithdraw={canManageMatches ? () => withdrawRequest(o.load.id, o.truck.id) : undefined}
                 />
               ))}
             </div>
@@ -215,7 +227,7 @@ function EngagementsPage() {
                   key={`${o.load.id}-${o.truck.id}`}
                   opp={o}
                   kind="request"
-                  onAct={() => setReview({ opportunity: o, kind: "request" })}
+                  onAct={canManageMatches ? () => setReview({ opportunity: o, kind: "request" }) : undefined}
                 />
               ))}
             </div>
@@ -306,9 +318,9 @@ function OpportunityCard({
 }: {
   opp: Opportunity;
   kind: "request" | "confirm" | "requested";
-  onAct?: () => void;
-  onDecline?: () => void;
-  onWithdraw?: () => void;
+  onAct?: (() => void) | undefined;
+  onDecline?: (() => void) | undefined;
+  onWithdraw?: (() => void) | undefined;
 }) {
   const { load, truck, operator, score } = opp;
   return (
@@ -379,16 +391,18 @@ function OpportunityCard({
         {kind === "requested" ? (
           <button
             onClick={onWithdraw}
-            className="flex-1 rounded-md border border-border py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-danger/10 hover:text-danger"
+            disabled={!onWithdraw}
+            className="flex-1 rounded-md border border-border py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Withdraw request
+            {onWithdraw ? "Withdraw request" : "Permission required"}
           </button>
         ) : (
           <button
             onClick={onAct}
-            className="flex-1 rounded-md bg-signal py-2 text-[10px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
+            disabled={!onAct}
+            className="flex-1 rounded-md bg-signal py-2 text-[10px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {kind === "confirm" ? "Confirm engagement" : "Request job"}
+            {!onAct ? "Permission required" : kind === "confirm" ? "Confirm engagement" : "Request job"}
           </button>
         )}
       </div>

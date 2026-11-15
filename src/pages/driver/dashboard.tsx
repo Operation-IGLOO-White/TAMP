@@ -1,18 +1,16 @@
 
-import { useEffect, useState } from "react";
 import { Link } from "@/lib/nav";
-import { ClipboardList, MapPin, PackageCheck, Star, TrendingUp, Truck } from "lucide-react";
+import { BellRing, MapPin, PackageCheck, Star, TrendingUp, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { TripRouteMap } from "@/components/tamp/TripRouteMap";
 import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
-import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 
 function DriverDashboard() {
-  const { me, trucks, matches, loads, trips, parties, disputes } = useTamp();
+  const { me, trucks, matches, loads, trips, dispatches, disputes } = useTamp();
 
   // Jobs for the trucks this driver is on (data is already scoped server-side).
   const jobs = trips
@@ -34,35 +32,9 @@ function DriverDashboard() {
   }).length;
   const onTimePct = done.length ? Math.round((onTime / done.length) * 100) : null;
 
-  // Open opportunities that this driver's available trucks match at 70+,
-  // scored server-side (src/fns/matching.ts).
-  const availableTrucks = trucks.filter((t) => t.status === "AVAILABLE");
-  const postedLoads = loads.filter((l) => l.status === "POSTED");
-  const postedLoadIds = postedLoads.map((l) => l.id).join(",");
-  const [opportunities, setOpportunities] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (availableTrucks.length === 0) {
-        setOpportunities(0);
-        return;
-      }
-      const hits = await Promise.all(
-        postedLoads.map(async (l) => {
-          const owner = parties.find((p) => p.id === l.ownerId);
-          if (!owner) return false;
-          const scored = await scoreLoadAgainstTrucks(l, availableTrucks, parties, owner);
-          return scored.some((m) => m.passed && m.score >= 70);
-        }),
-      );
-      if (!cancelled) setOpportunities(hits.filter(Boolean).length);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postedLoadIds, availableTrucks, parties]);
+  const pendingAssignments = dispatches.filter(
+    (assignment) => assignment.driverId === me.id && assignment.status === "OFFERED",
+  ).length;
 
   const first = me.contactName.split(" ")[0];
 
@@ -152,29 +124,29 @@ function DriverDashboard() {
           )}
         </Section>
 
-        {/* Opportunities + trucks */}
+        {/* Assignment inbox + assigned vehicles */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Link
-            to="/driver/engagements"
+            to="/driver"
             className="flex items-center justify-between rounded-2xl border border-border bg-graphite p-4 shadow-sm hover:border-signal/50"
           >
             <div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Job opportunities
+                Assignment inbox
               </div>
               <div className="mt-1 font-mono text-3xl font-black leading-none text-signal">
-                {opportunities}
+                {pendingAssignments}
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
-                Open loads your truck matches 70+
+                {pendingAssignments ? "New work waiting for your response" : "No assignments awaiting a response"}
               </div>
             </div>
-            <ClipboardList className="size-8 text-muted-foreground" />
+            <BellRing className="size-8 text-muted-foreground" />
           </Link>
 
           <div className="rounded-2xl border border-border bg-graphite p-4 shadow-sm">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Your trucks ({trucks.length})
+              Assigned vehicle{trucks.length === 1 ? "" : "s"} ({trucks.length})
             </div>
             <div className="mt-2 space-y-1.5">
               {trucks.length === 0 && (

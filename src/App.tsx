@@ -48,6 +48,7 @@ const Page42 = lazy(() => import("@/pages/owner/control-tower"));
 const Page43 = lazy(() => import("@/pages/admin/verification"));
 const Page44 = lazy(() => import("@/pages/admin/access-control"));
 const Page45 = lazy(() => import("@/pages/admin/matching"));
+const Page46 = lazy(() => import("@/pages/driver/dashboard"));
 
 export default function App() {
   return (
@@ -113,7 +114,15 @@ export default function App() {
             />
             <Route
               path="/driver/dashboard"
-              element={<Navigate to="/driver" replace />}
+              element={<Navigate to="/driver/home" replace />}
+            />
+            <Route
+              path="/driver/home"
+              element={
+                <RequireRole role={"DRIVER"}>
+                  <Page46 />
+                </RequireRole>
+              }
             />
             <Route
               path="/driver/engagements"
@@ -337,7 +346,7 @@ export default function App() {
             <Route
               path="/messages"
               element={
-                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "ADMIN"]}>
+                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}>
                   <Page37 />
                 </RequireRole>
               }

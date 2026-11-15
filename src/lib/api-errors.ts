@@ -22,7 +22,10 @@ export function userFacingError(error: unknown, fallback = "We could not complet
     return "Your account is still being reviewed. You can browse the system, but changes are available after verification.";
   if (/rejected verification|verification.*rejected/i.test(raw))
     return "Your verification needs attention. Review your profile documents or contact support.";
-  if (status === 403) return "You do not have permission to perform this action.";
+  if (/organisation role does not include|required permission|permission to perform/i.test(raw))
+    return "Your organisation role does not allow this change. Ask your organisation administrator or the platform administrator to review your access rights.";
+  if (status === 403)
+    return "Your organisation role does not allow this change. Ask an administrator to review your access rights.";
   if (status === 429) return "Too many attempts were made. Wait a moment and try again.";
   if (/password.*(?:at least|min(?:imum)?).*12|password.*12 characters/i.test(raw))
     return "Use a password of at least 12 characters with an uppercase letter, a lowercase letter and a number.";

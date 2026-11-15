@@ -20,7 +20,8 @@ import {
   Radio,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { IncidentDialog } from "@/components/tamp/IncidentDialog";
@@ -95,6 +96,9 @@ function DriverJobs() {
   const [mapNav, setMapNav] = useState(false);
   const [podJob, setPodJob] = useState<Job | null>(null);
   const [dispatchBusy, setDispatchBusy] = useState<string | null>(null);
+  const [declineTripId, setDeclineTripId] = useState<string | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const openMap = (job: Job, navMode = false) => {
     setMapJob(job);
@@ -171,16 +175,33 @@ function DriverJobs() {
     [trips, matches, trucks, loads, parties, me.id, me.role, latestDispatchByTrip],
   );
 
-  const respondToAssignment = async (tripId: string, action: "ACCEPT" | "DECLINE") => {
+  const respondToAssignment = async (
+    tripId: string,
+    action: "ACCEPT" | "DECLINE",
+    note?: string,
+  ) => {
     setDispatchBusy(tripId);
-    await updateDispatch(tripId, action);
+    const saved = await updateDispatch(tripId, action, note ? { note } : undefined);
     setDispatchBusy(null);
+    if (saved && action === "DECLINE") {
+      setDeclineTripId(null);
+      setDeclineReason("");
+    }
   };
   const activeTripIds = useMemo(
     () => jobs.filter((job) => isActiveTrip(job.trip.status)).map((job) => job.trip.id),
     [jobs],
   );
   const locationSharing = useDriverLocationSharing(activeTripIds);
+
+  useEffect(() => {
+    if (searchParams.get("navigate") !== "1" || mapJob) return;
+    const target = jobs.find((job) => isActiveTrip(job.trip.status));
+    if (!target) return;
+    setMapJob(target);
+    setMapNav(true);
+    setSearchParams({}, { replace: true });
+  }, [jobs, mapJob, searchParams, setSearchParams]);
   const gpsLabel =
     locationSharing.state === "sharing"
       ? "GPS live"
@@ -338,7 +359,10 @@ function DriverJobs() {
                   <button
                     type="button"
                     disabled={dispatchBusy === trip.id}
-                    onClick={() => void respondToAssignment(trip.id, "DECLINE")}
+                    onClick={() => {
+                      setDeclineTripId(trip.id);
+                      setDeclineReason("");
+                    }}
                     className="min-h-11 rounded-lg border border-danger/50 text-xs font-bold uppercase text-danger disabled:opacity-50"
                   >
                     Decline
@@ -520,6 +544,27 @@ function DriverJobs() {
             setPodJob(null);
           }}
         />
+      )}
+
+      {declineTripId && (
+        <div className="fixed inset-0 z-[70] grid place-items-end bg-black/55 p-3 sm:place-items-center" role="dialog" aria-modal="true" aria-labelledby="decline-title">
+          <div className="w-full max-w-md rounded-[1.75rem] border border-border bg-background p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="decline-title" className="text-lg font-black">Decline assignment</h2>
+                <p className="mt-1 text-xs text-muted-foreground">Your dispatcher will receive this reason and can assign another driver.</p>
+              </div>
+              <button type="button" onClick={() => setDeclineTripId(null)} className="grid size-9 place-items-center rounded-xl border border-border" aria-label="Close"><X className="size-4" /></button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {["Shift unavailable", "Too far from vehicle", "Safety concern", "Personal emergency"].map((reason) => (
+                <button key={reason} type="button" onClick={() => setDeclineReason(reason)} className={`min-h-11 rounded-xl border px-3 text-left text-xs font-bold transition-colors ${declineReason === reason ? "border-signal bg-signal/10 text-foreground" : "border-border text-muted-foreground"}`}>{reason}</button>
+              ))}
+            </div>
+            <textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} placeholder="Select a reason or type another reason…" rows={3} className="mt-3 w-full resize-none rounded-xl border border-border bg-graphite p-3 text-sm outline-none focus:border-signal" />
+            <button type="button" disabled={!declineReason.trim() || dispatchBusy === declineTripId} onClick={() => void respondToAssignment(declineTripId, "DECLINE", declineReason.trim())} className="mt-3 min-h-12 w-full rounded-xl bg-danger px-4 text-xs font-black uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm decline</button>
+          </div>
+        </div>
       )}
     </AppShell>
   );

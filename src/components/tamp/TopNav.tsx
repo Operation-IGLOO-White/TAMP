@@ -64,14 +64,16 @@ export function TopNav() {
     <>
       <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-graphite/95 px-4 shadow-sm backdrop-blur-xl md:px-5">
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setMobileMenu((open) => !open)}
-            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-steel/50 hover:text-foreground md:hidden"
-            aria-label="Open navigation"
-            aria-expanded={mobileMenu}
-          >
-            <Menu className="size-5" />
-          </button>
+          {role !== "DRIVER" && (
+            <button
+              onClick={() => setMobileMenu((open) => !open)}
+              className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-steel/50 hover:text-foreground md:hidden"
+              aria-label="Open navigation"
+              aria-expanded={mobileMenu}
+            >
+              <Menu className="size-5" />
+            </button>
+          )}
           <Link to={HOME_BY_ROLE[role]} className="transition-transform hover:scale-[1.02]">
             <BrandLogo className="h-12" priority />
           </Link>
@@ -84,7 +86,9 @@ export function TopNav() {
         </div>
       </nav>
       <VerificationNotice party={authParty} profilePath={PROFILE_BY_ROLE[role]} />
-      <MobileNavigation open={mobileMenu} onClose={() => setMobileMenu(false)} />
+      {role !== "DRIVER" && (
+        <MobileNavigation open={mobileMenu} onClose={() => setMobileMenu(false)} />
+      )}
     </>
   );
 }

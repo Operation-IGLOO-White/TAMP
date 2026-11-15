@@ -323,7 +323,13 @@ export default function MessagesPage() {
                 )}
                 <div ref={bottom} />
               </div>
-              <footer className="border-t border-border px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+              <footer
+                className={`border-t border-border px-3 pt-3 ${
+                  me.role === "DRIVER"
+                    ? "pb-[calc(6.75rem+env(safe-area-inset-bottom))] md:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                    : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                }`}
+              >
                 {attachment && (
                   <div className="mb-2 flex items-center justify-between rounded-md bg-steel/40 px-3 py-2 text-xs">
                     <span>{attachment.name}</span>

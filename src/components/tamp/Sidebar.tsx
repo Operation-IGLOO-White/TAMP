@@ -168,12 +168,17 @@ export function Sidebar() {
   const counts = useSidebarCounts();
   const navigate = useNavigate();
   const location = useLocation();
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    readOpenGroups(`tamp.sidebar.groups.desktop.${role}`),
+  );
 
-  useEffect(() => {
-    const activeGroup = nav.find((item) => item.children?.some((child) => navItemActive(child, location.pathname, location.search)));
-    if (activeGroup) setOpenGroups((current) => ({ ...current, [activeGroup.to]: true }));
-  }, [location.pathname, location.search, nav]);
+  const toggleGroup = (to: string, currentlyOpen: boolean) => {
+    setOpenGroups((current) => {
+      const next = { ...current, [to]: !currentlyOpen };
+      saveOpenGroups(`tamp.sidebar.groups.desktop.${role}`, next);
+      return next;
+    });
+  };
 
   return (
     <aside
@@ -192,7 +197,7 @@ export function Sidebar() {
               type="button"
               onClick={() => sidebarCollapsed
                 ? navigate({ to })
-                : setOpenGroups((current) => ({ ...current, [to]: !groupOpen }))}
+                : toggleGroup(to, groupOpen)}
               title={sidebarCollapsed ? label : undefined}
               aria-expanded={!sidebarCollapsed ? groupOpen : undefined}
               className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-[color,background-color,transform] duration-150 hover:bg-steel/50 hover:text-foreground active:scale-[0.99] ${groupActive ? "bg-steel/70 text-foreground" : "text-muted-foreground"} ${sidebarCollapsed ? "justify-center" : ""}`}
@@ -257,8 +262,18 @@ export function Sidebar() {
 export function MobileNavigation({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { role } = useTamp();
   const counts = useSidebarCounts(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    readOpenGroups(`tamp.sidebar.groups.mobile.${role}`),
+  );
   const location = useLocation();
+
+  const toggleGroup = (to: string) => {
+    setOpenGroups((current) => {
+      const next = { ...current, [to]: !(current[to] ?? true) };
+      saveOpenGroups(`tamp.sidebar.groups.mobile.${role}`, next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -278,7 +293,7 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
         <nav className="space-y-0.5 pb-6">
           {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact, children }) => children ? (
             <div key={to}>
-              <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [to]: !(current[to] ?? true) }))} className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition-colors ${children.some((child) => navItemActive(child, location.pathname, location.search)) ? "bg-steel/70 text-foreground" : "text-muted-foreground"}`}>
+              <button type="button" onClick={() => toggleGroup(to)} className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition-colors ${children.some((child) => navItemActive(child, location.pathname, location.search)) ? "bg-steel/70 text-foreground" : "text-muted-foreground"}`}>
                 <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
               </button>
               <div className={`grid transition-[grid-template-rows,opacity] duration-200 ${(openGroups[to] ?? true) ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}><div className="min-h-0 overflow-hidden"><div className="ml-5 space-y-1 border-l border-border pl-3">{children.map(({ to: childTo, label: childLabel, icon: ChildIcon, exact: childExact }) => (
@@ -303,6 +318,25 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
       </aside>
     </div>
   );
+}
+
+function readOpenGroups(key: string): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? (JSON.parse(stored) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveOpenGroups(key: string, groups: Record<string, boolean>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(groups));
+  } catch {
+    // Sidebar state persistence is optional when browser storage is unavailable.
+  }
 }
 
 function navItemActive(item: NavItem, pathname: string, search: string) {
