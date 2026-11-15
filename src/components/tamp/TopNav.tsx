@@ -30,6 +30,10 @@ import { BrandLogo } from "./BrandLogo";
 import { MobileNavigation } from "./Sidebar";
 import { switchOrganisation } from "@/fns/organisations";
 import type { Party } from "@/types/domain";
+import {
+  loadReadNotificationIds,
+  saveReadNotificationIds,
+} from "@/lib/notification-read-state";
 
 // Owner-driver merge: DRIVER folds into TRANSPORTER, so it isn't a separate
 // switchable workspace.
@@ -195,8 +199,17 @@ function NotificationsMenu() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [locallyRead, setLocallyRead] = useState<Set<string>>(() =>
+    loadReadNotificationIds(authParty?.id, authParty?.activeOrganisationId),
+  );
   const ref = useClickAway(() => setOpen(false));
   const seenServerNotifications = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    setLocallyRead(
+      loadReadNotificationIds(authParty?.id, authParty?.activeOrganisationId),
+    );
+  }, [authParty?.id, authParty?.activeOrganisationId]);
 
   // Poll the server notification store so the bell reflects domain events the
   // scheduler or other users trigger, not just this session's actions.
@@ -221,6 +234,13 @@ function NotificationsMenu() {
                 action: {
                   label: "View job",
                   onClick: () => {
+                    setLocallyRead((current) =>
+                      saveReadNotificationIds(
+                        authParty?.id,
+                        authParty?.activeOrganisationId,
+                        [...current, notification.id],
+                      ),
+                    );
                     queryClient.setQueryData<typeof server>(
                       ["notifications", authParty?.id, authParty?.activeOrganisationId],
                       (items) =>
@@ -245,7 +265,7 @@ function NotificationsMenu() {
     title: n.title,
     detail: n.detail,
     at: n.at,
-    unread: n.unread,
+    unread: n.unread && !locallyRead.has(n.id),
     tone: toClientTone(n.tone),
     subjectType: (n.subjectType ?? "LOAD") as Notification["subjectType"],
     subjectId: n.subjectId ?? "",
@@ -253,10 +273,22 @@ function NotificationsMenu() {
   const notifications = [
     ...maintenanceAlerts(maintenance, trucks, notificationsReadAt[role]),
     ...serverNotifs,
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  ]
+    .map((notification) => ({
+      ...notification,
+      unread: notification.unread && !locallyRead.has(notification.id),
+    }))
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const unread = notifications.filter((n) => n.unread).length;
 
   const markAll = () => {
+    setLocallyRead((current) =>
+      saveReadNotificationIds(
+        authParty?.id,
+        authParty?.activeOrganisationId,
+        [...current, ...notifications.map((notification) => notification.id)],
+      ),
+    );
     markNotificationsRead();
     void markServerRead().then(() =>
       queryClient.invalidateQueries({ queryKey: ["notifications"] }),
@@ -265,6 +297,13 @@ function NotificationsMenu() {
 
   const go = async (n: (typeof notifications)[number]) => {
     if (n.unread) {
+      setLocallyRead((current) =>
+        saveReadNotificationIds(
+          authParty?.id,
+          authParty?.activeOrganisationId,
+          [...current, n.id],
+        ),
+      );
       const isServerNotification = server.some((item) => item.id === n.id);
       if (isServerNotification) {
         queryClient.setQueryData<typeof server>(

@@ -14,6 +14,11 @@ import {
   toClientTone,
 } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
+import {
+  loadReadNotificationIds,
+  saveReadNotificationIds,
+} from "@/lib/notification-read-state";
+import { useState } from "react";
 
 const toneDot: Record<Notification["tone"], string> = {
   success: "bg-positive",
@@ -35,6 +40,9 @@ function NotificationsPage() {
   } = useTamp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [locallyRead, setLocallyRead] = useState<Set<string>>(() =>
+    loadReadNotificationIds(authParty?.id, authParty?.activeOrganisationId),
+  );
 
   // Server-side notification store (written on domain events).
   const { data: server = [] } = useQuery({
@@ -46,7 +54,7 @@ function NotificationsPage() {
     title: n.title,
     detail: n.detail,
     at: n.at,
-    unread: n.unread,
+    unread: n.unread && !locallyRead.has(n.id),
     tone: toClientTone(n.tone),
     subjectType: (n.subjectType ?? "LOAD") as Notification["subjectType"],
     subjectId: n.subjectId ?? "",
@@ -57,21 +65,40 @@ function NotificationsPage() {
   const derived = [
     ...maintenanceAlerts(maintenance, trucks, notificationsReadAt[role]),
   ];
-  const notifications = [...derived, ...serverNotifs].sort(
-    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
-  );
+  const notifications = [...derived, ...serverNotifs]
+    .map((notification) => ({
+      ...notification,
+      unread: notification.unread && !locallyRead.has(notification.id),
+    }))
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const unread = notifications.filter((n) => n.unread).length;
 
   const markAll = useMutation({
     mutationFn: () => markServerRead(),
-    onSuccess: () => {
+    onMutate: () => {
+      setLocallyRead((current) =>
+        saveReadNotificationIds(
+          authParty?.id,
+          authParty?.activeOrganisationId,
+          [...current, ...notifications.map((notification) => notification.id)],
+        ),
+      );
       markNotificationsRead(); // clear the derived-alert read timestamp too
+    },
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 
   const go = async (n: Notification) => {
     if (n.unread) {
+      setLocallyRead((current) =>
+        saveReadNotificationIds(
+          authParty?.id,
+          authParty?.activeOrganisationId,
+          [...current, n.id],
+        ),
+      );
       const isServerNotification = server.some((item) => item.id === n.id);
       if (isServerNotification) {
         queryClient.setQueryData<typeof server>(

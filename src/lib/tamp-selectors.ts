@@ -174,7 +174,9 @@ export function maintenanceAlerts(
         title: overdue ? "Maintenance overdue" : "Maintenance due soon",
         detail: `${m.title} for ${truck} — due ${new Date(m.dueDate).toLocaleDateString("en-ZA")}.`,
         at: m.dueDate,
-        unread: overdue ? true : new Date(m.createdAt).getTime() > readAt,
+        // Once acknowledged, an overdue task stays visible but must not return
+        // to the unread count on every render.
+        unread: (overdue ? due : new Date(m.createdAt).getTime()) > readAt,
         tone: overdue ? "warning" : "info",
         subjectType: "TRUCK",
         subjectId: m.truckId,
