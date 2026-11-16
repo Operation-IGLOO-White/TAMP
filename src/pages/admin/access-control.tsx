@@ -122,5 +122,5 @@ export default function AccessControl() {
 }
 
 function PermissionToggle({ enabled, disabled, label, onChange }: { enabled: boolean; disabled: boolean; label: string; onChange: (enabled: boolean) => void }) {
-  return <button type="button" role="switch" aria-checked={enabled} aria-label={label} disabled={disabled} onClick={() => onChange(!enabled)} className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? "bg-positive" : "bg-steel"} disabled:cursor-not-allowed disabled:opacity-50`}><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-0.5"}`}>{enabled && <Check className="m-1 size-3 text-positive" />}</span></button>;
+  return <button type="button" role="switch" aria-checked={enabled} aria-label={label} disabled={disabled} onClick={() => onChange(!enabled)} className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? "bg-signal" : "bg-steel"} disabled:cursor-not-allowed disabled:opacity-50`}><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-0.5"}`}>{enabled && <Check className="m-1 size-3 text-signal-foreground" />}</span></button>;
 }

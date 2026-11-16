@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 import { Link } from "@/lib/nav";
-import { BadgeCheck, FileText, Mail, Phone, Star } from "lucide-react";
+import { BadgeCheck, Download, ExternalLink, FileText, Mail, Phone, Star } from "lucide-react";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { Panel } from "@/components/tamp/StatCard";
@@ -13,7 +13,7 @@ import { ROLE_SHORT } from "@/lib/role-routes";
 import { formatMoney } from "@/lib/tamp-data";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
-import type { OnboardingUserType, Party } from "@/types/domain";
+import type { OnboardingUserType, Party, RegistrationDocument } from "@/types/domain";
 
 const USER_TYPE_LABEL: Record<OnboardingUserType, string> = {
   CARGO_OWNER: "Cargo Owner",
@@ -223,13 +223,39 @@ function PartyDetail() {
                     <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                       Documents ({onboarding.documents.length})
                     </div>
-                    <ul className="space-y-1">
-                      {onboarding.documents.map((d) => (
-                        <li key={d} className="flex items-center gap-1.5 text-foreground">
-                          <FileText className="size-3.5 shrink-0 text-muted-foreground" /> {d}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="space-y-2">
+                      {onboarding.documents.map((entry, index) => {
+                        const document: RegistrationDocument =
+                          typeof entry === "string"
+                            ? { label: entry, name: entry, url: "" }
+                            : entry;
+                        return (
+                          <div key={`${document.label}-${document.url || index}`} className="rounded-lg border border-border bg-background p-3">
+                            <div className="flex items-start gap-2">
+                              <FileText className="mt-0.5 size-4 shrink-0 text-signal" />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-bold text-foreground">{document.label}</p>
+                                <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{document.name}</p>
+                              </div>
+                            </div>
+                            {document.url ? (
+                              <div className="mt-2 grid grid-cols-2 gap-2">
+                                <a href={document.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-border text-[10px] font-bold uppercase hover:border-signal hover:bg-signal/5">
+                                  <ExternalLink className="size-3.5" /> Preview
+                                </a>
+                                <a href={`${document.url}?download=1`} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-signal text-[10px] font-bold uppercase text-signal-foreground">
+                                  <Download className="size-3.5" /> Download
+                                </a>
+                              </div>
+                            ) : (
+                              <p className="mt-2 rounded bg-signal/10 px-2 py-1.5 text-[10px] text-muted-foreground">
+                                Legacy submission: only the document name was retained.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

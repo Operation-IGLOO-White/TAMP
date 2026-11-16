@@ -438,6 +438,13 @@ export type TripStatus =
   | "CANCELLED";
 export type DisputeCategory = Dispute["category"];
 export type OnboardingUserType = "CARGO_OWNER" | "CARRIER" | "BROKER" | "DRIVER";
+export interface RegistrationDocument {
+  label: string;
+  name: string;
+  url: string;
+  contentType?: string;
+  size?: number;
+}
 export interface OnboardingData {
   userType: OnboardingUserType;
   business?:
@@ -460,7 +467,9 @@ export interface OnboardingData {
         truck?: { registration: string; bodyType: BodyType; capacityT: number };
       }
     | undefined;
-  documents?: string[];
+  // Older applications contain document labels only. New registrations store
+  // private upload references so administrators can review the actual files.
+  documents?: Array<string | RegistrationDocument>;
 }
 export interface Acceptance {
   id: string;

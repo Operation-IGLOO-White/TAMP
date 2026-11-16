@@ -17,8 +17,9 @@ import { AddressInput } from "@/components/tamp/AddressInput";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
 import { BrandLogo } from "@/components/tamp/BrandLogo";
 import { sendVerificationCode } from "@/fns/email";
-import { registerParty } from "@/fns/parties";
+import { attachRegistrationDocuments, registerParty } from "@/fns/parties";
 import { checkSaMobile } from "@/fns/phone";
+import { uploadFile } from "@/fns/upload";
 import { userFacingError } from "@/lib/api-errors";
 import type { BodyType, OnboardingUserType, Place } from "@/types/domain";
 
@@ -269,7 +270,8 @@ function Register() {
     capacityT: 34,
   });
   const [drvError, setDrvError] = useState("");
-  const [docs, setDocs] = useState<Record<string, string>>({});
+  const [docs, setDocs] = useState<Record<string, File>>({});
+  const [docError, setDocError] = useState("");
   const [addr, setAddr] = useState<Place | null>(null);
 
   const [codeInput, setCodeInput] = useState("");
@@ -282,6 +284,7 @@ function Register() {
   const [sendError, setSendError] = useState("");
   const [pwError, setPwError] = useState("");
   const [newId, setNewId] = useState("");
+  const [documentUploadWarning, setDocumentUploadWarning] = useState("");
 
   const isBusiness = userType === "CARRIER" || userType === "BROKER";
   const isDriver = userType === "DRIVER";
@@ -299,8 +302,8 @@ function Register() {
       ];
 
   const register = useMutation({
-    mutationFn: () =>
-      registerParty({
+    mutationFn: async () => {
+      const created = await registerParty({
         data: {
           userType: userType!,
           firstName: you.firstName.trim(),
@@ -338,12 +341,41 @@ function Register() {
                   : {}),
               }
             : undefined,
-          documents: Object.keys(docs).filter((k) => docs[k]),
+          // Labels are retained as a recovery record. Once the account is
+          // created, the email-verified session uploads and attaches each
+          // private file to the application below.
+          documents: Object.keys(docs).filter((key) => docs[key]),
         },
-      }),
-    onSuccess: ({ id }) => {
+      });
+      try {
+        const uploaded = await Promise.all(
+          Object.entries(docs).map(async ([label, file]) => {
+            const stored = await uploadFile(file, "KYC");
+            return {
+              label,
+              name: stored.filename,
+              url: stored.url,
+              contentType: stored.contentType,
+              size: stored.size,
+            };
+          }),
+        );
+        if (uploaded.length) await attachRegistrationDocuments(uploaded);
+        return { ...created, documentUploadWarning: "" };
+      } catch (error) {
+        return {
+          ...created,
+          documentUploadWarning: userFacingError(
+            error,
+            "Your account was created, but one or more documents could not be uploaded. Sign in and upload them from your profile.",
+          ),
+        };
+      }
+    },
+    onSuccess: ({ id, documentUploadWarning: warning }) => {
       queryClient.invalidateQueries({ queryKey: ["parties"] });
       setNewId(id);
+      setDocumentUploadWarning(warning);
       setStep("done");
     },
   });
@@ -438,6 +470,14 @@ function Register() {
 
   const submitVerification = (e: React.FormEvent) => {
     e.preventDefault();
+    const missing = docList.filter((label) => !docs[label]);
+    if (missing.length) {
+      setDocError(
+        `Upload ${missing.length} required document${missing.length === 1 ? "" : "s"} before continuing.`,
+      );
+      return;
+    }
+    setDocError("");
     toOtp();
   };
 
@@ -900,7 +940,8 @@ function Register() {
                 : userType === "CARRIER"
                   ? "Carriers must also supply vehicle, licence, roadworthy and insurance documents."
                   : "Brokers must also supply mandate and commission documents."}{" "}
-              Demo only — files aren't stored; filenames are recorded for the queue.
+              Files are securely stored and are only available to your account and authorised
+              TAMP verification administrators.
             </p>
             <div className="space-y-2">
               {docList.map((label) => (
@@ -908,10 +949,18 @@ function Register() {
                   key={label}
                   label={label}
                   value={docs[label]}
-                  onChange={(name) => setDocs((d) => ({ ...d, [label]: name }))}
+                  onChange={(file) =>
+                    setDocs((current) => {
+                      const next = { ...current };
+                      if (file) next[label] = file;
+                      else delete next[label];
+                      return next;
+                    })
+                  }
                 />
               ))}
             </div>
+            {docError && <p className="text-xs font-medium text-danger">{docError}</p>}
             <button type="submit" className={btnCls}>
               Continue to email verification
             </button>
@@ -1025,6 +1074,11 @@ function Register() {
                     : "Your account has been created and is pending verification."}{" "}
                 Reference <span className="font-mono text-foreground">{newId}</span>.
               </p>
+              {documentUploadWarning && (
+                <p className="mt-3 rounded-md border border-signal/40 bg-signal/10 px-3 py-2 text-left text-xs text-foreground">
+                  {documentUploadWarning}
+                </p>
+              )}
             </div>
             <Link to="/" className={btnCls + " inline-block"}>
               Back to sign in
@@ -1096,8 +1150,8 @@ function DocUpload({
   onChange,
 }: {
   label: string;
-  value: string | undefined;
-  onChange: (name: string) => void;
+  value: File | undefined;
+  onChange: (file: File | undefined) => void;
 }) {
   return (
     <label
@@ -1112,12 +1166,12 @@ function DocUpload({
       )}
       <span className="min-w-0 flex-1">
         <span className="block font-semibold">{label}</span>
-        {value && <span className="block truncate text-[10px] text-muted-foreground">{value}</span>}
+        {value && <span className="block truncate text-[10px] text-muted-foreground">{value.name}</span>}
       </span>
       <input
         type="file"
         accept=".pdf,.png,.jpg,.jpeg"
-        onChange={(e) => onChange(e.target.files?.[0]?.name ?? "")}
+        onChange={(e) => onChange(e.target.files?.[0])}
         className="hidden"
       />
     </label>

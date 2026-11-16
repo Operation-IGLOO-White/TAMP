@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
   Building2,
@@ -17,6 +17,7 @@ import { BODY_TYPE_LABEL } from "@/components/tamp/BodyTypeIcon";
 import { StatCard } from "@/components/tamp/StatCard";
 import { useTamp } from "@/context/TampContext";
 import { listOrganisations } from "@/fns/organisations";
+import { getOnboarding } from "@/fns/parties";
 import { assessFleetCompliance } from "@/lib/fleet-compliance";
 import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import { Link } from "@/lib/nav";
@@ -60,6 +61,20 @@ export default function VerificationInbox() {
   const [company, setCompany] = useState("ALL");
   const [status, setStatus] = useState<ReviewStatus | "ALL">("ALL");
   const [order, setOrder] = useState<"oldest" | "newest">("oldest");
+  const pendingApplicants = useMemo(
+    () => parties.filter((party) => party.verification !== "VERIFIED"),
+    [parties],
+  );
+  const onboardingQueries = useQueries({
+    queries: pendingApplicants.map((party) => ({
+      queryKey: ["onboarding", party.id],
+      queryFn: () => getOnboarding(party.id),
+    })),
+  });
+  const registrationApplications = pendingApplicants.map((party, index) => ({
+    party,
+    onboarding: onboardingQueries[index]?.data,
+  }));
 
   const items = useMemo<ReviewItem[]>(() => {
     const organisationItems: ReviewItem[] = organisations
@@ -132,8 +147,28 @@ export default function VerificationInbox() {
         detail: problems.join(" · ") || "A compliance document is approaching expiry.",
       }];
     });
-    return [...organisationItems, ...truckItems, ...driverItems, ...documentItems];
-  }, [organisations, parties, trucks, vehicles, maintenance]);
+    const registrationDocumentItems: ReviewItem[] = registrationApplications.flatMap(
+      ({ party, onboarding }) => {
+        const documents = onboarding?.documents ?? [];
+        if (!documents.length) return [];
+        const labels = documents.map((document) =>
+          typeof document === "string" ? document : document.label,
+        );
+        return [{
+          id: `registration-documents-${party.id}`,
+          kind: "documents" as const,
+          title: `${party.contactName} registration documents`,
+          subtitle: `${documents.length} uploaded file${documents.length === 1 ? "" : "s"}`,
+          company: party.companyName,
+          status: party.verification === "REJECTED" ? "REJECTED" as const : "PENDING" as const,
+          submittedAt: party.createdAt,
+          href: `/admin/users/${encodeURIComponent(party.id)}`,
+          detail: labels.join(" · "),
+        }];
+      },
+    );
+    return [...organisationItems, ...truckItems, ...driverItems, ...registrationDocumentItems, ...documentItems];
+  }, [organisations, parties, trucks, vehicles, maintenance, registrationApplications]);
 
   const companies = useMemo(() => [...new Set(items.map((item) => item.company))].sort(), [items]);
   const filtered = items
