@@ -12,8 +12,8 @@ import type { Party, Role } from "@/types/domain";
 
 const ROLE_TABS: { key: Role | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
-  { key: "FREIGHT_OWNER", label: "Cargo Owners" },
-  { key: "TRANSPORTER", label: "Truck Owners" },
+  { key: "FREIGHT_OWNER", label: "Freight Owners" },
+  { key: "TRANSPORTER", label: "Transporters" },
   { key: "DRIVER", label: "Drivers" },
   { key: "ADMIN", label: "Admins" },
 ];

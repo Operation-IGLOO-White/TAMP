@@ -145,8 +145,8 @@ function AdminDashboard() {
         {/* ② Marketplace health */}
         <Section title="Marketplace health">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
-            <Metric label="Active cargo owners" value={String(activeCargoOwners)} />
-            <Metric label="Active truck owners" value={String(activeTruckOwners)} />
+            <Metric label="Active freight owners" value={String(activeCargoOwners)} />
+            <Metric label="Active transporters" value={String(activeTruckOwners)} />
             <Metric label="Loads (7d)" value={String(loads7d)} />
             <Metric label="Trucks (7d)" value={String(trucks7d)} />
             <Metric label="Acceptance rate" value={`${acceptanceRate}%`} />

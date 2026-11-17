@@ -56,7 +56,7 @@ const ROLE_IDS: Record<OrganisationRole, string> = {
 };
 const ROLE_LABEL: Record<OrganisationRole, string> = {
   FREIGHT_OWNER: "Cargo organisation admin",
-  TRANSPORTER: "Carrier organisation admin",
+  TRANSPORTER: "Transporter organisation admin",
   DRIVER: "Driver",
   CARGO_OPERATOR: "Cargo operator",
   DISPATCHER: "Fleet dispatcher",
@@ -212,8 +212,8 @@ export default function OrganisationPage() {
               <div className="grid grid-cols-2 gap-2">
                 <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filter organisation type" className="h-9 rounded-md border border-border bg-background px-2 text-[11px] outline-none">
                   <option value="ALL">All types</option>
-                  <option value="CARGO_OWNER">Cargo owners</option>
-                  <option value="CARRIER">Carriers</option>
+                  <option value="CARGO_OWNER">Freight owners</option>
+                  <option value="CARRIER">Transporters</option>
                   <option value="BROKER">Brokers</option>
                   <option value="DRIVER_NETWORK">Driver networks</option>
                 </select>
@@ -270,8 +270,8 @@ export default function OrganisationPage() {
                 onChange={(event) => setNewType(event.target.value as typeof newType)}
                 className="mt-2 w-full rounded-md border border-border px-3 py-2 text-sm"
               >
-                <option value="CARGO_OWNER">Cargo owner</option>
-                <option value="CARRIER">Carrier</option>
+                <option value="CARGO_OWNER">Freight owner</option>
+                <option value="CARRIER">Transporter</option>
                 <option value="BROKER">Broker</option>
                 <option value="DRIVER_NETWORK">Driver network</option>
               </select>

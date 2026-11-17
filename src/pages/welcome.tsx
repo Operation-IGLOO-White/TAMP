@@ -11,8 +11,8 @@ import type { OnboardingUserType } from "@/types/domain";
 const PROVINCES = ["GP", "KZN", "WC", "EC", "FS", "NW", "LP", "MP", "NC"];
 
 const TYPES: { value: OnboardingUserType; label: string; blurb: string; icon: typeof Truck }[] = [
-  { value: "CARGO_OWNER", label: "Cargo Owner", blurb: "I have freight to move.", icon: Boxes },
-  { value: "CARRIER", label: "Carrier / Truck Owner", blurb: "I operate trucks.", icon: Truck },
+  { value: "CARGO_OWNER", label: "Freight Owner", blurb: "I have freight to move.", icon: Boxes },
+  { value: "CARRIER", label: "Transporter", blurb: "I operate trucks.", icon: Truck },
   { value: "DRIVER", label: "Truck Driver", blurb: "I drive — for myself or a fleet.", icon: IdCard },
   { value: "BROKER", label: "Broker / Business", blurb: "I broker loads between parties.", icon: Briefcase },
 ];

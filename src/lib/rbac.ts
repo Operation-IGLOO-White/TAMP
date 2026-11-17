@@ -50,7 +50,7 @@ export const ROLE_LABELS: Record<BuiltInRole, string> = {
   SYSTEM_SUPER_USER: "System Super User",
   ADMIN: "Platform Administrator",
   FREIGHT_OWNER: "Cargo Organisation Admin",
-  TRANSPORTER: "Carrier Organisation Admin",
+  TRANSPORTER: "Transporter Organisation Admin",
   DRIVER: "Driver",
   CARGO_OPERATOR: "Cargo Operator",
   DISPATCHER: "Fleet Dispatcher",

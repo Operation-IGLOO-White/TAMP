@@ -536,7 +536,7 @@ function TruckCard({
             </div>
             <div className="mt-1 text-[10px] text-muted-foreground">
               Pick-up {new Date(best.load.pickupWindow.from).toLocaleDateString("en-ZA")} · the
-              cargo owner accepts your truck to engage
+              freight owner accepts your truck to engage
             </div>
           </div>
         ) : (

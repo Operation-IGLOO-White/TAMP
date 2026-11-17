@@ -161,7 +161,7 @@ function EngagementsPage() {
             <p className="text-sm font-semibold text-foreground">You're all caught up</p>
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
               No confirmations, requests or open jobs matching your trucks right now. New loads
-              appear here the moment cargo owners post them.
+              appear here the moment freight owners post them.
             </p>
           </div>
         )}
@@ -171,7 +171,7 @@ function EngagementsPage() {
             <SectionHeader
               title="Awaiting your confirmation"
               count={confirmable.length}
-              hint="A cargo owner picked your truck"
+              hint="A freight owner picked your truck"
               accent
             />
             <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
@@ -193,7 +193,7 @@ function EngagementsPage() {
             <SectionHeader
               title="Requested — awaiting approval"
               count={requested.length}
-              hint="Sent to the cargo owner"
+              hint="Sent to the freight owner"
             />
             <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
               {requested.map((o) => (
@@ -370,7 +370,7 @@ function OpportunityCard({
 
       {kind === "requested" ? (
         <p className="px-4 text-[10px] leading-snug text-muted-foreground">
-          Request sent to the cargo owner. You'll get the job once they approve it.
+          Request sent to the freight owner. You'll get the job once they approve it.
         </p>
       ) : (
         <p className="px-4 text-[9px] leading-snug text-muted-foreground">
@@ -540,8 +540,8 @@ export function EngagementCard({
 
       {onRate && (
         <RatingBox
-          title="Rate the cargo owner"
-          receivedTitle="Cargo owner rated you"
+          title="Rate the freight owner"
+          receivedTitle="Freight owner rated you"
           myRating={myRating}
           receivedRating={receivedRating}
           onRate={onRate}

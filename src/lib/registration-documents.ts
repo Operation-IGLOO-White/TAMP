@@ -9,7 +9,6 @@ export const BASE_REGISTRATION_DOCUMENTS = [
 ] as const;
 
 export const CARRIER_REGISTRATION_DOCUMENTS = [
-  "Vehicle registration",
   "Operating licence",
   "Roadworthy certificate",
   "Insurance certificate",
@@ -46,7 +45,10 @@ export function registrationDocumentLabels(
     );
   }
   if (userType === "CARRIER") {
-    return [...BASE_REGISTRATION_DOCUMENTS, ...CARRIER_REGISTRATION_DOCUMENTS];
+    return [
+      ...BASE_REGISTRATION_DOCUMENTS.filter((label) => label !== "Transport / insurance"),
+      ...CARRIER_REGISTRATION_DOCUMENTS,
+    ];
   }
   if (userType === "BROKER") {
     return [...BASE_REGISTRATION_DOCUMENTS, ...BROKER_REGISTRATION_DOCUMENTS];

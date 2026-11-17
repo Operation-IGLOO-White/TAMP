@@ -16,8 +16,8 @@ import { useTamp } from "@/context/TampContext";
 import type { OnboardingUserType, Party, RegistrationDocument } from "@/types/domain";
 
 const USER_TYPE_LABEL: Record<OnboardingUserType, string> = {
-  CARGO_OWNER: "Cargo Owner",
-  CARRIER: "Carrier / Truck Owner",
+  CARGO_OWNER: "Freight Owner",
+  CARRIER: "Transporter",
   BROKER: "Broker / Business",
   DRIVER: "Truck Driver",
 };

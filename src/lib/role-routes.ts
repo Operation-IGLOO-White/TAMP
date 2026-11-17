@@ -22,15 +22,15 @@ export const PROFILE_BY_ROLE: Record<
 
 // User-facing role names.
 export const ROLE_LABEL: Record<Role, string> = {
-  FREIGHT_OWNER: "CARGO OWNER",
-  TRANSPORTER: "TRUCK OWNER",
+  FREIGHT_OWNER: "FREIGHT OWNER",
+  TRANSPORTER: "TRANSPORTER",
   DRIVER: "TRUCK DRIVER",
   ADMIN: "SUPER ADMIN",
 };
 
 export const ROLE_SHORT: Record<Role, string> = {
-  FREIGHT_OWNER: "Cargo Owner",
-  TRANSPORTER: "Truck Owner",
+  FREIGHT_OWNER: "Freight Owner",
+  TRANSPORTER: "Transporter",
   DRIVER: "Truck Driver",
   ADMIN: "Super Admin",
 };

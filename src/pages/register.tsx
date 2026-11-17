@@ -179,13 +179,13 @@ const USER_TYPES: {
 }[] = [
   {
     value: "CARGO_OWNER",
-    label: "Cargo Owner",
+    label: "Freight Owner",
     blurb: "I have freight to move.",
     icon: Boxes,
   },
   {
     value: "CARRIER",
-    label: "Carrier / Truck Owner",
+    label: "Transporter",
     blurb: "I operate trucks and haul freight.",
     icon: Truck,
   },
@@ -490,7 +490,7 @@ function Register() {
         </h1>
         <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
           {userType === null
-            ? "Choose how you'll use TAMP. Cargo owners get moving in minutes; carriers and brokers complete a short business verification."
+            ? "Choose how you'll use TAMP. Freight owners get moving in minutes; transporters and brokers complete a short business verification."
             : "Complete each step. Your account is created in a pending state and an administrator verifies it before you can transact."}
         </p>
         {userType !== null && (
@@ -899,7 +899,7 @@ function Register() {
                   ? "Drivers must supply ID, licence, PrDP and their vehicle documents (licence disc, roadworthy and insurance) for a background check."
                   : "Drivers must supply ID, licence and a valid PrDP for a background check."
                 : userType === "CARRIER"
-                  ? "Carriers must also supply vehicle, licence, roadworthy and insurance documents."
+                  ? "Transporters must also supply an operating licence, roadworthy certificate and insurance certificate."
                   : "Brokers must also supply mandate and commission documents."}{" "}
               Files are securely stored and are only available to your account and authorised
               TAMP verification administrators.
