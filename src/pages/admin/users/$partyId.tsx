@@ -80,6 +80,12 @@ function PartyDetail() {
   const activity = audit
     .filter((e) => e.actorId === party.id || e.subjectId === party.id)
     .slice(0, 8);
+  const registrationDocuments: RegistrationDocument[] = (onboarding?.documents ?? []).map(
+    (entry) =>
+      typeof entry === "string"
+        ? { label: entry, name: entry, url: "" }
+        : entry,
+  );
 
   return (
     <AppShell>
@@ -218,46 +224,6 @@ function PartyDetail() {
                   </>
                 )}
 
-                {onboarding.documents && onboarding.documents.length > 0 && (
-                  <div>
-                    <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                      Documents ({onboarding.documents.length})
-                    </div>
-                    <div className="space-y-2">
-                      {onboarding.documents.map((entry, index) => {
-                        const document: RegistrationDocument =
-                          typeof entry === "string"
-                            ? { label: entry, name: entry, url: "" }
-                            : entry;
-                        return (
-                          <div key={`${document.label}-${document.url || index}`} className="rounded-lg border border-border bg-background p-3">
-                            <div className="flex items-start gap-2">
-                              <FileText className="mt-0.5 size-4 shrink-0 text-signal" />
-                              <div className="min-w-0 flex-1">
-                                <p className="font-bold text-foreground">{document.label}</p>
-                                <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{document.name}</p>
-                              </div>
-                            </div>
-                            {document.url ? (
-                              <div className="mt-2 grid grid-cols-2 gap-2">
-                                <a href={document.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-border text-[10px] font-bold uppercase hover:border-signal hover:bg-signal/5">
-                                  <ExternalLink className="size-3.5" /> Preview
-                                </a>
-                                <a href={`${document.url}?download=1`} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-signal text-[10px] font-bold uppercase text-signal-foreground">
-                                  <Download className="size-3.5" /> Download
-                                </a>
-                              </div>
-                            ) : (
-                              <p className="mt-2 rounded bg-signal/10 px-2 py-1.5 text-[10px] text-muted-foreground">
-                                Legacy submission: only the document name was retained.
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             </Panel>
           )}
@@ -286,6 +252,9 @@ function PartyDetail() {
 
         {/* Related entities + activity */}
         <div className="space-y-6">
+          {registrationDocuments.length > 0 && (
+            <RegistrationDocumentsTable documents={registrationDocuments} />
+          )}
           {ownedLoads.length > 0 && (
             <Panel title={`Loads posted (${ownedLoads.length})`}>
               <div className="divide-y divide-border">
@@ -396,6 +365,80 @@ function AppRow({ label, value, danger }: { label: string; value: string; danger
       </span>
     </div>
   );
+}
+
+function RegistrationDocumentsTable({ documents }: { documents: RegistrationDocument[] }) {
+  return (
+    <Panel title={`Registration documents (${documents.length})`}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-xs">
+          <thead>
+            <tr className="border-b border-border bg-steel/30 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+              <th className="px-4 py-3">Document</th>
+              <th className="px-3 py-3">File name</th>
+              <th className="px-3 py-3">Format</th>
+              <th className="px-3 py-3 text-right">Size</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {documents.map((document, index) => (
+              <tr key={`${document.label}-${document.url || index}`} className="hover:bg-steel/20">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-signal/10 text-signal">
+                      <FileText className="size-4" />
+                    </span>
+                    <span className="font-bold text-foreground">{document.label}</span>
+                  </div>
+                </td>
+                <td className="max-w-[240px] px-3 py-3">
+                  <span className="block truncate text-muted-foreground" title={document.name}>{document.name}</span>
+                </td>
+                <td className="px-3 py-3 font-mono text-[10px] uppercase text-muted-foreground">
+                  {document.contentType?.split("/").pop() || fileExtension(document.name) || "—"}
+                </td>
+                <td className="px-3 py-3 text-right font-mono text-[10px] text-muted-foreground">
+                  {formatFileSize(document.size)}
+                </td>
+                <td className="px-4 py-3">
+                  {document.url ? (
+                    <div className="flex justify-end gap-2">
+                      <a href={document.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border px-3 text-[10px] font-bold uppercase hover:border-signal hover:bg-signal/5">
+                        <ExternalLink className="size-3.5" /> View
+                      </a>
+                      <a href={`${document.url}?download=1`} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-signal px-3 text-[10px] font-bold uppercase text-signal-foreground hover:brightness-95">
+                        <Download className="size-3.5" /> Download
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="block text-right text-[10px] font-semibold text-danger">File not stored</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {documents.some((document) => !document.url) && (
+        <p className="border-t border-border bg-signal/5 px-4 py-3 text-[10px] text-muted-foreground">
+          Some older applications retained document names only. Those applicants must upload the files again before approval.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+function fileExtension(name: string) {
+  const extension = name.split(".").pop();
+  return extension && extension !== name ? extension : "";
+}
+
+function formatFileSize(size?: number) {
+  if (!size) return "—";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default PartyDetail;
