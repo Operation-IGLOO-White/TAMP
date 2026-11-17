@@ -428,7 +428,7 @@ function SecurityTab({ me }: { me: Party }) {
 
   const submit = async () => {
     setError("");
-    if (next.length < 6) return setError("Use a password of at least 6 characters.");
+    if (next.length < 8) return setError("Use a password of at least 8 characters.");
     if (next !== confirm) return setError("New passwords don't match.");
     setBusy(true);
     try {

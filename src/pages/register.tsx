@@ -88,7 +88,7 @@ interface PwStrength {
 }
 function passwordStrength(pw: string): PwStrength {
   const checks = {
-    length: pw.length >= 12,
+    length: pw.length >= 8,
     lower: /[a-z]/.test(pw),
     upper: /[A-Z]/.test(pw),
     digit: /\d/.test(pw),
@@ -96,7 +96,7 @@ function passwordStrength(pw: string): PwStrength {
   };
   let score = Object.values(checks).filter(Boolean).length;
   // Very short passwords can never score well.
-  if (pw.length < 12) score = Math.min(score, 1);
+  if (pw.length < 8) score = Math.min(score, 1);
   score = Math.max(0, score - 1); // map 0..5 checks → 0..4
   const meta: { label: string; tone: string }[] = [
     { label: "Too weak", tone: "bg-danger" },
@@ -106,7 +106,7 @@ function passwordStrength(pw: string): PwStrength {
     { label: "Strong", tone: "bg-positive" },
   ];
   const hints: string[] = [];
-  if (!checks.length) hints.push("12+ characters");
+  if (!checks.length) hints.push("8+ characters");
   if (!checks.upper) hints.push("an uppercase letter");
   if (!checks.digit) hints.push("a number");
   if (!checks.symbol) hints.push("a symbol");
@@ -115,7 +115,7 @@ function passwordStrength(pw: string): PwStrength {
 
 function validPassword(password: string) {
   return (
-    password.length >= 12 &&
+    password.length >= 8 &&
     /[a-z]/.test(password) &&
     /[A-Z]/.test(password) &&
     /\d/.test(password)
@@ -123,7 +123,7 @@ function validPassword(password: string) {
 }
 
 const PASSWORD_HELP =
-  "Use at least 12 characters, including an uppercase letter, a lowercase letter and a number.";
+  "Use at least 8 characters, including an uppercase letter, a lowercase letter and a number.";
 
 function PasswordMeter({ password }: { password: string }) {
   if (!password) return null;

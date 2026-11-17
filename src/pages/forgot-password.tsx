@@ -41,7 +41,7 @@ function ForgotPassword() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (password.length < 12) return setError("Use a password of at least 12 characters.");
+    if (password.length < 8) return setError("Use a password of at least 8 characters.");
     if (password !== confirm) return setError("Passwords don't match.");
     setBusy(true);
     try {
