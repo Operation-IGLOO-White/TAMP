@@ -21,41 +21,11 @@ import { attachRegistrationDocuments, registerParty } from "@/fns/parties";
 import { checkSaMobile } from "@/fns/phone";
 import { uploadFile } from "@/fns/upload";
 import { userFacingError } from "@/lib/api-errors";
+import { registrationDocumentLabels } from "@/lib/registration-documents";
 import type { BodyType, OnboardingUserType, Place } from "@/types/domain";
 
 const PROVINCES = ["GP", "KZN", "WC", "EC", "FS", "NW", "LP", "MP", "NC"];
 const BUSINESS_TYPES = ["Pty Ltd", "Close Corporation", "Sole Proprietor", "Partnership", "Other"];
-
-// Verification documents (BRS D1 §7.1 / step 03).
-const BASE_DOCS = [
-  "CIPC registration",
-  "Tax clearance",
-  "Proof of address",
-  "Bank confirmation",
-  "Transport / insurance",
-];
-const CARRIER_DOCS = [
-  "Vehicle registration",
-  "Operating licence",
-  "Roadworthy certificate",
-  "Insurance certificate",
-];
-const BROKER_DOCS = ["Broker mandate", "Commission / FSP agreement"];
-// Individual truck-driver documents (Uber/Bolt-style driver verification).
-const DRIVER_DOCS = [
-  "South African ID / passport",
-  "Driver's licence (front & back)",
-  "Professional Driving Permit (PrDP)",
-  "Proof of address",
-  "Profile photo",
-];
-// Vehicle verification — only an owner-operator supplies these (a fleet driver's
-// vehicle is verified by the fleet).
-const DRIVER_VEHICLE_DOCS = [
-  "Vehicle licence disc (registration)",
-  "Roadworthy certificate",
-  "Vehicle insurance certificate",
-];
 
 // Truck categories a driver can operate — the "what do you drive?" step,
 // modelled on how Uber/Bolt let a driver pick their vehicle class.
@@ -290,16 +260,7 @@ function Register() {
   const isDriver = userType === "DRIVER";
   const needsReview = isBusiness || isDriver;
   const lastDataStep: Step = needsReview ? "verification" : "you";
-  const docList = isDriver
-    ? DRIVER_DOCS.flatMap((d) =>
-        // Slot the vehicle docs in before proof of address, for owner-operators.
-        d === "Proof of address" && drv.workType === "OWNER" ? [...DRIVER_VEHICLE_DOCS, d] : [d],
-      )
-    : [
-        ...BASE_DOCS,
-        ...(userType === "CARRIER" ? CARRIER_DOCS : []),
-        ...(userType === "BROKER" ? BROKER_DOCS : []),
-      ];
+  const docList = userType ? registrationDocumentLabels(userType, drv.workType) : [];
 
   const register = useMutation({
     mutationFn: async () => {

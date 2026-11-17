@@ -1,6 +1,7 @@
 
 import { useNavigate } from "@/lib/nav";
-import { BadgeCheck, Camera, Lock, LogOut, Star, User } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BadgeCheck, Camera, CheckCircle2, ExternalLink, FileText, Lock, LogOut, Star, UploadCloud, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   changePassword as changePasswordFn,
@@ -8,11 +9,12 @@ import {
   logoutOtherSessions,
   requestEmailChange,
 } from "@/fns/auth";
-import { uploadKycDocument } from "@/fns/parties";
+import { attachRegistrationDocuments, getOnboarding, uploadKycDocument } from "@/fns/parties";
 import { uploadFile } from "@/fns/upload";
+import { onboardingDocumentLabels } from "@/lib/registration-documents";
 import { ROLE_SHORT } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
-import type { Party } from "@/types/domain";
+import type { OnboardingData, Party, RegistrationDocument } from "@/types/domain";
 import { Avatar } from "./Avatar";
 import { PasswordInput } from "./PasswordInput";
 
@@ -567,6 +569,10 @@ function SecurityTab({ me }: { me: Party }) {
 // ── Verification tab ─────────────────────────────────────────
 function VerificationTab({ me, role }: { me: Party; role: Party["role"] }) {
   const { refreshAuth } = useTamp();
+  const onboarding = useQuery({
+    queryKey: ["onboarding", me.id],
+    queryFn: () => getOnboarding(me.id),
+  });
   const kycRef = useRef<HTMLInputElement>(null);
   const [uploadingKyc, setUploadingKyc] = useState(false);
   const [kycError, setKycError] = useState<string | null>(null);
@@ -621,11 +627,18 @@ function VerificationTab({ me, role }: { me: Party; role: Party["role"] }) {
           />
         </dl>
 
+        {onboarding.data && onboardingDocumentLabels(onboarding.data).length > 0 && (
+          <RegistrationDocumentReupload
+            partyId={me.id}
+            onboarding={onboarding.data}
+          />
+        )}
+
         {/* KYC document upload */}
         <div className="rounded-xl border border-border p-4">
           <div className="mb-1 text-sm font-bold">KYC document</div>
           <p className="mb-3 text-[11px] text-muted-foreground">
-            Upload your registration / ID document (PDF or image, max 8 MB). It's stored privately —
+            Upload an additional registration / ID document (PDF or image, max 10 MB). It's stored privately —
             only you and our verification team can open it.
           </p>
           {me.kycDocument ? (
@@ -680,6 +693,141 @@ function VerificationTab({ me, role }: { me: Party; role: Party["role"] }) {
         )}
       </div>
     </>
+  );
+}
+
+function RegistrationDocumentReupload({
+  partyId,
+  onboarding,
+}: {
+  partyId: string;
+  onboarding: OnboardingData;
+}) {
+  const queryClient = useQueryClient();
+  const labels = onboardingDocumentLabels(onboarding);
+  const storedDocuments = new Map<string, RegistrationDocument>(
+    (onboarding.documents ?? [])
+      .filter((document): document is RegistrationDocument => typeof document !== "string" && Boolean(document.url))
+      .map((document) => [document.label, document]),
+  );
+  const [files, setFiles] = useState<Record<string, File>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const missingCount = labels.filter((label) => !storedDocuments.has(label)).length;
+  const selectedCount = Object.keys(files).length;
+
+  const saveDocuments = async () => {
+    const stillMissing = labels.filter((label) => !storedDocuments.has(label) && !files[label]);
+    if (stillMissing.length) {
+      setError(`Select ${stillMissing.length} missing document${stillMissing.length === 1 ? "" : "s"} before submitting.`);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      const documents: RegistrationDocument[] = [];
+      for (const label of labels) {
+        const replacement = files[label];
+        if (replacement) {
+          const uploaded = await uploadFile(replacement, "KYC");
+          documents.push({
+            label,
+            name: uploaded.filename,
+            url: uploaded.url,
+            contentType: uploaded.contentType,
+            size: uploaded.size,
+          });
+        } else {
+          const existing = storedDocuments.get(label);
+          if (existing) documents.push(existing);
+        }
+      }
+      await attachRegistrationDocuments(documents);
+      setFiles({});
+      setSaved(true);
+      await queryClient.invalidateQueries({ queryKey: ["onboarding", partyId] });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The documents could not be uploaded. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-steel/20 px-4 py-3">
+        <div>
+          <div className="text-sm font-bold">Registration documents</div>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Re-upload missing files or replace an existing document. PDFs and images up to 10 MB are accepted.
+          </p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${missingCount ? "bg-danger/10 text-danger" : "bg-positive/10 text-positive"}`}>
+          {missingCount ? `${missingCount} missing` : "Complete"}
+        </span>
+      </div>
+
+      <div className="divide-y divide-border">
+        {labels.map((label) => {
+          const stored = storedDocuments.get(label);
+          const selected = files[label];
+          return (
+            <div key={label} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${stored || selected ? "bg-positive/10 text-positive" : "bg-signal/10 text-signal"}`}>
+                  {stored || selected ? <CheckCircle2 className="size-4" /> : <FileText className="size-4" />}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-bold">{label}</div>
+                  <div className="truncate text-[10px] text-muted-foreground">
+                    {selected?.name ?? stored?.name ?? "No file stored"}
+                  </div>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {stored?.url && !selected && (
+                  <a href={stored.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-[10px] font-bold uppercase hover:bg-steel/40">
+                    <ExternalLink className="size-3.5" /> View
+                  </a>
+                )}
+                <label className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-signal px-3 text-[10px] font-bold uppercase text-signal hover:bg-signal/10">
+                  <UploadCloud className="size-3.5" /> {stored || selected ? "Replace" : "Select file"}
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={saving}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file) return;
+                      setFiles((current) => ({ ...current, [label]: file }));
+                      setError("");
+                      setSaved(false);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-border bg-steel/10 px-4 py-3">
+        {error && <p className="mb-2 text-xs font-semibold text-danger">{error}</p>}
+        {saved && <p className="mb-2 text-xs font-semibold text-positive">Documents submitted successfully. Your application is ready for review.</p>}
+        <button
+          type="button"
+          onClick={() => void saveDocuments()}
+          disabled={saving || (!selectedCount && !missingCount)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-signal px-4 text-xs font-black uppercase text-signal-foreground transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <UploadCloud className="size-4" /> {saving ? "Uploading documents…" : missingCount ? "Submit documents" : "Save replacements"}
+        </button>
+      </div>
+    </div>
   );
 }
 
