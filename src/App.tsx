@@ -119,7 +119,7 @@ export default function App() {
             <Route
               path="/driver/home"
               element={
-                <RequireRole role={"DRIVER"}>
+                <RequireRole role={"DRIVER"} permission="trips.read">
                   <Page46 />
                 </RequireRole>
               }
@@ -159,7 +159,7 @@ export default function App() {
             <Route
               path="/driver"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]}>
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="trips.read">
                   <Page12 />
                 </RequireRole>
               }
@@ -173,11 +173,21 @@ export default function App() {
               }
             />
             <Route path="/forgot-password" element={<Page14 />} />
-            <Route path="/notifications" element={<Page15 />} />
+            <Route
+              path="/notifications"
+              element={
+                <RequireRole
+                  role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}
+                  permission="notifications.read"
+                >
+                  <Page15 />
+                </RequireRole>
+              }
+            />
             <Route
               path="/owner/board"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="loads.read">
                   <Page16 />
                 </RequireRole>
               }
@@ -185,7 +195,7 @@ export default function App() {
             <Route
               path="/owner/history"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="trips.read">
                   <Page17 />
                 </RequireRole>
               }
@@ -193,7 +203,7 @@ export default function App() {
             <Route
               path="/owner/shipments"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="loads.read">
                   <Page41 />
                 </RequireRole>
               }
@@ -201,7 +211,7 @@ export default function App() {
             <Route
               path="/owner/control-tower"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="tracking.read">
                   <Page42 />
                 </RequireRole>
               }
@@ -209,7 +219,7 @@ export default function App() {
             <Route
               path="/owner/loads/:loadId"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="loads.read">
                   <Page18 />
                 </RequireRole>
               }
@@ -217,7 +227,7 @@ export default function App() {
             <Route
               path="/owner"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="loads.read">
                   <Page19 />
                 </RequireRole>
               }
@@ -236,7 +246,7 @@ export default function App() {
             <Route
               path="/transporter/engagements"
               element={
-                <RequireRole role={"TRANSPORTER"}>
+                <RequireRole role={"TRANSPORTER"} permission="matches.read">
                   <Page24 />
                 </RequireRole>
               }
@@ -244,7 +254,7 @@ export default function App() {
             <Route
               path="/transporter/fleet"
               element={
-                <RequireRole role={"TRANSPORTER"}>
+                <RequireRole role={"TRANSPORTER"} permission="trucks.read">
                   <Page25 />
                 </RequireRole>
               }
@@ -252,7 +262,7 @@ export default function App() {
             <Route
               path="/transporter/fleet-ops"
               element={
-                <RequireRole role={"TRANSPORTER"}>
+                <RequireRole role={"TRANSPORTER"} permission="trucks.read">
                   <Page26 />
                 </RequireRole>
               }
@@ -276,7 +286,7 @@ export default function App() {
             <Route
               path="/transporter/history"
               element={
-                <RequireRole role={"TRANSPORTER"}>
+                <RequireRole role={"TRANSPORTER"} permission="trips.read">
                   <Page27 />
                 </RequireRole>
               }
@@ -284,7 +294,7 @@ export default function App() {
             <Route
               path="/transporter"
               element={
-                <RequireRole role={"TRANSPORTER"}>
+                <RequireRole role={"TRANSPORTER"} permission="trucks.read">
                   <Page28 />
                 </RequireRole>
               }
@@ -297,7 +307,17 @@ export default function App() {
                 </RequireRole>
               }
             />
-            <Route path="/trucks/:truckId" element={<Page30 />} />
+            <Route
+              path="/trucks/:truckId"
+              element={
+                <RequireRole
+                  role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}
+                  permission="trucks.read"
+                >
+                  <Page30 />
+                </RequireRole>
+              }
+            />
             <Route path="/welcome" element={<Page31 />} />
             <Route
               path="/admin/logs"
@@ -310,7 +330,7 @@ export default function App() {
             <Route
               path="/owner/billing"
               element={
-                <RequireRole role={"FREIGHT_OWNER"}>
+                <RequireRole role={"FREIGHT_OWNER"} permission="finance.read">
                   <Page33 />
                 </RequireRole>
               }
@@ -334,7 +354,7 @@ export default function App() {
             <Route
               path="/transporter/dispatch"
               element={
-                <RequireRole role={"TRANSPORTER"}>
+                <RequireRole role={"TRANSPORTER"} permission="dispatch.manage">
                   <Page36 />
                 </RequireRole>
               }
@@ -346,7 +366,10 @@ export default function App() {
             <Route
               path="/messages"
               element={
-                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}>
+                <RequireRole
+                  role={["FREIGHT_OWNER", "TRANSPORTER", "DRIVER", "ADMIN"]}
+                  permission="messages.read"
+                >
                   <Page37 />
                 </RequireRole>
               }

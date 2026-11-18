@@ -22,6 +22,7 @@ import { Waybill } from "@/components/tamp/Waybill";
 import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/fns/matching";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
+import { hasPermission } from "@/lib/access";
 import type { Load, MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
 
 // §6.2 weighted score rules — the matching-rules explainer, stated plainly
@@ -72,6 +73,7 @@ const HARD_FILTERS = [
   { ruleId: "R-WINDOW", label: "Truck availability overlaps the pickup window" },
   { ruleId: "R-RADIUS", label: "Truck within 150 km of origin" },
   { ruleId: "R-STATUS", label: "Truck posting is AVAILABLE" },
+  { ruleId: "R-VEHICLE-REVIEW", label: "Vehicle compliance review is approved" },
 ];
 
 type SortKey = "score" | "R-PROXIMITY" | "R-HISTORY" | "R-CAPACITY-FIT";
@@ -100,9 +102,12 @@ function LoadDetail() {
     incidents,
     audit,
     proofs,
+    authParty,
     acceptMatch,
     rejectMatch,
   } = useTamp();
+  const canManageMatches = hasPermission(authParty, "matches.manage");
+  const canReportIncidents = hasPermission(authParty, "incidents.report");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [showUnqualified, setShowUnqualified] = useState(false);
   const [reviewTruck, setReviewTruck] = useState<TruckPosting | null>(null);
@@ -193,7 +198,7 @@ function LoadDetail() {
             {mobileMenuOpen && (
               <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-xl border border-border bg-graphite p-1 shadow-2xl">
                 <MobileAction icon={Route} label="Trip progress" onClick={() => scrollToSection("load-trip-timeline", setMobileMenuOpen)} />
-                {trip && (
+                {trip && canReportIncidents && (
                   <MobileAction
                     icon={MessageCircle}
                     label="Message trip"
@@ -382,11 +387,13 @@ function LoadDetail() {
           </aside>
         </div>
       </main>
-      <IncidentDialog
-        loadId={load.id}
-        open={issueOpen}
-        onClose={() => setIssueOpen(false)}
-      />
+      {canReportIncidents && (
+        <IncidentDialog
+          loadId={load.id}
+          open={issueOpen}
+          onClose={() => setIssueOpen(false)}
+        />
+      )}
       </AppShell>
     );
   }
@@ -473,8 +480,10 @@ function LoadDetail() {
                 score={m.score}
                 breakdown={m.breakdown}
                 variant="suggested"
-                onAccept={() => setReviewTruck(m.truck)}
-                onReject={() => rejectMatch(load.id, m.truck.id)}
+                {...(canManageMatches ? {
+                  onAccept: () => setReviewTruck(m.truck),
+                  onReject: () => rejectMatch(load.id, m.truck.id),
+                } : {})}
               />
             ))}
           </div>
@@ -551,7 +560,7 @@ function LoadDetail() {
           </div>
         </aside>
       </div>
-      {reviewTruck && (
+      {canManageMatches && reviewTruck && (
         <MatchReviewDialog
           load={load}
           truck={reviewTruck}

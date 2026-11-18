@@ -36,6 +36,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 import { useLocation } from "react-router-dom";
 import { useTamp } from "@/context/TampContext";
 import { playNotificationSound } from "@/lib/notification-sound";
+import { hasPermission, type PermissionCode } from "@/lib/access";
 import type { Role } from "@/types/domain";
 
 type NavItem = {
@@ -43,22 +44,23 @@ type NavItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   exact?: boolean;
+  permission?: PermissionCode;
   children?: NavItem[];
 };
 
 // Navigation only — analytics live on the dashboards, not the rail.
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   FREIGHT_OWNER: [
-    { to: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true },
+    { to: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "loads.read" },
     {
       to: "/owner/shipments",
       label: "Shipments",
       icon: Boxes,
       children: [
-        { to: "/owner/shipments", label: "All Shipments", icon: PackageOpen, exact: true },
-        { to: "/owner/shipments?view=active", label: "Active Shipments", icon: Activity },
-        { to: "/owner/shipments?view=scheduled", label: "Scheduled", icon: CalendarDays },
-        { to: "/owner/shipments?view=recurring", label: "Recurring Schedules", icon: Repeat2 },
+        { to: "/owner/shipments", label: "All Shipments", icon: PackageOpen, exact: true, permission: "loads.read" },
+        { to: "/owner/shipments?view=active", label: "Active Shipments", icon: Activity, permission: "loads.read" },
+        { to: "/owner/shipments?view=scheduled", label: "Scheduled", icon: CalendarDays, permission: "loads.read" },
+        { to: "/owner/shipments?view=recurring", label: "Recurring Schedules", icon: Repeat2, permission: "loads.read" },
       ],
     },
     {
@@ -66,8 +68,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       label: "Marketplace",
       icon: Store,
       children: [
-        { to: "/owner/board", label: "Freight Board", icon: ClipboardList, exact: true },
-        { to: "/owner/board?status=POSTED", label: "Matches & Offers", icon: RouteIcon },
+        { to: "/owner/board", label: "Freight Board", icon: ClipboardList, exact: true, permission: "loads.read" },
+        { to: "/owner/board?status=POSTED", label: "Matches & Offers", icon: RouteIcon, permission: "matches.read" },
       ],
     },
     {
@@ -75,44 +77,44 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       label: "Operations",
       icon: RadioTower,
       children: [
-        { to: "/owner/control-tower", label: "Live Control Tower", icon: RadioTower, exact: true },
-        { to: "/owner/history", label: "Delivery History", icon: History },
+        { to: "/owner/control-tower", label: "Live Control Tower", icon: RadioTower, exact: true, permission: "tracking.read" },
+        { to: "/owner/history", label: "Delivery History", icon: History, permission: "trips.read" },
       ],
     },
-    { to: "/owner/billing", label: "Billing", icon: WalletCards },
-    { to: "/messages", label: "Messages", icon: MessageCircle },
-    { to: "/organisation", label: "Organisation", icon: Building2 },
+    { to: "/owner/billing", label: "Billing", icon: WalletCards, permission: "finance.read" },
+    { to: "/messages", label: "Messages", icon: MessageCircle, permission: "messages.read" },
+    { to: "/organisation", label: "Organisation", icon: Building2, permission: "organisations.read" },
     { to: "/owner/profile", label: "Profile", icon: User },
   ],
   TRANSPORTER: [
-    { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true },
+    { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "trucks.read" },
     {
       to: "/transporter/fleet",
       label: "Fleet Management",
       icon: Truck,
       children: [
-        { to: "/transporter/fleet", label: "All Vehicles", icon: Truck, exact: true },
-        { to: "/transporter/fleet?status=active", label: "Active Vehicles", icon: Activity },
-        { to: "/transporter/fleet-ops?tab=compliance", label: "Compliance", icon: ShieldCheck },
-        { to: "/transporter/fleet-ops?tab=maintenance", label: "Maintenance & Repairs", icon: Wrench },
-        { to: "/transporter/fleet-ops?tab=fuel", label: "Fuel & Telematics", icon: Fuel },
-        { to: "/transporter/fleet-ops?tab=costs", label: "Costs & Analytics", icon: CircleGauge },
-        { to: "/transporter/drivers", label: "Drivers Directory", icon: UserRoundCog },
+        { to: "/transporter/fleet", label: "All Vehicles", icon: Truck, exact: true, permission: "trucks.read" },
+        { to: "/transporter/fleet?status=active", label: "Active Vehicles", icon: Activity, permission: "trucks.read" },
+        { to: "/transporter/fleet-ops?tab=compliance", label: "Compliance", icon: ShieldCheck, permission: "trucks.read" },
+        { to: "/transporter/fleet-ops?tab=maintenance", label: "Maintenance & Repairs", icon: Wrench, permission: "trucks.manage" },
+        { to: "/transporter/fleet-ops?tab=fuel", label: "Fuel & Telematics", icon: Fuel, permission: "trucks.manage" },
+        { to: "/transporter/fleet-ops?tab=costs", label: "Costs & Analytics", icon: CircleGauge, permission: "finance.read" },
+        { to: "/transporter/drivers", label: "Drivers Directory", icon: UserRoundCog, permission: "organisations.read" },
       ],
     },
-    { to: "/transporter/engagements", label: "Engagements", icon: RouteIcon },
-    { to: "/transporter/dispatch", label: "Dispatch", icon: Send },
-    { to: "/driver", label: "My Jobs", icon: PackageCheck },
-    { to: "/transporter/history", label: "History", icon: History },
-    { to: "/transporter/earnings", label: "Earnings", icon: WalletCards },
-    { to: "/messages", label: "Messages", icon: MessageCircle },
-    { to: "/organisation", label: "Organisation", icon: Building2 },
+    { to: "/transporter/engagements", label: "Engagements", icon: RouteIcon, permission: "matches.read" },
+    { to: "/transporter/dispatch", label: "Dispatch", icon: Send, permission: "dispatch.manage" },
+    { to: "/driver", label: "My Jobs", icon: PackageCheck, permission: "trips.read" },
+    { to: "/transporter/history", label: "History", icon: History, permission: "trips.read" },
+    { to: "/transporter/earnings", label: "Earnings", icon: WalletCards, permission: "finance.read" },
+    { to: "/messages", label: "Messages", icon: MessageCircle, permission: "messages.read" },
+    { to: "/organisation", label: "Organisation", icon: Building2, permission: "organisations.read" },
     { to: "/transporter/profile", label: "Profile", icon: User },
   ],
   // Owner-driver merge: DRIVER is no longer a separate workspace; its job
   // screen is reachable from the Truck Owner rail above.
   DRIVER: [
-    { to: "/driver", label: "My Jobs", icon: PackageCheck, exact: true },
+    { to: "/driver", label: "My Jobs", icon: PackageCheck, exact: true, permission: "trips.read" },
     { to: "/driver/profile", label: "Profile", icon: User },
   ],
   ADMIN: [
@@ -121,10 +123,10 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       label: "Platform",
       icon: LayoutDashboard,
       children: [
-        { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-        { to: "/admin/organisations", label: "Organisations", icon: Building2 },
-        { to: "/admin/users", label: "Users", icon: Users },
-        { to: "/admin/access-control", label: "Access Control", icon: ShieldCheck },
+        { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "platform.admin" },
+        { to: "/admin/organisations", label: "Organisations", icon: Building2, permission: "organisations.read" },
+        { to: "/admin/users", label: "Users", icon: Users, permission: "users.read" },
+        { to: "/admin/access-control", label: "Access Control", icon: ShieldCheck, permission: "organisations.members.manage" },
       ],
     },
     {
@@ -132,11 +134,11 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       label: "Verification",
       icon: ListChecks,
       children: [
-        { to: "/admin/verification", label: "Verification Inbox", icon: ListChecks, exact: true },
-        { to: "/admin/verification?queue=trucks", label: "Truck Reviews", icon: Truck },
-        { to: "/admin/verification?queue=drivers", label: "Driver Reviews", icon: UserRoundCog },
-        { to: "/admin/verification?queue=documents", label: "Compliance Documents", icon: ShieldCheck },
-        { to: "/admin/trucks", label: "All Trucks", icon: Truck },
+        { to: "/admin/verification", label: "Verification Inbox", icon: ListChecks, exact: true, permission: "users.verify" },
+        { to: "/admin/verification?queue=trucks", label: "Truck Reviews", icon: Truck, permission: "trucks.read" },
+        { to: "/admin/verification?queue=drivers", label: "Driver Reviews", icon: UserRoundCog, permission: "users.verify" },
+        { to: "/admin/verification?queue=documents", label: "Compliance Documents", icon: ShieldCheck, permission: "users.verify" },
+        { to: "/admin/trucks", label: "All Trucks", icon: Truck, permission: "trucks.read" },
       ],
     },
     {
@@ -144,18 +146,18 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       label: "Operations",
       icon: RadioTower,
       children: [
-        { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck },
-        { to: "/admin/matching", label: "Matching Engine", icon: SlidersHorizontal },
-        { to: "/messages", label: "Messages", icon: MessageCircle },
+        { to: "/admin/oversight", label: "Oversight", icon: ShieldCheck, permission: "incidents.manage" },
+        { to: "/admin/matching", label: "Matching Engine", icon: SlidersHorizontal, permission: "platform.admin" },
+        { to: "/messages", label: "Messages", icon: MessageCircle, permission: "messages.read" },
       ],
     },
-    { to: "/admin/finance", label: "Finance", icon: WalletCards },
+    { to: "/admin/finance", label: "Finance", icon: WalletCards, permission: "finance.manage" },
     {
       to: "/admin/logs",
       label: "System",
       icon: Settings,
       children: [
-        { to: "/admin/logs", label: "System Logs", icon: ScrollText },
+        { to: "/admin/logs", label: "System Logs", icon: ScrollText, permission: "system.logs.read" },
         { to: "/admin/profile", label: "Profile", icon: User },
       ],
     },
@@ -163,8 +165,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
 };
 
 export function Sidebar() {
-  const { role, sidebarCollapsed, toggleSidebar } = useTamp();
-  const nav = NAV_BY_ROLE[role];
+  const { role, authParty, sidebarCollapsed, toggleSidebar } = useTamp();
+  const nav = permittedNavigation(NAV_BY_ROLE[role], authParty);
   const counts = useSidebarCounts();
   const navigate = useNavigate();
   const location = useLocation();
@@ -260,7 +262,8 @@ export function Sidebar() {
 }
 
 export function MobileNavigation({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { role } = useTamp();
+  const { role, authParty } = useTamp();
+  const navigation = permittedNavigation(NAV_BY_ROLE[role], authParty);
   const counts = useSidebarCounts(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     readOpenGroups(`tamp.sidebar.groups.mobile.${role}`),
@@ -291,7 +294,7 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
       <button className="absolute inset-0 bg-black/30" onClick={onClose} aria-label="Close menu" />
       <aside className="relative z-10 flex h-full w-[min(86vw,320px)] flex-col overflow-y-auto border-r border-border bg-sidebar p-3 text-foreground shadow-2xl animate-in slide-in-from-left duration-200">
         <nav className="space-y-0.5 pb-6">
-          {NAV_BY_ROLE[role].map(({ to, label, icon: Icon, exact, children }) => children ? (
+          {navigation.map(({ to, label, icon: Icon, exact, children }) => children ? (
             <div key={to}>
               <button type="button" onClick={() => toggleGroup(to)} className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition-colors ${children.some((child) => navItemActive(child, location.pathname, location.search)) ? "bg-steel/70 text-foreground" : "text-muted-foreground"}`}>
                 <Icon className="size-[18px]" /><span className="flex-1 text-left">{label}</span><NavCount count={counts[to] ?? 0} collapsed={false} /><ChevronDown className={`size-4 transition-transform duration-200 ${(openGroups[to] ?? true) ? "rotate-180" : ""}`} />
@@ -318,6 +321,15 @@ export function MobileNavigation({ open, onClose }: { open: boolean; onClose: ()
       </aside>
     </div>
   );
+}
+
+function permittedNavigation(items: NavItem[], party: ReturnType<typeof useTamp>["authParty"]): NavItem[] {
+  return items.flatMap((item) => {
+    if (!hasPermission(party, item.permission)) return [];
+    if (!item.children) return [item];
+    const children = permittedNavigation(item.children, party);
+    return children.length ? [{ ...item, children }] : [];
+  });
 }
 
 function readOpenGroups(key: string): Record<string, boolean> {

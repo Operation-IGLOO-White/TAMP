@@ -19,6 +19,7 @@ import {
   tripForMatch,
 } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
+import { hasPermission } from "@/lib/access";
 import type { Load, Party, Trip, TruckPosting } from "@/types/domain";
 
 type TruckRequest = {
@@ -42,8 +43,20 @@ const LOAD_EXPIRY_DAYS = 7;
 
 function BoardPage() {
   // All domain data comes from the store, hydrated from Postgres on load.
-  const { loads, matches, trips, disputes, trucks, parties, acceptMatch, acceptRequest, cancelLoad } =
-    useTamp();
+  const {
+    loads,
+    matches,
+    trips,
+    disputes,
+    trucks,
+    parties,
+    authParty,
+    acceptMatch,
+    acceptRequest,
+    cancelLoad,
+  } = useTamp();
+  const canManageLoads = hasPermission(authParty, "loads.manage");
+  const canManageMatches = hasPermission(authParty, "matches.manage");
   const [searchParams] = useSearchParams();
   const statusParam = searchParams.get("status") ?? undefined;
   const postParam = searchParams.get("post") === "true";
@@ -200,7 +213,7 @@ function BoardPage() {
     <AppShell>
       <PageHeader
         title="Freight Board"
-        actions={
+        actions={canManageLoads ? (
           <button
             onClick={() => {
               setEditingLoad(null);
@@ -210,10 +223,10 @@ function BoardPage() {
           >
             <Plus className="size-3.5" /> Post New Load
           </button>
-        }
+        ) : undefined}
       />
 
-      {(posting || editingLoad) && (
+      {canManageLoads && (posting || editingLoad) && (
         <PostLoadForm
           key={editingLoad?.id ?? "new"}
           {...(editingLoad ? { initialLoad: editingLoad } : {})}
@@ -305,26 +318,30 @@ function BoardPage() {
           <LoadCard
             key={row.load.id}
             {...row}
-            onAccept={() =>
-              row.topMatch && setReview({ load: row.load, truck: row.topMatch.truck, kind: "match" })
-            }
-            onAcceptRequest={(truckId) => {
-              const truck = trucks.find((item) => item.id === truckId);
-              if (truck) setReview({ load: row.load, truck, kind: "request" });
-            }}
-            onEdit={() => {
-              setPosting(false);
-              setEditingLoad(row.load);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onCancel={() => {
-              if (window.confirm("Cancel this load? It will be removed from matching and cannot be accepted."))
-                cancelLoad(row.load.id);
-            }}
+            {...(canManageMatches ? {
+              onAccept: () => {
+                if (row.topMatch) setReview({ load: row.load, truck: row.topMatch.truck, kind: "match" });
+              },
+              onAcceptRequest: (truckId: string) => {
+                const truck = trucks.find((item) => item.id === truckId);
+                if (truck) setReview({ load: row.load, truck, kind: "request" });
+              },
+            } : {})}
+            {...(canManageLoads ? {
+              onEdit: () => {
+                setPosting(false);
+                setEditingLoad(row.load);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              },
+              onCancel: () => {
+                if (window.confirm("Cancel this load? It will be removed from matching and cannot be accepted."))
+                  cancelLoad(row.load.id);
+              },
+            } : {})}
           />
         ))}
       </div>
-      {review && (
+      {canManageMatches && review && (
         <MatchReviewDialog
           load={review.load}
           truck={review.truck}
@@ -361,10 +378,10 @@ function LoadCard({
   engagedTruck: TruckPosting | undefined;
   engagedOperator: Party | undefined;
   requests: TruckRequest[];
-  onAccept: () => void;
-  onAcceptRequest: (truckId: string) => void;
-  onEdit: () => void;
-  onCancel: () => void;
+  onAccept?: () => void;
+  onAcceptRequest?: (truckId: string) => void;
+  onEdit?: () => void;
+  onCancel?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   return (
@@ -387,7 +404,7 @@ function LoadCard({
         </div>
         <div className="text-right">
           <StatusChip status={status} />
-          {load.status === "POSTED" && (
+          {load.status === "POSTED" && onEdit && onCancel && (
             <span className="ml-2 inline-flex gap-1">
               <button
                 type="button"
@@ -424,7 +441,10 @@ function LoadCard({
               {requests.length > 1 ? `Best of ${requests.length} requests` : "Carrier request"}
             </div>
             {/* Highest-scoring request first, the rest under "View more". */}
-            <RequestRow r={requests[0]!} onAccept={() => onAcceptRequest(requests[0]!.truck.id)} />
+            <RequestRow
+              r={requests[0]!}
+              {...(onAcceptRequest ? { onAccept: () => onAcceptRequest(requests[0]!.truck.id) } : {})}
+            />
             {requests.length > 1 && (
               <>
                 <button
@@ -439,7 +459,7 @@ function LoadCard({
                       <RequestRow
                         key={r.truck.id}
                         r={r}
-                        onAccept={() => onAcceptRequest(r.truck.id)}
+                        {...(onAcceptRequest ? { onAccept: () => onAcceptRequest(r.truck.id) } : {})}
                       />
                     ))}
                   </div>
@@ -474,12 +494,14 @@ function LoadCard({
               />
             </div>
             <div className="mt-3 flex gap-2">
-              <button
-                onClick={onAccept}
-                className="flex-1 rounded-md bg-signal py-2 text-[11px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
-              >
-                Accept match
-              </button>
+              {onAccept && (
+                <button
+                  onClick={onAccept}
+                  className="flex-1 rounded-md bg-signal py-2 text-[11px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
+                >
+                  Accept match
+                </button>
+              )}
               <Link
                 to="/owner/loads/$loadId"
                 params={{ loadId: load.id }}
@@ -530,7 +552,7 @@ function LoadCard({
   );
 }
 
-function RequestRow({ r, onAccept }: { r: TruckRequest; onAccept: () => void }) {
+function RequestRow({ r, onAccept }: { r: TruckRequest; onAccept?: () => void }) {
   // Surface the assigned driver as the person who'll do the run; the fleet
   // operator and truck are the supporting detail.
   const face = r.driver ?? r.operator;
@@ -552,12 +574,14 @@ function RequestRow({ r, onAccept }: { r: TruckRequest; onAccept: () => void }) 
         count={(r.driver ?? r.operator)?.ratingCount ?? 0}
       />
       <span className="font-mono text-lg font-black text-signal">{r.score}</span>
-      <button
-        onClick={onAccept}
-        className="rounded-md bg-signal px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
-      >
-        Accept
-      </button>
+      {onAccept && (
+        <button
+          onClick={onAccept}
+          className="rounded-md bg-signal px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-signal-foreground hover:brightness-105"
+        >
+          Accept
+        </button>
+      )}
     </div>
   );
 }

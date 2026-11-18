@@ -21,14 +21,16 @@ import {
 } from "@/lib/tamp-dashboard";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
+import { hasPermission } from "@/lib/access";
 
 // A POSTED load with no engagement expires off the active board after 7 days;
 // the owner can re-post it (which resets the clock).
 const LOAD_EXPIRY_DAYS = 7;
 
 function OwnerDashboard() {
-  const { loads, trucks, matches, trips, disputes, ratings, audit, parties, me, repostLoad } =
+  const { loads, trucks, matches, trips, disputes, ratings, audit, parties, me, authParty, repostLoad } =
     useTamp();
+  const canManageLoads = hasPermission(authParty, "loads.manage");
   const data = { matches, loads, trucks, parties };
 
   // ① Needs you
@@ -122,7 +124,7 @@ function OwnerDashboard() {
     <AppShell>
       <PageHeader
         title={`Welcome back, ${me.contactName.split(" ")[0]}`}
-        actions={
+        actions={canManageLoads ? (
           <Link
             to="/owner/board"
             search={{ post: true }}
@@ -130,7 +132,7 @@ function OwnerDashboard() {
           >
             <Plus className="size-3.5" /> Post a load
           </Link>
-        }
+        ) : undefined}
       />
 
       <div className="space-y-6 p-3 sm:space-y-8 sm:p-6">
@@ -299,12 +301,14 @@ function OwnerDashboard() {
                         #{load.id} · expired · posted {age}d ago
                       </div>
                     </div>
-                    <button
-                      onClick={() => repostLoad(load.id)}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-signal px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
-                    >
-                      <RefreshCw className="size-3.5" /> Re-post
-                    </button>
+                    {canManageLoads && (
+                      <button
+                        onClick={() => repostLoad(load.id)}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-signal px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
+                      >
+                        <RefreshCw className="size-3.5" /> Re-post
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

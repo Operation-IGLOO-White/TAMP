@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   Building2,
+  Check,
   CalendarClock,
   ChevronRight,
   FileWarning,
@@ -11,6 +13,7 @@ import {
   ShieldCheck,
   Truck,
   UserRoundCog,
+  X,
 } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL } from "@/components/tamp/BodyTypeIcon";
@@ -21,6 +24,7 @@ import { getOnboarding } from "@/fns/parties";
 import { assessFleetCompliance } from "@/lib/fleet-compliance";
 import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import { Link } from "@/lib/nav";
+import { listReviewDocuments, reviewDocument, type DocumentSubjectType } from "@/fns/documents";
 
 type Queue = "all" | "organisations" | "trucks" | "drivers" | "documents";
 type ReviewStatus = "PENDING" | "UNVERIFIED" | "REJECTED" | "ACTION_REQUIRED" | "DUE_SOON";
@@ -35,6 +39,10 @@ type ReviewItem = {
   href: string;
   image?: string;
   detail: string;
+  subjectType?: DocumentSubjectType;
+  subjectId?: string;
+  documentId?: string;
+  reviewStatus?: "PENDING" | "APPROVED" | "REJECTED";
 };
 
 const QUEUES: { id: Queue; label: string; icon: typeof ListChecks }[] = [
@@ -52,8 +60,18 @@ function ageLabel(value: string) {
 }
 
 export default function VerificationInbox() {
+  const queryClient = useQueryClient();
   const { parties, trucks, vehicles, maintenance } = useTamp();
   const { data: organisations = [] } = useQuery({ queryKey: ["organisations"], queryFn: listOrganisations });
+  const { data: reviewDocuments = [] } = useQuery({ queryKey: ["review-documents"], queryFn: listReviewDocuments });
+  const review = useMutation({
+    mutationFn: reviewDocument,
+    onSuccess: (_result, input) => {
+      toast.success(`Document ${input.status.toLowerCase()}`);
+      return queryClient.invalidateQueries({ queryKey: ["review-documents"] });
+    },
+    onError: () => toast.error("Document review could not be saved"),
+  });
   const [params, setParams] = useSearchParams();
   const requested = params.get("queue") as Queue | null;
   const queue: Queue = requested && QUEUES.some((item) => item.id === requested) ? requested : "all";
@@ -167,8 +185,23 @@ export default function VerificationInbox() {
         }];
       },
     );
-    return [...organisationItems, ...truckItems, ...driverItems, ...registrationDocumentItems, ...documentItems];
-  }, [organisations, parties, trucks, vehicles, maintenance, registrationApplications]);
+    const driverDocumentItems: ReviewItem[] = reviewDocuments.map((document) => ({
+      id: `driver-document-${document.documentId}`,
+      kind: "documents",
+      title: document.driverName ?? "Driver document",
+      subtitle: (document.documentType ?? "Driver document").replaceAll("_", " "),
+      company: parties.find((party) => party.id === document.subjectId)?.companyName ?? "Transporter",
+      status: document.reviewStatus === "REJECTED" ? "REJECTED" : "PENDING",
+      submittedAt: document.uploadedAt ?? new Date(0).toISOString(),
+      href: `/admin/users/${encodeURIComponent(document.subjectId)}`,
+      detail: document.filename,
+      subjectType: document.subjectType,
+      subjectId: document.subjectId,
+      documentId: document.documentId,
+      reviewStatus: document.reviewStatus,
+    }));
+    return [...organisationItems, ...truckItems, ...driverItems, ...registrationDocumentItems, ...documentItems, ...driverDocumentItems];
+  }, [organisations, parties, trucks, vehicles, maintenance, registrationApplications, reviewDocuments]);
 
   const companies = useMemo(() => [...new Set(items.map((item) => item.company))].sort(), [items]);
   const filtered = items
@@ -216,7 +249,12 @@ export default function VerificationInbox() {
                 </div>
                 <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-sm font-bold">{item.title}</h3><ReviewBadge status={item.status} /></div><p className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</p><p className="mt-1 line-clamp-2 text-[11px]">{item.detail}</p></div>
                 <div><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Company</p><p className="mt-1 truncate text-xs font-semibold">{item.company}</p><p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground"><CalendarClock className="size-3" /> {ageLabel(item.submittedAt)}</p></div>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-signal">Review <ChevronRight className="size-4" /></span>
+                {item.subjectType && item.documentId ? (
+                  <span className="flex items-center justify-end gap-1">
+                    <button type="button" disabled={review.isPending} onClick={(event) => { event.preventDefault(); review.mutate({ subjectType: item.subjectType!, subjectId: item.subjectId!, documentId: item.documentId!, status: "APPROVED" }); }} className="grid size-9 place-items-center rounded-md bg-signal text-signal-foreground disabled:opacity-50" aria-label={`Approve ${item.title}`}><Check className="size-4" /></button>
+                    <button type="button" disabled={review.isPending} onClick={(event) => { event.preventDefault(); const reason = window.prompt("Why is this document being rejected?")?.trim(); if (reason) review.mutate({ subjectType: item.subjectType!, subjectId: item.subjectId!, documentId: item.documentId!, status: "REJECTED", reason }); }} className="grid size-9 place-items-center rounded-md border border-danger/40 text-danger disabled:opacity-50" aria-label={`Reject ${item.title}`}><X className="size-4" /></button>
+                  </span>
+                ) : <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-signal">Review <ChevronRight className="size-4" /></span>}
               </Link>
             ))}
           </div>

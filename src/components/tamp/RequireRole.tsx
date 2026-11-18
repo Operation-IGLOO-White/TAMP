@@ -3,6 +3,7 @@ import { useNavigate } from "@/lib/nav";
 import { useEffect, type ReactNode } from "react";
 import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
+import { hasPermission, type PermissionCode } from "@/lib/access";
 import type { Role } from "@/types/domain";
 
 // Route-level role guard — spec §3: a user must never reach a role's route
@@ -21,14 +22,14 @@ export function RequireRole({
   children,
 }: {
   role: Role | Role[];
-  permission?: string;
+  permission?: PermissionCode;
   children: ReactNode;
 }) {
   const { role: activeRole, authParty, authReady } = useTamp();
   const navigate = useNavigate();
   const allowed = Array.isArray(role) ? role : [role];
-  const hasPermission = !permission || authParty?.permissions?.includes(permission) === true;
-  const authorised = authParty != null && allowed.includes(activeRole) && hasPermission;
+  const permitted = hasPermission(authParty, permission);
+  const authorised = authParty != null && allowed.includes(activeRole) && permitted;
 
   // A social-login account that hasn't finished onboarding is sent to /welcome.
   const needsOnboarding = authParty?.onboardingComplete === false;
@@ -38,9 +39,9 @@ export function RequireRole({
     if (!authParty) navigate({ to: "/" }); // not signed in → login
     else if (needsOnboarding) navigate({ to: "/welcome" });
     else if (!allowed.includes(activeRole)) navigate({ to: HOME_BY_ROLE[activeRole] });
-    else if (!hasPermission) navigate({ to: "/403" });
+    else if (!permitted) navigate({ to: "/403" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authReady, authParty, needsOnboarding, activeRole, hasPermission, navigate]);
+  }, [authReady, authParty, needsOnboarding, activeRole, permitted, navigate]);
 
   if (!authReady) return null;
   if (!authorised || needsOnboarding) return null;

@@ -15,6 +15,7 @@ const truck = {
   availableTo: "2026-11-12T08:00:00Z",
   status: "AVAILABLE",
   createdAt: "2026-01-01T00:00:00Z",
+  licenceNumber: "LIC-ABC-123",
   licenceExpiry: "2027-01-01T00:00:00Z",
   documents: ["licence", "roadworthy", "insurance"],
 } satisfies TruckPosting;

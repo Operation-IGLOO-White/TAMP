@@ -1,7 +1,7 @@
 
 import { Link } from "@/lib/nav";
 import { useParams, useNavigate } from "react-router-dom";
-import { Activity, AlertTriangle, BadgeCheck, ExternalLink, FileText, Fuel, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, BadgeCheck, Check, ExternalLink, FileText, Fuel, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus, Wrench, X } from "lucide-react";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import { assessFleetCompliance } from "@/lib/fleet-compliance";
 import { setVehicleVerification } from "@/fns/vehicles";
+import { reviewDocument } from "@/fns/documents";
 import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import type { Party } from "@/types/domain";
 
@@ -27,6 +28,7 @@ function TruckDetail() {
   const { trucks, vehicles, maintenance, fuelLogs, parties, matches, loads, trips, disputes, role, me, assignDriver, linkDriver } =
     useTamp();
   const [verificationOverride, setVerificationOverride] = useState<"PENDING" | "VERIFIED" | "REJECTED" | null>(null);
+  const [documentReviewOverrides, setDocumentReviewOverrides] = useState<Record<string, "APPROVED" | "REJECTED">>({});
   const [cancelLoadId, setCancelLoadId] = useState<string | null>(null);
   const verifyVehicle = useMutation({
     mutationFn: (status: "PENDING" | "VERIFIED" | "REJECTED") =>
@@ -36,6 +38,15 @@ function TruckDetail() {
       toast.success(`Truck marked ${updated.verification.toLowerCase()}`);
     },
     onError: () => toast.error("Truck verification could not be saved"),
+  });
+  const reviewVehicleDocument = useMutation({
+    mutationFn: (input: { documentId: string; status: "APPROVED" | "REJECTED"; reason?: string }) =>
+      reviewDocument({ subjectType: "TRUCK", subjectId: truckId!, ...input }),
+    onSuccess: (result, input) => {
+      setDocumentReviewOverrides((current) => ({ ...current, [input.documentId]: result.reviewStatus }));
+      toast.success(`Document ${result.reviewStatus.toLowerCase()}`);
+    },
+    onError: () => toast.error("Document review could not be saved"),
   });
 
   const truck = trucks.find((t) => t.id === truckId);
@@ -58,6 +69,17 @@ function TruckDetail() {
   const compliance = assessFleetCompliance(truck, vehicle, maintenance);
   const photos = vehicle?.photos?.length ? vehicle.photos : truck.photos ?? [];
   const documents = vehicle?.documents?.length ? vehicle.documents : truck.documents ?? [];
+  const documentEvidence = documents.map((url, index) => {
+    const metadata = truck.documentMetadata?.find((item) => item.url === url);
+    return {
+      url,
+      id: metadata?.id || url,
+      name: metadata?.name || evidenceName(url, index),
+      reviewStatus: documentReviewOverrides[url] ?? metadata?.reviewStatus ?? "PENDING",
+      reviewReason: metadata?.reviewReason,
+    };
+  });
+  const allDocumentsApproved = documentEvidence.length >= 3 && documentEvidence.every((item) => item.reviewStatus === "APPROVED");
   const driver = truck.driverId ? parties.find((p) => p.id === truck.driverId) : undefined;
   const isAdmin = role === "ADMIN";
   const canManageDriver = isAdmin || me.id === truck.transporterId;
@@ -217,7 +239,7 @@ function TruckDetail() {
                     </button>
                   )}
                   {(verificationOverride ?? vehicle?.verification ?? "PENDING") !== "VERIFIED" && (
-                    <button type="button" disabled={verifyVehicle.isPending || documents.length < 3 || photos.length === 0} onClick={() => verifyVehicle.mutate("VERIFIED")} className="rounded-lg bg-positive px-5 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40">
+                    <button type="button" disabled={verifyVehicle.isPending || !allDocumentsApproved || photos.length === 0} onClick={() => verifyVehicle.mutate("VERIFIED")} className="rounded-lg bg-signal px-5 py-2 text-xs font-black uppercase text-signal-foreground disabled:cursor-not-allowed disabled:opacity-40">
                       Verify truck
                     </button>
                   )}
@@ -245,12 +267,19 @@ function TruckDetail() {
             <div className="p-4">
               {documents.length ? (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {documents.map((url, index) => (
-                    <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-border bg-graphite p-3 hover:border-signal">
-                      <FileText className="size-5 shrink-0 text-signal" />
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold">{evidenceName(url, index)}</span>
-                      <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
-                    </a>
+                  {documentEvidence.map((document, index) => (
+                    <div key={`${document.url}-${index}`} className="rounded-xl border border-border bg-graphite p-3">
+                      <div className="flex items-center gap-3">
+                        <FileText className="size-5 shrink-0 text-signal" />
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold">{document.name}</span>
+                        <a href={document.url} target="_blank" rel="noreferrer" aria-label={`View ${document.name}`}><ExternalLink className="size-3.5 shrink-0 text-muted-foreground" /></a>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
+                        <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${document.reviewStatus === "APPROVED" ? "bg-positive/15 text-positive" : document.reviewStatus === "REJECTED" ? "bg-danger/15 text-danger" : "bg-signal/15 text-signal"}`}>{document.reviewStatus}</span>
+                        {isAdmin && <span className="flex gap-1"><button type="button" disabled={reviewVehicleDocument.isPending} onClick={() => reviewVehicleDocument.mutate({ documentId: document.url, status: "APPROVED" })} className="grid size-8 place-items-center rounded-md bg-signal text-signal-foreground disabled:opacity-50" aria-label={`Approve ${document.name}`}><Check className="size-3.5" /></button><button type="button" disabled={reviewVehicleDocument.isPending} onClick={() => { const reason = window.prompt("Why is this document being rejected?")?.trim(); if (reason) reviewVehicleDocument.mutate({ documentId: document.url, status: "REJECTED", reason }); }} className="grid size-8 place-items-center rounded-md border border-danger/40 text-danger disabled:opacity-50" aria-label={`Reject ${document.name}`}><X className="size-3.5" /></button></span>}
+                      </div>
+                      {document.reviewReason && <p className="mt-2 text-[10px] text-danger">{document.reviewReason}</p>}
+                    </div>
                   ))}
                 </div>
               ) : <EmptyEvidence text="No vehicle documents were attached." />}

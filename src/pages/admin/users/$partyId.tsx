@@ -1,14 +1,16 @@
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { Link } from "@/lib/nav";
-import { BadgeCheck, Download, ExternalLink, FileText, Mail, Phone, Star } from "lucide-react";
+import { BadgeCheck, Check, Download, ExternalLink, FileText, Mail, Phone, Star, X } from "lucide-react";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { Panel } from "@/components/tamp/StatCard";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { getOnboarding, setPartyVerification } from "@/fns/parties";
+import { reviewDocument } from "@/fns/documents";
 import { ROLE_SHORT } from "@/lib/role-routes";
 import { formatMoney } from "@/lib/tamp-data";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
@@ -38,6 +40,7 @@ const VERIFY_TONE: Record<Party["verification"], string> = {
 
 function PartyDetail() {
   const { partyId } = useParams<{ partyId: string }>();
+  const queryClient = useQueryClient();
   const { parties, loads, trucks, matches, trips, disputes, audit, setVerification } = useTamp();
 
   const party = parties.find((p) => p.id === partyId);
@@ -45,6 +48,17 @@ function PartyDetail() {
   const verify = useMutation({
     mutationFn: (v: { partyId: string; status: Party["verification"] }) =>
       setPartyVerification({ data: v }),
+    onSuccess: (_result, variables) => setVerification(variables.partyId, variables.status),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Verification could not be saved"),
+  });
+  const reviewRegistrationDocument = useMutation({
+    mutationFn: (input: { documentId: string; status: "APPROVED" | "REJECTED"; reason?: string }) =>
+      reviewDocument({ subjectType: "REGISTRATION", subjectId: partyId!, ...input }),
+    onSuccess: (_result, input) => {
+      toast.success(`Document ${input.status.toLowerCase()}`);
+      return queryClient.invalidateQueries({ queryKey: ["onboarding", partyId] });
+    },
+    onError: () => toast.error("Document review could not be saved"),
   });
   // The rich sign-up application, for review before approving.
   const { data: onboarding } = useQuery({
@@ -54,7 +68,6 @@ function PartyDetail() {
   });
   const setStatus = (status: Party["verification"]) => {
     if (!party) return;
-    setVerification(party.id, status);
     verify.mutate({ partyId: party.id, status });
   };
 
@@ -253,7 +266,19 @@ function PartyDetail() {
         {/* Related entities + activity */}
         <div className="space-y-6">
           {registrationDocuments.length > 0 && (
-            <RegistrationDocumentsTable documents={registrationDocuments} />
+            <RegistrationDocumentsTable
+              documents={registrationDocuments}
+              busy={reviewRegistrationDocument.isPending}
+              onReview={(document, status) => {
+                const documentId = document.id || document.url;
+                if (!documentId) return;
+                const reason = status === "REJECTED"
+                  ? window.prompt("Why is this document being rejected?")?.trim()
+                  : undefined;
+                if (status === "REJECTED" && !reason) return;
+                reviewRegistrationDocument.mutate({ documentId, status, ...(reason ? { reason } : {}) });
+              }}
+            />
           )}
           {ownedLoads.length > 0 && (
             <Panel title={`Loads posted (${ownedLoads.length})`}>
@@ -367,7 +392,15 @@ function AppRow({ label, value, danger }: { label: string; value: string; danger
   );
 }
 
-function RegistrationDocumentsTable({ documents }: { documents: RegistrationDocument[] }) {
+function RegistrationDocumentsTable({
+  documents,
+  busy,
+  onReview,
+}: {
+  documents: RegistrationDocument[];
+  busy: boolean;
+  onReview: (document: RegistrationDocument, status: "APPROVED" | "REJECTED") => void;
+}) {
   return (
     <Panel title={`Registration documents (${documents.length})`}>
       <div className="overflow-x-auto">
@@ -378,6 +411,7 @@ function RegistrationDocumentsTable({ documents }: { documents: RegistrationDocu
               <th className="px-3 py-3">File name</th>
               <th className="px-3 py-3">Format</th>
               <th className="px-3 py-3 text-right">Size</th>
+              <th className="px-3 py-3">Review</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -401,6 +435,12 @@ function RegistrationDocumentsTable({ documents }: { documents: RegistrationDocu
                 <td className="px-3 py-3 text-right font-mono text-[10px] text-muted-foreground">
                   {formatFileSize(document.size)}
                 </td>
+                <td className="px-3 py-3">
+                  <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${document.reviewStatus === "APPROVED" ? "bg-positive/15 text-positive" : document.reviewStatus === "REJECTED" ? "bg-danger/15 text-danger" : "bg-signal/15 text-signal"}`}>
+                    {document.reviewStatus ?? "PENDING"}
+                  </span>
+                  {document.reviewReason && <p className="mt-1 max-w-52 text-[10px] text-danger">{document.reviewReason}</p>}
+                </td>
                 <td className="px-4 py-3">
                   {document.url ? (
                     <div className="flex justify-end gap-2">
@@ -410,6 +450,8 @@ function RegistrationDocumentsTable({ documents }: { documents: RegistrationDocu
                       <a href={`${document.url}?download=1`} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-signal px-3 text-[10px] font-bold uppercase text-signal-foreground hover:brightness-95">
                         <Download className="size-3.5" /> Download
                       </a>
+                      <button type="button" disabled={busy} onClick={() => onReview(document, "APPROVED")} className="grid size-9 place-items-center rounded-md bg-signal text-signal-foreground disabled:opacity-50" aria-label={`Approve ${document.label}`}><Check className="size-4" /></button>
+                      <button type="button" disabled={busy} onClick={() => onReview(document, "REJECTED")} className="grid size-9 place-items-center rounded-md border border-danger/40 text-danger disabled:opacity-50" aria-label={`Reject ${document.label}`}><X className="size-4" /></button>
                     </div>
                   ) : (
                     <span className="block text-right text-[10px] font-semibold text-danger">File not stored</span>

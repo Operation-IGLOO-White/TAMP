@@ -1,4 +1,5 @@
 import { responseError } from "@/lib/api-errors";
+import type { StoredDocument } from "@/types/domain";
 
 export type DriverDocumentType =
   | "IDENTITY_DOCUMENT"
@@ -7,7 +8,7 @@ export type DriverDocumentType =
   | "MEDICAL_CERTIFICATE"
   | "EMPLOYMENT_CONTRACT";
 
-export interface DriverDocument {
+export interface DriverDocument extends StoredDocument {
   id: string;
   organisationId: string;
   driverId: string;
@@ -17,6 +18,7 @@ export interface DriverDocument {
   issuedAt?: string | null;
   expiresAt?: string | null;
   fileUrl: string;
+  url: string;
   filename: string;
   contentType: string;
   size: number;

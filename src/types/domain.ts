@@ -133,6 +133,9 @@ export interface TruckPosting {
   driverId?: string | undefined;
   photos?: string[];
   documents?: string[];
+  documentMetadata?: StoredDocument[];
+  vehicleVerification?: VerificationStatus;
+  vehicleVerificationUpdatedAt?: ISODate;
   id: UUID; // display ref: TR-0087
   transporterId: UUID;
   registration: string; // masked to last 3 chars until CONFIRMED
@@ -166,6 +169,7 @@ export interface Vehicle {
   licenceExpiry?: string;
   photos: string[];
   documents: string[];
+  documentMetadata?: StoredDocument[];
   verification: VerificationStatus;
   status: VehicleStatus;
   createdAt: ISODate;
@@ -438,12 +442,24 @@ export type TripStatus =
   | "CANCELLED";
 export type DisputeCategory = Dispute["category"];
 export type OnboardingUserType = "CARGO_OWNER" | "CARRIER" | "BROKER" | "DRIVER";
-export interface RegistrationDocument {
-  label: string;
+export interface StoredDocument {
+  id?: string;
   name: string;
   url: string;
   contentType?: string;
   size?: number;
+  category?: string;
+  status?: "PENDING" | "VALID" | "EXPIRING" | "EXPIRED" | "REJECTED" | "REMOVED";
+  reviewStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  reviewReason?: string | null;
+  reviewedAt?: ISODate;
+  reviewedBy?: UUID;
+  uploadedAt?: ISODate;
+  uploadedBy?: UUID;
+  expiresAt?: ISODate | null;
+}
+export interface RegistrationDocument extends StoredDocument {
+  label: string;
 }
 export interface OnboardingData {
   userType: OnboardingUserType;
