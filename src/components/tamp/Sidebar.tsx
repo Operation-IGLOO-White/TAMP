@@ -81,7 +81,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       icon: Store,
       children: [
         { to: "/owner/board", label: "Freight Board", icon: ClipboardList, exact: true, permission: "loads.read" },
-        { to: "/owner/board?status=POSTED", label: "Matches & Offers", icon: RouteIcon, permission: "matches.read" },
+        { to: "/owner/offers", label: "Matches & Offers", icon: RouteIcon, permission: "matches.read" },
       ],
     },
     {
