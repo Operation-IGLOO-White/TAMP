@@ -22,6 +22,10 @@ export function userFacingError(error: unknown, fallback = "We could not complet
     return "Your account is still being reviewed. You can browse the system, but changes are available after verification.";
   if (/rejected verification|verification.*rejected/i.test(raw))
     return "Your verification needs attention. Review your profile documents or contact support.";
+  if (/assignment is no longer available|only the assigned driver may respond/i.test(raw))
+    return "This job is no longer assigned to this account. Refresh My Jobs or ask the dispatcher to assign it again.";
+  if (/required permission:\s*dispatch\.respond|dispatch\.respond/i.test(raw))
+    return "This driver needs the ‘Respond to driver assignments’ permission in the transporter's organisation.";
   if (/organisation role does not include|required permission|permission to perform/i.test(raw))
     return "Your organisation role does not allow this change. Ask your organisation administrator or the platform administrator to review your access rights.";
   if (status === 403)
