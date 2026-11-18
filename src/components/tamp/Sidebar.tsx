@@ -67,7 +67,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     },
     {
       to: "/owner/directory",
-      label: "Customers & Templates",
+      label: "Customers",
       icon: ContactRound,
       children: [
         { to: "/owner/directory", label: "Customer Directory", icon: Users, exact: true, permission: "loads.read" },
