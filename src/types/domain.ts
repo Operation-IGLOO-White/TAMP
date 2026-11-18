@@ -136,6 +136,12 @@ export interface TruckPosting {
   photos?: string[];
   documents?: string[];
   documentMetadata?: StoredDocument[];
+  documentReviews?: Record<string, {
+    reviewStatus: "PENDING" | "APPROVED" | "REJECTED";
+    reviewReason?: string;
+    reviewedAt?: ISODate;
+    reviewedBy?: UUID;
+  }>;
   vehicleVerification?: VerificationStatus;
   vehicleVerificationUpdatedAt?: ISODate;
   id: UUID; // display ref: TR-0087
