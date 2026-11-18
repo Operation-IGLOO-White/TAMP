@@ -34,7 +34,20 @@ const TRUCK_DOCS = [
   "Insurance certificate",
 ];
 
-const dateInputValue = (iso: string | undefined) => (iso ? iso.slice(0, 10) : "");
+const dateInputValue = (iso: string | undefined) => {
+  if (!iso) return "";
+  const parts = new Intl.DateTimeFormat("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value["year"]}-${value["month"]}-${value["day"]}`;
+};
+
+const southAfricaDateTime = (date: string, endOfDay = false) =>
+  new Date(`${date}T${endOfDay ? "23:59:59" : "00:00:00"}+02:00`).toISOString();
 
 function FleetPage() {
   const { me, authParty, loads, trucks, vehicles, matches, parties, addTruck, updateTruck } = useTamp();
@@ -222,7 +235,12 @@ function TruckCard({
     licenceNumber: truck.licenceNumber ?? vehicle?.licenceNumber ?? "",
     licenceExpiry: dateInputValue(truck.licenceExpiry ?? vehicle?.licenceExpiry),
     dest: (truck.preferredLanes?.[0]
-      ? { label: truck.preferredLanes[0].destination, province: "", lat: 0, lng: 0 }
+      ? truck.preferredLanes[0].destinationPlace ?? {
+          label: truck.preferredLanes[0].destination,
+          province: "",
+          lat: 0,
+          lng: 0,
+        }
       : null) as Place | null,
   }));
   const [editError, setEditError] = useState("");
@@ -267,10 +285,10 @@ function TruckCard({
       ...(form.volumeCapacityM3 > 0 ? { volumeCapacityM3: form.volumeCapacityM3 } : {}),
       availableFrom: form.alwaysAvailable
         ? new Date().toISOString()
-        : new Date(`${form.availableFrom}T00:00:00`).toISOString(),
+        : southAfricaDateTime(form.availableFrom),
       availableTo: form.alwaysAvailable
         ? new Date("2100-12-31T23:59:59Z").toISOString()
-        : new Date(`${form.availableTo}T23:59:59`).toISOString(),
+        : southAfricaDateTime(form.availableTo, true),
       alwaysAvailable: form.alwaysAvailable,
       ...(form.vin.trim() ? { vin: form.vin.trim().toUpperCase() } : {}),
       ...(form.make.trim() ? { make: form.make.trim() } : {}),
@@ -281,7 +299,14 @@ function TruckCard({
       photos,
       documents,
       preferredLanes: form.dest
-        ? [{ origin: form.location.label, destination: form.dest.label }]
+        ? [{
+            origin: form.location.label,
+            destination: form.dest.label,
+            originPlace: form.location,
+            ...(form.dest.lat !== 0 || form.dest.lng !== 0
+              ? { destinationPlace: form.dest }
+              : {}),
+          }]
         : [],
       });
       setEditing(false);
@@ -422,6 +447,12 @@ function TruckCard({
           </label>
           <div className="col-span-2">
             <Field label="Destination (preferred lane)">
+              <p className="mb-2 rounded-md bg-steel/30 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">From:</span>{" "}
+                {form.location.label || "Select the current location first"}
+                <span className="mx-2 text-signal">→</span>
+                <span className="font-semibold text-foreground">Preferred destination</span>
+              </p>
               <AddressInput
                 value={form.dest}
                 onSelect={(p) => setForm({ ...form, dest: p })}
@@ -642,10 +673,10 @@ function AddTruckForm({
         currentLocation: form.location,
         availableFrom: form.alwaysAvailable
           ? new Date().toISOString()
-          : new Date(`${form.availableFrom}T00:00:00`).toISOString(),
+          : southAfricaDateTime(form.availableFrom),
         availableTo: form.alwaysAvailable
           ? new Date("2100-12-31T23:59:59Z").toISOString()
-          : new Date(`${form.availableTo}T23:59:59`).toISOString(),
+          : southAfricaDateTime(form.availableTo, true),
         alwaysAvailable: form.alwaysAvailable,
         preferredLanes: [],
         photos: uploadedPhotos.map((upload) => upload.url),

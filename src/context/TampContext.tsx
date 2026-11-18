@@ -163,7 +163,7 @@ interface NewTruckInput {
   currentLocation: TruckPosting["currentLocation"];
   availableFrom: string;
   availableTo: string;
-  preferredLanes?: { origin: string; destination: string }[] | undefined;
+  preferredLanes?: TruckPosting["preferredLanes"];
   photos?: string[];
   documents?: string[];
   vin?: string;

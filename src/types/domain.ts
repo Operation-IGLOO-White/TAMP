@@ -153,7 +153,12 @@ export interface TruckPosting {
   currentLocation: Place;
   availableFrom: ISODate;
   availableTo: ISODate;
-  preferredLanes?: { origin: string; destination: string }[] | undefined;
+  preferredLanes?: {
+    origin: string;
+    destination: string;
+    originPlace?: Place;
+    destinationPlace?: Place;
+  }[] | undefined;
   status: TruckStatus;
   createdAt: ISODate;
 }
