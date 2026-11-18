@@ -411,6 +411,12 @@ function useSidebarCounts(playSound = true): Record<string, number> {
       }
       return { "/driver": relevantTripIds.size };
     }
+    if (role === "FREIGHT_OWNER") {
+      const pendingOffers = matches.filter((match) =>
+        ["SUGGESTED", "OFFERED"].includes(match.status),
+      ).length;
+      return { "/owner/offers": pendingOffers };
+    }
     if (role === "ADMIN") {
       const pendingUsers = parties.filter((party) => party.verification === "PENDING" || party.verification === "UNVERIFIED").length;
       const pendingTrucks = trucks.filter((truck) => {
