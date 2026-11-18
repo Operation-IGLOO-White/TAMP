@@ -398,6 +398,23 @@
       0 10px 30px rgb(10 12 18 / 0.055);
   }
 
+  .field {
+    min-height: 2.75rem;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--background);
+    padding: 0.65rem 0.75rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    outline: none;
+  }
+
+  .field:focus {
+    border-color: var(--signal);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 14%, transparent);
+  }
+
   .dark .app-surface {
     box-shadow:
       0 1px 2px rgb(0 0 0 / 0.28),

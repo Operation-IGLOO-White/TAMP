@@ -73,6 +73,8 @@ export interface Place {
 export interface Load {
   id: UUID; // display ref: LD-0142
   ownerId: UUID;
+  customerId?: UUID;
+  templateId?: UUID;
   reference: string;
   cargoType: CargoType;
   weightKg: number;

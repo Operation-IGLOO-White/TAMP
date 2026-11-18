@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
@@ -17,6 +18,7 @@ import { isActiveTrip } from "@/lib/tamp-dashboard";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { Link } from "@/lib/nav";
 import type { Load } from "@/types/domain";
+import { getFreightWorkspace } from "@/fns/freight-workspace";
 
 type View = "all" | "active" | "scheduled" | "recurring";
 
@@ -43,6 +45,9 @@ export default function OwnerShipments() {
   const requestedView = params.get("view") as View | null;
   const view: View = requestedView && requestedView in viewLabels ? requestedView : "all";
   const [query, setQuery] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [status, setStatus] = useState("");
+  const { data: workspace } = useQuery({ queryKey: ["freight-workspace"], queryFn: getFreightWorkspace });
 
   const rows = useMemo(
     () =>
@@ -85,6 +90,10 @@ export default function OwnerShipments() {
       return false;
     if (view === "scheduled" && !isScheduled(load, trip)) return false;
     if (view === "recurring" && !load.recurrence?.active) return false;
+    if (customerId && load.customerId !== customerId) return false;
+    const displayStatus = displayStatusForLoad(load, matches, trips, disputes);
+    if (status && displayStatus !== status) return false;
+    const customer = workspace?.customers.find((item) => item.id === load.customerId);
     const haystack = [
       load.id,
       load.reference,
@@ -93,6 +102,7 @@ export default function OwnerShipments() {
       load.cargoType,
       truck?.registration,
       carrier?.contactName,
+      customer?.name,
     ]
       .filter(Boolean)
       .join(" ")
@@ -141,15 +151,11 @@ export default function OwnerShipments() {
                 </button>
               ))}
             </div>
-            <label className="relative block w-full sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search route, reference, truck or carrier"
-                className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:border-signal"
-              />
-            </label>
+            <div className="grid w-full gap-2 sm:max-w-3xl sm:grid-cols-[minmax(220px,1fr)_170px_170px]">
+              <label className="relative block"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search route, customer, reference or carrier" className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:border-signal" /></label>
+              <select value={customerId} onChange={(event) => setCustomerId(event.target.value)} aria-label="Filter by customer" className="h-10 rounded-md border border-border bg-background px-3 text-xs outline-none focus:border-signal"><option value="">All customers</option>{workspace?.customers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+              <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status" className="h-10 rounded-md border border-border bg-background px-3 text-xs outline-none focus:border-signal"><option value="">All statuses</option>{["DRAFT", "POSTED", "MATCHED", "CONFIRMED", "IN_TRANSIT", "DELIVERED", "DISPUTED", "CANCELLED", "EXPIRED"].map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select>
+            </div>
           </div>
 
           <div className="divide-y divide-border">
@@ -185,6 +191,7 @@ export default function OwnerShipments() {
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     {Math.round(load.weightKg / 100) / 10} t · {load.cargoType.replaceAll("_", " ")} · {load.distanceKm.toFixed(0)} km
                   </p>
+                  {load.customerId && <p className="mt-1 text-[10px] font-semibold text-signal">{workspace?.customers.find((item) => item.id === load.customerId)?.name ?? "Customer record"}</p>}
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Pickup</p>

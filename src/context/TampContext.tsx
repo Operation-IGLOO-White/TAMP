@@ -128,6 +128,8 @@ const ACTOR_BY_ROLE: Record<Role, string> = {
 
 interface NewLoadInput {
   ownerId: string;
+  customerId?: string;
+  templateId?: string;
   cargoType: CargoType;
   weightKg: number;
   volumeM3?: number | undefined;

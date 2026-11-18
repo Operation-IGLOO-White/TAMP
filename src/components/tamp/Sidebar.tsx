@@ -27,6 +27,8 @@ import {
   CalendarDays,
   Repeat2,
   Boxes,
+  ContactRound,
+  BarChart3,
   Store,
   ListChecks,
   Settings,
@@ -64,6 +66,16 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       ],
     },
     {
+      to: "/owner/directory",
+      label: "Customers & Templates",
+      icon: ContactRound,
+      children: [
+        { to: "/owner/directory", label: "Customer Directory", icon: Users, exact: true, permission: "loads.read" },
+        { to: "/owner/directory?view=locations", label: "Saved Locations", icon: RouteIcon, permission: "loads.read" },
+        { to: "/owner/directory?view=templates", label: "Load & Lane Templates", icon: Repeat2, permission: "loads.read" },
+      ],
+    },
+    {
       to: "/owner/board",
       label: "Marketplace",
       icon: Store,
@@ -82,6 +94,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       ],
     },
     { to: "/owner/billing", label: "Billing", icon: WalletCards, permission: "finance.read" },
+    { to: "/owner/insights", label: "Rates & Reporting", icon: BarChart3, permission: "finance.read" },
     { to: "/messages", label: "Messages", icon: MessageCircle, permission: "messages.read" },
     { to: "/organisation", label: "Organisation", icon: Building2, permission: "organisations.read" },
     { to: "/owner/profile", label: "Profile", icon: User },

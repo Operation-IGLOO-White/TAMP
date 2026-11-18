@@ -1,16 +1,18 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CalendarDays, Check, MapPin, Package, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { useTamp } from "@/context/TampContext";
 import { bodyTypesForCargo, roadDistanceKm } from "@/fns/matching";
 import { priceLoad, type PriceBreakdown } from "@/fns/pricing";
 import { computeRoute } from "@/fns/routes";
+import { getFreightWorkspace } from "@/fns/freight-workspace";
 import { formatMoney } from "@/lib/tamp-data";
 import type { BodyType, CargoType, Load, LoadStopKind, Place } from "@/types/domain";
 
 type DraftStop = { id: string; kind: LoadStopKind; place: Place | null; date: string; contactName: string; contactPhone: string; instructions: string; cargoWeightKg: number };
 type RecurrenceMode = "NONE" | "WEEKLY" | "SPECIFIC_DAYS";
-type FormState = { origin: Place | null; destination: Place | null; cargoType: CargoType; weightKg: number; volumeM3: number; pickupDate: string; pickupTime: string; deliveryDate: string; deliveryTime: string; recurrenceMode: RecurrenceMode; recurrenceDays: number[]; recurrenceEnds: string; specialRequirements: string };
+type FormState = { customerId: string; templateId: string; origin: Place | null; destination: Place | null; cargoType: CargoType; weightKg: number; volumeM3: number; pickupDate: string; pickupTime: string; deliveryDate: string; deliveryTime: string; recurrenceMode: RecurrenceMode; recurrenceDays: number[]; recurrenceEnds: string; specialRequirements: string };
 
 const cargoTypes: { value: CargoType; label: string }[] = [
   { value: "GENERAL_PALLETISED", label: "General palletised" }, { value: "BULK_DRY", label: "Bulk dry" },
@@ -40,7 +42,7 @@ function nextRecurringDate(fromDate: string, time: string, daysOfWeek: number[])
 
 function initialForm(load?: Load): FormState {
   const recurrenceMode: RecurrenceMode = load?.recurrence?.frequency ?? "NONE";
-  return { origin: load?.origin ?? null, destination: load?.destination ?? null, cargoType: load?.cargoType ?? "GENERAL_PALLETISED", weightKg: load?.weightKg ?? 24000, volumeM3: load?.volumeM3 ?? 0, pickupDate: datePart(load?.pickupWindow.from, day(3)), pickupTime: timePart(load?.pickupWindow.from, "08:00"), deliveryDate: datePart(load?.deliveryBy, day(5)), deliveryTime: timePart(load?.deliveryBy, "17:00"), recurrenceMode, recurrenceDays: load?.recurrence?.daysOfWeek ?? [], recurrenceEnds: datePart(load?.recurrence?.endsOn, ""), specialRequirements: load?.specialRequirements ?? "" };
+  return { customerId: load?.customerId ?? "", templateId: load?.templateId ?? "", origin: load?.origin ?? null, destination: load?.destination ?? null, cargoType: load?.cargoType ?? "GENERAL_PALLETISED", weightKg: load?.weightKg ?? 24000, volumeM3: load?.volumeM3 ?? 0, pickupDate: datePart(load?.pickupWindow.from, day(3)), pickupTime: timePart(load?.pickupWindow.from, "08:00"), deliveryDate: datePart(load?.deliveryBy, day(5)), deliveryTime: timePart(load?.deliveryBy, "17:00"), recurrenceMode, recurrenceDays: load?.recurrence?.daysOfWeek ?? [], recurrenceEnds: datePart(load?.recurrence?.endsOn, ""), specialRequirements: load?.specialRequirements ?? "" };
 }
 function initialStops(load?: Load): DraftStop[] {
   return (load?.stops ?? []).slice().sort((a, b) => a.sequence - b.sequence).slice(1, -1).map((stop) => ({ id: stop.id, kind: stop.kind, place: stop.place, date: datePart(stop.window.from, datePart(load?.pickupWindow.from, day(3))), contactName: stop.contactName ?? "", contactPhone: stop.contactPhone ?? "", instructions: stop.instructions ?? "", cargoWeightKg: stop.cargoWeightKg ?? 0 }));
@@ -53,8 +55,16 @@ export function PostLoadForm({ onDone, initialLoad }: { onDone: () => void; init
   const [stops, setStops] = useState<DraftStop[]>(() => initialStops(initialLoad));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const { data: workspace } = useQuery({ queryKey: ["freight-workspace"], queryFn: getFreightWorkspace, enabled: role === "FREIGHT_OWNER" });
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((current) => ({ ...current, [key]: value }));
   const updateStop = (id: string, patch: Partial<DraftStop>) => setStops((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  const applyTemplate = (templateId: string) => {
+    const template = workspace?.templates.find((item) => item.id === templateId);
+    if (!template) { set("templateId", templateId); return; }
+    const origin = workspace?.locations.find((item) => item.id === template.originLocationId)?.place ?? null;
+    const destination = workspace?.locations.find((item) => item.id === template.destinationLocationId)?.place ?? null;
+    setForm((current) => ({ ...current, templateId, customerId: template.customerId ?? current.customerId, cargoType: template.cargoType, weightKg: template.weightKg, volumeM3: template.volumeM3 ?? 0, specialRequirements: template.specialRequirements ?? "", origin: origin ?? current.origin, destination: destination ?? current.destination }));
+  };
   const addStop = (kind: LoadStopKind) => setStops((items) => [...items, { id: `LS-${crypto.randomUUID()}`, kind, place: null, date: kind === "PICKUP" ? form.pickupDate : form.deliveryDate, contactName: "", contactPhone: "", instructions: "", cargoWeightKg: 0 }]);
   const moveStop = (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -107,7 +117,7 @@ export function PostLoadForm({ onDone, initialLoad }: { onDone: () => void; init
       ];
       const recurrenceDays = form.recurrenceMode === "WEEKLY" ? [(new Date(`${form.pickupDate}T12:00:00`).getDay() + 6) % 7] : form.recurrenceDays;
       const recurrence = form.recurrenceMode === "NONE" ? undefined : { scheduleId: initialLoad?.recurrence?.scheduleId ?? `RS-${crypto.randomUUID()}`, frequency: form.recurrenceMode, daysOfWeek: recurrenceDays, nextPostAt: nextRecurringDate(form.pickupDate, form.pickupTime, recurrenceDays), ...(form.recurrenceEnds ? { endsOn: at(form.recurrenceEnds, "23:59") } : {}), active: true, isTemplate: true };
-      const input = { ownerId: initialLoad?.ownerId ?? me.id, cargoType: form.cargoType, weightKg: form.weightKg, volumeM3: form.volumeM3 || undefined, origin: form.origin, destination: form.destination, distanceKm, pickupWindow: { from: pickupFrom, to: pickupTo }, deliveryBy: at(form.deliveryDate, form.deliveryTime), specialRequirements: form.specialRequirements.trim() || undefined, stops: savedStops, ...(recurrence ? { recurrence } : {}) };
+      const input = { ownerId: initialLoad?.ownerId ?? me.id, ...(form.customerId ? { customerId: form.customerId } : {}), ...(form.templateId ? { templateId: form.templateId } : {}), cargoType: form.cargoType, weightKg: form.weightKg, volumeM3: form.volumeM3 || undefined, origin: form.origin, destination: form.destination, distanceKm, pickupWindow: { from: pickupFrom, to: pickupTo }, deliveryBy: at(form.deliveryDate, form.deliveryTime), specialRequirements: form.specialRequirements.trim() || undefined, stops: savedStops, ...(recurrence ? { recurrence } : {}) };
       if (initialLoad) await updateLoad(initialLoad.id, input); else await addLoad(input);
       onDone();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "We could not save this load. Please try again."); } finally { setSaving(false); }
@@ -116,6 +126,7 @@ export function PostLoadForm({ onDone, initialLoad }: { onDone: () => void; init
   return <section className="border-b border-border bg-background/95 animate-slide">
     <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-7">
       <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-signal">{initialLoad ? `Editing ${initialLoad.reference}` : "New freight request"}</p><h2 className="mt-1 text-xl font-bold sm:text-2xl">{initialLoad ? "Update your load" : "Post a load"}</h2><p className="mt-1 text-xs text-muted-foreground sm:text-sm">Complete one clear step at a time. You can review everything before saving.</p></div><button type="button" onClick={onDone} aria-label="Close load form" className="rounded-lg border border-border p-2 text-muted-foreground hover:bg-steel/30 hover:text-foreground"><X className="size-5" /></button></div>
+      {role === "FREIGHT_OWNER" && workspace && <div className="mb-5 grid gap-3 rounded-xl border border-border bg-steel/20 p-3 sm:grid-cols-2"><label><span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Customer</span><select value={form.customerId} onChange={(event) => set("customerId", event.target.value)} className="field"><option value="">No customer selected</option>{workspace.customers.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Load or lane template</span><select value={form.templateId} onChange={(event) => applyTemplate(event.target.value)} className="field"><option value="">Start from scratch</option>{workspace.templates.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>}
       <nav aria-label="Load form progress" className="mb-6 grid grid-cols-4 gap-1 sm:gap-2">{steps.map((item, index) => { const Icon = item.icon; const active = index === step; const complete = index < step; return <button key={item.label} type="button" onClick={() => index < step && setStep(index)} className={`flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[9px] font-bold uppercase tracking-wide transition sm:flex-row sm:justify-center sm:px-3 sm:text-xs ${active ? "border-signal bg-signal/10 text-foreground" : complete ? "border-success/40 bg-success/5 text-foreground" : "border-border text-muted-foreground"}`}><span className={`grid size-6 shrink-0 place-items-center rounded-full ${active ? "bg-signal text-signal-foreground" : complete ? "bg-success text-white" : "bg-steel"}`}>{complete ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}</span><span className="truncate">{item.label}</span></button>; })}</nav>
       <form onSubmit={(event) => event.preventDefault()}>
         {step === 0 && <RouteStep form={form} set={set} stops={stops} updateStop={updateStop} addStop={addStop} moveStop={moveStop} removeStop={(id) => setStops((items) => items.filter((item) => item.id !== id))} />}
