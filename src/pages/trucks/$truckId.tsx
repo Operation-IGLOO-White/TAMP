@@ -2,7 +2,7 @@
 import { Link } from "@/lib/nav";
 import { useParams, useNavigate } from "react-router-dom";
 import { Activity, AlertTriangle, BadgeCheck, Check, ExternalLink, FileText, Fuel, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus, Wrench, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/tamp/AppShell";
@@ -127,7 +127,7 @@ function TruckDetail() {
 
       <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-[#f7f7f4] via-white to-[#ecece7] px-5 py-6 text-black sm:px-8">
         <div className="absolute -right-20 -top-24 size-72 rounded-full bg-signal/20 blur-3xl" />
-        <div className="relative grid items-center gap-6 xl:grid-cols-[minmax(380px,1fr)_minmax(520px,.9fr)]">
+        <div className="relative grid items-center gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(420px,.7fr)]">
           <div className="relative animate-in fade-in slide-in-from-left-3 duration-500">
             <div className="pointer-events-none absolute inset-x-[8%] bottom-5 h-12 rounded-[50%] bg-black/10 blur-2xl" />
             <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-black/55">
@@ -140,13 +140,12 @@ function TruckDetail() {
               className="relative h-48 w-full object-contain drop-shadow-[0_18px_18px_rgba(0,0,0,.2)] transition-transform duration-700 hover:-translate-y-1 hover:scale-[1.03] sm:h-64"
             />
           </div>
-          <FleetInstrumentCluster
-            registration={truck.registration}
-            compliance={{ value: compliance.score, detail: compliance.level.replaceAll("_", " ") }}
-            operational={{ value: operationalScore, detail: truck.status.replaceAll("_", " ") }}
-            fuel={{ value: Math.min(100, truckFuel.length * 12), detail: `R ${fuelSpend.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}` }}
-            maintenance={{ value: Math.max(0, 100 - scheduledMaintenance.length * 15), detail: `${scheduledMaintenance.length} scheduled` }}
-          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
+            <RadialGauge label="Compliance" value={compliance.score} detail={compliance.level.replaceAll("_", " ")} icon={ShieldCheck} />
+            <RadialGauge label="Operational" value={operationalScore} detail={truck.status.replaceAll("_", " ")} icon={Activity} />
+            <RadialGauge label="Fuel records" value={Math.min(100, truckFuel.length * 12)} detail={`R ${fuelSpend.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`} icon={Fuel} />
+            <RadialGauge label="Maintenance" value={Math.max(0, 100 - scheduledMaintenance.length * 15)} detail={`${scheduledMaintenance.length} scheduled`} icon={Wrench} />
+          </div>
         </div>
       </section>
 
@@ -477,105 +476,19 @@ function Spec({ label, value }: { label: string; value: string }) {
   );
 }
 
-type InstrumentReading = { value: number; detail: string };
-
-function FleetInstrumentCluster({
-  registration,
-  compliance,
-  operational,
-  fuel,
-  maintenance,
-}: {
-  registration: string;
-  compliance: InstrumentReading;
-  operational: InstrumentReading;
-  fuel: InstrumentReading;
-  maintenance: InstrumentReading;
-}) {
-  return (
-    <div className="relative mx-auto w-full max-w-[620px] overflow-hidden rounded-[18%_18%_12%_12%/10%_10%_16%_16%] border border-black/20 bg-[linear-gradient(145deg,rgba(7,8,11,.82)_0%,rgba(24,26,31,.75)_44%,rgba(4,5,7,.86)_100%)] p-2.5 text-white shadow-[0_20px_42px_rgba(0,0,0,.2),inset_0_1px_0_rgba(255,255,255,.2),inset_0_-16px_38px_rgba(0,0,0,.32)] backdrop-blur-xl sm:p-3">
-      <div className="pointer-events-none absolute inset-x-[9%] top-0 h-16 rounded-[50%] bg-gradient-to-b from-white/18 to-transparent blur-xl" />
-      <div className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full bg-signal/15 blur-3xl" />
-      <div className="relative mb-0 flex items-center justify-between px-5 pt-0.5">
-        <span className="hidden h-px flex-1 bg-gradient-to-r from-transparent via-signal/80 to-signal sm:block" />
-        <div className="px-3 text-center">
-          <div className="text-[9px] font-black uppercase tracking-[.25em] text-white/80 sm:text-[10px]">Fleet intelligence</div>
-          <div className="mt-0.5 font-mono text-[7px] uppercase tracking-[.18em] text-signal/90">Live vehicle health</div>
-        </div>
-        <span className="hidden h-px flex-1 bg-gradient-to-l from-transparent via-signal/80 to-signal sm:block" />
-      </div>
-
-      <div className="relative grid grid-cols-2 gap-px overflow-hidden rounded-[1.75rem] bg-white/10">
-        <AnalogGauge label="Compliance" {...compliance} icon={ShieldCheck} warning={compliance.value < 80} />
-        <AnalogGauge label="Operational" {...operational} icon={Activity} />
-        <AnalogGauge label="Fuel records" {...fuel} icon={Fuel} displayValue={fuel.detail} status="Recorded spend" />
-        <AnalogGauge label="Maintenance" {...maintenance} icon={Wrench} />
-      </div>
-
-      <div className="relative mx-auto -mt-0.5 flex w-fit items-center gap-2.5 rounded-full border border-signal/50 bg-black/55 px-3.5 py-1.5 shadow-[0_0_18px_rgba(244,180,0,.18),inset_0_1px_0_rgba(255,255,255,.12)] backdrop-blur-md">
-        <span className="size-1.5 animate-pulse rounded-full bg-positive shadow-[0_0_8px_currentColor]" />
-        <span className="font-mono text-[10px] font-black tracking-[.13em] text-white sm:text-xs">{registration}</span>
-        <span className="text-[7px] font-bold uppercase tracking-widest text-white/45">Online</span>
-      </div>
-    </div>
-  );
-}
-
-function AnalogGauge({
-  label,
-  value,
-  detail,
-  displayValue,
-  status,
-  icon: Icon,
-  warning = false,
-}: InstrumentReading & {
-  label: string;
-  displayValue?: string;
-  status?: string;
-  icon: typeof ShieldCheck;
-  warning?: boolean;
-}) {
+function RadialGauge({ label, value, detail, icon: Icon }: { label: string; value: number; detail: string; icon: typeof ShieldCheck }) {
   const safeValue = Math.max(0, Math.min(100, Math.round(value)));
-  const needleRotation = -90 + safeValue * 1.8;
-  const statusText = status ?? detail;
   return (
-    <div className="group relative min-w-0 overflow-hidden bg-[linear-gradient(155deg,rgba(255,255,255,.055),rgba(255,255,255,.012)_45%,rgba(0,0,0,.18))] px-2 pb-2 pt-2 shadow-[inset_0_1px_0_rgba(255,255,255,.055)] backdrop-blur-sm sm:px-3">
-      <div className="flex items-center justify-center gap-1.5 text-[8px] font-black uppercase tracking-[.13em] text-white/65 sm:text-[10px]">
-        <Icon className="size-3 text-signal sm:size-3.5" />
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="relative mx-auto -mt-2 aspect-[1.8/1] w-full max-w-[190px]">
-        <svg viewBox="0 0 180 108" className="h-full w-full overflow-visible" aria-hidden="true">
-          <defs>
-            <filter id={`gauge-glow-${label.replace(/\s/g, "-")}`} x="-40%" y="-40%" width="180%" height="180%">
-              <feGaussianBlur stdDeviation="2.2" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-          <path d="M 20 88 A 70 70 0 0 1 160 88" fill="none" stroke="rgba(255,255,255,.13)" strokeWidth="10" strokeLinecap="round" pathLength="100" />
-          <path d="M 20 88 A 70 70 0 0 1 160 88" fill="none" stroke="#f4b400" strokeWidth="8" strokeLinecap="round" pathLength="100" strokeDasharray={`${safeValue} 100`} filter={`url(#gauge-glow-${label.replace(/\s/g, "-")})`} className="transition-[stroke-dasharray] duration-700" />
-          {Array.from({ length: 11 }, (_, index) => {
-            const angle = Math.PI - (Math.PI * index) / 10;
-            const x1 = 90 + Math.cos(angle) * 59;
-            const y1 = 88 - Math.sin(angle) * 59;
-            const x2 = 90 + Math.cos(angle) * 67;
-            const y2 = 88 - Math.sin(angle) * 67;
-            return <line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,.72)" strokeWidth={index % 5 === 0 ? 2 : 1} />;
-          })}
-          <g style={{ transform: `rotate(${needleRotation}deg)`, transformOrigin: "90px 88px" }} className="transition-transform duration-700 ease-out">
-            <line x1="90" y1="88" x2="90" y2="35" stroke="white" strokeWidth="2.5" strokeLinecap="round" filter={`url(#gauge-glow-${label.replace(/\s/g, "-")})`} />
-          </g>
-          <circle cx="90" cy="88" r="5" fill="#08090c" stroke="#f4b400" strokeWidth="3" />
-          <text x="18" y="103" fill="rgba(255,255,255,.5)" fontSize="8" fontFamily="monospace">0</text>
-          <text x="153" y="103" fill="rgba(255,255,255,.5)" fontSize="8" fontFamily="monospace">100</text>
-        </svg>
-        <div className="pointer-events-none absolute inset-x-0 top-[47%] text-center">
-          <div className="font-mono text-lg font-black leading-none tracking-tight text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] sm:text-xl">{displayValue ?? safeValue}</div>
+    <div className="group rounded-2xl border border-black/10 bg-white/80 p-3 shadow-[0_10px_30px_rgba(20,20,20,.08)] backdrop-blur transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(20,20,20,.14)]">
+      <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-black/50"><Icon className="size-3.5 text-signal" />{label}</div>
+      <div className="mt-3 flex items-center gap-3">
+        <div
+          className="relative grid size-16 shrink-0 place-items-center rounded-full transition-transform duration-500 group-hover:rotate-3"
+          style={{ background: `conic-gradient(#f5b800 ${safeValue * 3.6}deg, #e5e5df 0deg)` } as CSSProperties}
+        >
+          <div className="grid size-12 place-items-center rounded-full bg-white font-mono text-sm font-black">{safeValue}</div>
         </div>
-      </div>
-      <div className={`mx-auto -mt-2 w-fit max-w-full truncate rounded-full border px-2.5 py-0.5 text-[6px] font-black uppercase tracking-[.1em] sm:text-[7px] ${warning ? "border-danger/55 bg-danger/20 text-red-300" : "border-white/15 bg-white/5 text-white/70"}`} title={statusText}>
-        {statusText}
+        <div className="min-w-0"><div className="text-xs font-black">{detail}</div><div className="mt-1 text-[9px] uppercase tracking-wide text-black/45">Live fleet score</div></div>
       </div>
     </div>
   );
