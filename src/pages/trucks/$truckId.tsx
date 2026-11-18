@@ -127,7 +127,7 @@ function TruckDetail() {
 
       <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-[#f7f7f4] via-white to-[#ecece7] px-5 py-6 text-black sm:px-8">
         <div className="absolute -right-20 -top-24 size-72 rounded-full bg-signal/20 blur-3xl" />
-        <div className="relative grid items-center gap-6 xl:grid-cols-[minmax(360px,.78fr)_minmax(600px,1.22fr)]">
+        <div className="relative grid items-center gap-6 xl:grid-cols-[minmax(380px,1fr)_minmax(520px,.9fr)]">
           <div className="relative animate-in fade-in slide-in-from-left-3 duration-500">
             <div className="pointer-events-none absolute inset-x-[8%] bottom-5 h-12 rounded-[50%] bg-black/10 blur-2xl" />
             <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-black/55">
@@ -493,29 +493,29 @@ function FleetInstrumentCluster({
   maintenance: InstrumentReading;
 }) {
   return (
-    <div className="relative mx-auto w-full max-w-[760px] overflow-hidden rounded-[2.25rem] border border-white/15 bg-[linear-gradient(145deg,#07080b_0%,#17191e_42%,#050608_100%)] p-3 text-white shadow-[0_26px_55px_rgba(0,0,0,.3),inset_0_1px_0_rgba(255,255,255,.16),inset_0_-20px_50px_rgba(0,0,0,.45)] sm:p-4">
-      <div className="pointer-events-none absolute inset-x-[7%] top-0 h-20 rounded-[50%] bg-gradient-to-b from-white/14 to-transparent blur-xl" />
+    <div className="relative mx-auto w-full max-w-[620px] overflow-hidden rounded-[18%_18%_12%_12%/10%_10%_16%_16%] border border-black/20 bg-[linear-gradient(145deg,rgba(7,8,11,.82)_0%,rgba(24,26,31,.75)_44%,rgba(4,5,7,.86)_100%)] p-2.5 text-white shadow-[0_20px_42px_rgba(0,0,0,.2),inset_0_1px_0_rgba(255,255,255,.2),inset_0_-16px_38px_rgba(0,0,0,.32)] backdrop-blur-xl sm:p-3">
+      <div className="pointer-events-none absolute inset-x-[9%] top-0 h-16 rounded-[50%] bg-gradient-to-b from-white/18 to-transparent blur-xl" />
       <div className="pointer-events-none absolute -right-12 -top-16 size-44 rounded-full bg-signal/15 blur-3xl" />
-      <div className="relative mb-1 flex items-center justify-between px-3 pt-1">
+      <div className="relative mb-0 flex items-center justify-between px-5 pt-0.5">
         <span className="hidden h-px flex-1 bg-gradient-to-r from-transparent via-signal/80 to-signal sm:block" />
         <div className="px-3 text-center">
-          <div className="text-[10px] font-black uppercase tracking-[.28em] text-white/80 sm:text-xs">Fleet intelligence</div>
-          <div className="mt-1 font-mono text-[9px] uppercase tracking-[.18em] text-signal/90">Live vehicle health</div>
+          <div className="text-[9px] font-black uppercase tracking-[.25em] text-white/80 sm:text-[10px]">Fleet intelligence</div>
+          <div className="mt-0.5 font-mono text-[7px] uppercase tracking-[.18em] text-signal/90">Live vehicle health</div>
         </div>
         <span className="hidden h-px flex-1 bg-gradient-to-l from-transparent via-signal/80 to-signal sm:block" />
       </div>
 
-      <div className="relative grid grid-cols-2 gap-2 sm:gap-3">
+      <div className="relative grid grid-cols-2 gap-px overflow-hidden rounded-[1.75rem] bg-white/10">
         <AnalogGauge label="Compliance" {...compliance} icon={ShieldCheck} warning={compliance.value < 80} />
         <AnalogGauge label="Operational" {...operational} icon={Activity} />
         <AnalogGauge label="Fuel records" {...fuel} icon={Fuel} displayValue={fuel.detail} status="Recorded spend" />
         <AnalogGauge label="Maintenance" {...maintenance} icon={Wrench} />
       </div>
 
-      <div className="relative mx-auto -mt-1 flex w-fit items-center gap-3 rounded-full border border-signal/60 bg-black/80 px-4 py-2 shadow-[0_0_22px_rgba(244,180,0,.22),inset_0_1px_0_rgba(255,255,255,.12)]">
+      <div className="relative mx-auto -mt-0.5 flex w-fit items-center gap-2.5 rounded-full border border-signal/50 bg-black/55 px-3.5 py-1.5 shadow-[0_0_18px_rgba(244,180,0,.18),inset_0_1px_0_rgba(255,255,255,.12)] backdrop-blur-md">
         <span className="size-1.5 animate-pulse rounded-full bg-positive shadow-[0_0_8px_currentColor]" />
-        <span className="font-mono text-xs font-black tracking-[.13em] text-white sm:text-sm">{registration}</span>
-        <span className="text-[8px] font-bold uppercase tracking-widest text-white/45">Online</span>
+        <span className="font-mono text-[10px] font-black tracking-[.13em] text-white sm:text-xs">{registration}</span>
+        <span className="text-[7px] font-bold uppercase tracking-widest text-white/45">Online</span>
       </div>
     </div>
   );
@@ -540,12 +540,12 @@ function AnalogGauge({
   const needleRotation = -90 + safeValue * 1.8;
   const statusText = status ?? detail;
   return (
-    <div className="group relative min-w-0 overflow-hidden rounded-[1.4rem] border border-white/10 bg-[linear-gradient(155deg,rgba(255,255,255,.075),rgba(255,255,255,.018)_45%,rgba(0,0,0,.26))] px-2 pb-2 pt-2 shadow-[inset_0_1px_0_rgba(255,255,255,.09),0_10px_24px_rgba(0,0,0,.2)] backdrop-blur-md sm:px-3 sm:pb-3">
+    <div className="group relative min-w-0 overflow-hidden bg-[linear-gradient(155deg,rgba(255,255,255,.055),rgba(255,255,255,.012)_45%,rgba(0,0,0,.18))] px-2 pb-2 pt-2 shadow-[inset_0_1px_0_rgba(255,255,255,.055)] backdrop-blur-sm sm:px-3">
       <div className="flex items-center justify-center gap-1.5 text-[8px] font-black uppercase tracking-[.13em] text-white/65 sm:text-[10px]">
         <Icon className="size-3 text-signal sm:size-3.5" />
         <span className="truncate">{label}</span>
       </div>
-      <div className="relative mx-auto -mt-1 aspect-[1.65/1] w-full max-w-[210px]">
+      <div className="relative mx-auto -mt-2 aspect-[1.8/1] w-full max-w-[190px]">
         <svg viewBox="0 0 180 108" className="h-full w-full overflow-visible" aria-hidden="true">
           <defs>
             <filter id={`gauge-glow-${label.replace(/\s/g, "-")}`} x="-40%" y="-40%" width="180%" height="180%">
@@ -570,11 +570,11 @@ function AnalogGauge({
           <text x="18" y="103" fill="rgba(255,255,255,.5)" fontSize="8" fontFamily="monospace">0</text>
           <text x="153" y="103" fill="rgba(255,255,255,.5)" fontSize="8" fontFamily="monospace">100</text>
         </svg>
-        <div className="pointer-events-none absolute inset-x-0 bottom-[4%] text-center">
-          <div className="font-mono text-xl font-black leading-none tracking-tight text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.7)] sm:text-2xl">{displayValue ?? safeValue}</div>
+        <div className="pointer-events-none absolute inset-x-0 top-[47%] text-center">
+          <div className="font-mono text-lg font-black leading-none tracking-tight text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] sm:text-xl">{displayValue ?? safeValue}</div>
         </div>
       </div>
-      <div className={`mx-auto -mt-1 w-fit max-w-full truncate rounded-full border px-2.5 py-1 text-[7px] font-black uppercase tracking-[.1em] sm:text-[8px] ${warning ? "border-danger/55 bg-danger/20 text-red-300" : "border-white/15 bg-white/5 text-white/70"}`} title={statusText}>
+      <div className={`mx-auto -mt-2 w-fit max-w-full truncate rounded-full border px-2.5 py-0.5 text-[6px] font-black uppercase tracking-[.1em] sm:text-[7px] ${warning ? "border-danger/55 bg-danger/20 text-red-300" : "border-white/15 bg-white/5 text-white/70"}`} title={statusText}>
         {statusText}
       </div>
     </div>
