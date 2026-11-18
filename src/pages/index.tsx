@@ -15,6 +15,7 @@ import { HOME_BY_ROLE } from "@/lib/role-routes";
 import { useTamp } from "@/context/TampContext";
 import { PasswordInput } from "@/components/tamp/PasswordInput";
 import { BrandLogo } from "@/components/tamp/BrandLogo";
+import { AppVersion } from "@/components/tamp/AppVersion";
 import type { Party } from "@/types/domain";
 import { verifyMfa } from "@/fns/auth";
 
@@ -134,15 +135,18 @@ function Landing() {
 
       <header className="login-reveal relative z-20 mx-auto flex w-full max-w-[1480px] items-center justify-between px-6 py-6 sm:px-10 lg:px-14 lg:py-8">
         <BrandLogo className="h-11 sm:h-13" priority darkSurface />
-        <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
-          <span>Track</span>
-          <i className="h-3 w-px bg-white/25" />
-          <span>Manage</span>
-          <i className="h-3 w-px bg-white/25" />
-          <span>Move</span>
-          <i className="h-3 w-px bg-white/25" />
-          <span>Perform</span>
-          <i className="ml-1 h-px w-10 bg-signal" />
+        <div className="flex items-center gap-4">
+          <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
+            <span>Track</span>
+            <i className="h-3 w-px bg-white/25" />
+            <span>Manage</span>
+            <i className="h-3 w-px bg-white/25" />
+            <span>Move</span>
+            <i className="h-3 w-px bg-white/25" />
+            <span>Perform</span>
+            <i className="ml-1 h-px w-10 bg-signal" />
+          </div>
+          <AppVersion dark />
         </div>
       </header>
 

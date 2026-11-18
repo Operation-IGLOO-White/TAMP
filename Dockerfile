@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM node:24-alpine AS build
 WORKDIR /app
+ARG VITE_GIT_VERSION=dev
+ARG VITE_APP_VERSION=0.1.0
+ENV VITE_GIT_VERSION=$VITE_GIT_VERSION
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .

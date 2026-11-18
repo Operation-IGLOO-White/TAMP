@@ -27,6 +27,7 @@ import {
 import { useTamp } from "@/context/TampContext";
 import { Avatar } from "./Avatar";
 import { BrandLogo } from "./BrandLogo";
+import { AppVersion } from "./AppVersion";
 import { MobileNavigation } from "./Sidebar";
 import { switchOrganisation } from "@/fns/organisations";
 import type { Party } from "@/types/domain";
@@ -84,6 +85,7 @@ export function TopNav() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <AppVersion />
           <OrganisationSwitcher />
           <NotificationsMenu />
           <ProfileMenu />
