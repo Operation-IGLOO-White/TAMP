@@ -8,7 +8,6 @@ import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { formatMoney } from "@/lib/tamp-data";
-import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
 import { Link } from "@/lib/nav";
@@ -38,7 +37,7 @@ const TRUCK_DOCS = [
 const dateInputValue = (iso: string | undefined) => (iso ? iso.slice(0, 10) : "");
 
 function FleetPage() {
-  const { me, authParty, loads, trucks, vehicles, parties, addTruck, updateTruck } = useTamp();
+  const { me, authParty, loads, trucks, vehicles, matches, parties, addTruck, updateTruck } = useTamp();
   const isDriver = me.role === "DRIVER";
   const canManageFleet = authParty?.permissions?.includes("trucks.manage") ?? false;
   const [searchParams] = useSearchParams();
@@ -70,36 +69,23 @@ function FleetPage() {
     );
   }, [activeOnly, trucks, query]);
 
-  // Best-matching open load per truck (highest score it passes). Scored
-  // server-side (src/fns/matching.ts) — one call per open load, scoring every
-  // available truck at once, rather than one call per truck×load pair.
-  const availableTrucks = useMemo(() => trucks.filter((t) => t.status === "AVAILABLE"), [trucks]);
-  const [bestLoadByTruckId, setBestLoadByTruckId] = useState<
-    Map<string, { load: Load; score: number }>
-  >(new Map());
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const best = new Map<string, { load: Load; score: number }>();
-      await Promise.all(
-        openLoads.map(async (load) => {
-          const owner = parties.find((p) => p.id === load.ownerId);
-          if (!owner || availableTrucks.length === 0) return;
-          const scored = await scoreLoadAgainstTrucks(load, availableTrucks, parties, owner);
-          for (const m of scored) {
-            if (!m.passed) continue;
-            const current = best.get(m.truck.id);
-            if (!current || m.score > current.score) best.set(m.truck.id, { load, score: m.score });
-          }
-        }),
-      );
-      if (!cancelled) setBestLoadByTruckId(best);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [openLoads, availableTrucks, parties]);
+  // Suggestions are persisted by the matching engine whenever inventory
+  // changes. Reuse them instead of recalculating the whole marketplace each
+  // time this page renders.
+  const bestLoadByTruckId = useMemo(() => {
+    const loadsById = new Map(openLoads.map((load) => [load.id, load]));
+    const best = new Map<string, { load: Load; score: number }>();
+    for (const match of matches) {
+      if (!['SUGGESTED', 'OFFERED'].includes(match.status)) continue;
+      const load = loadsById.get(match.loadId);
+      if (!load) continue;
+      const current = best.get(match.truckPostingId);
+      if (!current || match.score > current.score) {
+        best.set(match.truckPostingId, { load, score: match.score });
+      }
+    }
+    return best;
+  }, [matches, openLoads]);
 
   const bestLoadFor = (truck: TruckPosting): { load: Load; score: number } | undefined =>
     bestLoadByTruckId.get(truck.id);
@@ -628,10 +614,24 @@ function AddTruckForm({
       description: "Uploading vehicle photos and documents…",
     });
     try {
-      const [uploadedPhotos, uploadedDocs] = await Promise.all([
-        Promise.all(TRUCK_PHOTOS.map((label) => uploadFile(photos[label]!.file, "TRUCK_PHOTO"))),
-        Promise.all(TRUCK_DOCS.map((label) => uploadFile(docs[label]!, "TRUCK_DOCUMENT"))),
-      ]);
+      // Large files previously started as seven simultaneous requests. Keep a
+      // small concurrency window so uploads don't starve normal API traffic.
+      const jobs = [
+        ...TRUCK_PHOTOS.map((label) => ({ file: photos[label]!.file, kind: "TRUCK_PHOTO" as const })),
+        ...TRUCK_DOCS.map((label) => ({ file: docs[label]!, kind: "TRUCK_DOCUMENT" as const })),
+      ];
+      const uploads = new Array<Awaited<ReturnType<typeof uploadFile>>>(jobs.length);
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < jobs.length) {
+          const index = cursor++;
+          const job = jobs[index]!;
+          uploads[index] = await uploadFile(job.file, job.kind);
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      const uploadedPhotos = uploads.slice(0, TRUCK_PHOTOS.length);
+      const uploadedDocs = uploads.slice(TRUCK_PHOTOS.length);
       await onAdd({
         transporterId: me.id,
         ...(me.role === "DRIVER" ? { driverId: me.id } : {}),

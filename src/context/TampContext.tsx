@@ -384,6 +384,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
       }),
     );
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hydratePromise = useRef<Promise<void> | null>(null);
   // What has been persisted, for computing deltas.
   const persistedRef = useRef<EntityMaps>(emptyMaps());
 
@@ -433,8 +434,13 @@ export function TampProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Load this account's scoped domain data from Postgres.
-  const hydrateDomain = useCallback(async (background = false) => {
-    try {
+  const hydrateDomain = useCallback((background = false) => {
+    // Navigation, polling and post-command refreshes can all request the same
+    // snapshot. Share one in-flight request instead of making the API rebuild
+    // the account snapshot several times concurrently.
+    if (hydratePromise.current) return hydratePromise.current;
+    const request = (async () => {
+      try {
       const accountId = authRef.current?.id;
       const before = stateRef.current;
       const snap = await loadState();
@@ -462,9 +468,14 @@ export function TampProvider({ children }: { children: ReactNode }) {
         dispatches: snap.dispatches,
       }));
       persistedRef.current = mapsFrom(snap);
-    } catch {
-      /* not signed in / offline — keep whatever is loaded */
-    }
+      } catch {
+        /* not signed in / offline — keep whatever is loaded */
+      } finally {
+        hydratePromise.current = null;
+      }
+    })();
+    hydratePromise.current = request;
+    return request;
   }, []);
 
   // Clear domain data (on sign-out) so the next account never sees it.
@@ -563,10 +574,14 @@ export function TampProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!auth.party || !hydrated) return;
     const timer = setInterval(() => {
-      if (!saving.current && !computeDelta(persistedRef.current, stateRef.current).changed) {
+      if (
+        document.visibilityState === "visible" &&
+        !saving.current &&
+        !computeDelta(persistedRef.current, stateRef.current).changed
+      ) {
         void hydrateDomain(true);
       }
-    }, 10000);
+    }, 30000);
     return () => clearInterval(timer);
   }, [auth.party, hydrated, hydrateDomain]);
 
@@ -985,36 +1000,13 @@ export function TampProvider({ children }: { children: ReactNode }) {
           updatedAt: now,
         };
         const operator = current.parties.find((p) => p.id === truck.transporterId)!;
-        const openLoads = current.loads.filter((l) => l.status === "POSTED");
-        const generated: Match[] = [];
-        await Promise.all(
-          openLoads.map(async (load) => {
-            const ownerParty = current.parties.find((p) => p.id === load.ownerId)!;
-            const scored = (
-              await scoreLoadAgainstTrucks(load, [truck], current.parties, ownerParty)
-            ).filter((m) => m.passed);
-            for (const m of scored) {
-              generated.push({
-                id: nextRef("MT"),
-                loadId: load.id,
-                truckPostingId: truck.id,
-                score: m.score,
-                breakdown: m.breakdown,
-                hardFilterResults: m.hardFilterResults,
-                status: "SUGGESTED",
-                initiatedBy: "SYSTEM",
-                expiresAt: new Date(Date.now() + 864e5).toISOString(),
-                createdAt: new Date().toISOString(),
-              });
-            }
-          }),
-        );
-
         const nextState: State = {
           ...current,
           trucks: [truck, ...current.trucks],
           vehicles: [vehicle, ...current.vehicles],
-          matches: [...generated, ...current.matches],
+          // The sync endpoint creates authoritative suggestions once the truck
+          // is stored. Avoid scoring every open load here before the save.
+          matches: current.matches,
           audit: log(
             current.audit,
             "TRUCK_POSTED",
