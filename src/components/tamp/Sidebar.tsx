@@ -108,10 +108,12 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       children: [
         { to: "/transporter/fleet", label: "All Vehicles", icon: Truck, exact: true, permission: "trucks.read" },
         { to: "/transporter/fleet?status=active", label: "Active Vehicles", icon: Activity, permission: "trucks.read" },
+        { to: "/transporter/fleet-ops?tab=availability", label: "Availability Calendar", icon: CalendarDays, permission: "trucks.manage" },
         { to: "/transporter/fleet-ops?tab=compliance", label: "Compliance", icon: ShieldCheck, permission: "trucks.read" },
+        { to: "/transporter/fleet-ops?tab=inspections", label: "Inspections & Defects", icon: ListChecks, permission: "trucks.manage" },
         { to: "/transporter/fleet-ops?tab=maintenance", label: "Maintenance & Repairs", icon: Wrench, permission: "trucks.manage" },
         { to: "/transporter/fleet-ops?tab=fuel", label: "Fuel & Telematics", icon: Fuel, permission: "trucks.manage" },
-        { to: "/transporter/fleet-ops?tab=costs", label: "Costs & Analytics", icon: CircleGauge, permission: "finance.read" },
+        { to: "/transporter/fleet-ops?tab=costs", label: "Vehicle Profitability", icon: CircleGauge, permission: "finance.read" },
         { to: "/transporter/drivers", label: "Drivers Directory", icon: UserRoundCog, permission: "organisations.read" },
       ],
     },

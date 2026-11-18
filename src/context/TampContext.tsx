@@ -258,6 +258,7 @@ export interface NewMaintenanceInput {
   dueDate: string;
   amount?: number | undefined; // cost in ZAR
   note?: string | undefined;
+  completed?: boolean | undefined;
 }
 export interface NewProofInput {
   tripId: string;
@@ -1554,9 +1555,10 @@ export function TampProvider({ children }: { children: ReactNode }) {
             kind: input.kind,
             title: input.title,
             dueDate: input.dueDate,
-            status: "SCHEDULED",
+            status: input.completed ? "DONE" : "SCHEDULED",
             cost: input.amount ? { amount: input.amount, currency: "ZAR", vat: "incl" } : undefined,
             note: input.note,
+            completedAt: input.completed ? new Date().toISOString() : undefined,
             createdAt: new Date().toISOString(),
           };
           return {
@@ -1569,7 +1571,9 @@ export function TampProvider({ children }: { children: ReactNode }) {
               me.role,
               "TRUCK",
               truck.id,
-              `${input.title} scheduled for ${truck.registration} (due ${new Date(input.dueDate).toLocaleDateString("en-ZA")}).`,
+              input.completed
+                ? `${input.title} recorded for ${truck.registration}.`
+                : `${input.title} scheduled for ${truck.registration} (due ${new Date(input.dueDate).toLocaleDateString("en-ZA")}).`,
             ),
           };
         }),
