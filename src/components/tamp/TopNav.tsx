@@ -383,8 +383,10 @@ function NotificationsMenu() {
                     }`}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-semibold">{n.title}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">{n.detail}</div>
+                    <div className="break-words text-xs font-semibold leading-4">{n.title}</div>
+                    <div className="mt-0.5 break-words text-[11px] leading-4 text-muted-foreground">
+                      {n.detail}
+                    </div>
                     <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
                       {new Date(n.at).toLocaleString("en-ZA", {
                         day: "2-digit",

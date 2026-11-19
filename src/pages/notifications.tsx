@@ -169,7 +169,9 @@ function NotificationsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">{n.detail}</div>
+                    <div className="mt-0.5 whitespace-normal break-words text-xs leading-5 text-muted-foreground">
+                      {n.detail}
+                    </div>
                     <div className="mt-1 font-mono text-[10px] text-muted-foreground">
                       {new Date(n.at).toLocaleString("en-ZA", {
                         day: "2-digit",
