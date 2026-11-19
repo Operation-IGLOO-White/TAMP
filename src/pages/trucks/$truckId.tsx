@@ -1,7 +1,7 @@
 
 import { Link } from "@/lib/nav";
 import { useParams, useNavigate } from "react-router-dom";
-import { Activity, AlertTriangle, BadgeCheck, Check, ExternalLink, FileText, Fuel, Images, Loader2, MapPin, ShieldCheck, Star, UserPlus, Wrench, X } from "lucide-react";
+import { Activity, AlertTriangle, BadgeCheck, Check, ExternalLink, FileText, Fuel, Images, MapPin, ShieldCheck, Star, UserPlus, Wrench, X } from "lucide-react";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -12,7 +12,6 @@ import { LaneRail } from "@/components/tamp/LaneRail";
 import { Panel } from "@/components/tamp/StatCard";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { IncidentDialog } from "@/components/tamp/IncidentDialog";
-import { findDriver } from "@/fns/parties";
 import { daysSince, estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
@@ -85,6 +84,9 @@ function TruckDetail() {
   const canManageDriver = isAdmin || me.id === truck.transporterId;
   const canDriveOwnTruck =
     me.id === truck.transporterId && me.role === "TRANSPORTER" && me.verification === "VERIFIED";
+  const organisationDrivers = parties
+    .filter((party) => party.role === "DRIVER")
+    .sort((left, right) => left.contactName.localeCompare(right.contactName));
 
   const truckTrips = trips
     .map((trip) => {
@@ -381,6 +383,7 @@ function TruckDetail() {
             {canManageDriver && (
               <AssignDriver
                 assigned={!!driver}
+                drivers={organisationDrivers}
                 selfAssigned={truck.driverId === me.id}
                 canAssignSelf={canDriveOwnTruck}
                 onAssignSelf={() => assignDriver(truck.id, me.id)}
@@ -494,10 +497,10 @@ function RadialGauge({ label, value, detail, icon: Icon }: { label: string; valu
   );
 }
 
-// Assign a driver to this truck by the organisation-managed email. Driver
-// accounts can be provisioned directly from the Organisation screen.
+// Assign a verified driver already provisioned in this organisation.
 function AssignDriver({
   assigned,
+  drivers,
   selfAssigned,
   canAssignSelf,
   onAssignSelf,
@@ -505,43 +508,28 @@ function AssignDriver({
   onUnassign,
 }: {
   assigned: boolean;
+  drivers: Party[];
   selfAssigned: boolean;
   canAssignSelf: boolean;
   onAssignSelf: () => void;
   onLink: (driver: Party) => void;
   onUnassign: () => void;
 }) {
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [driverId, setDriverId] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // A looked-up driver who can't yet be assigned (unverified) — shown with a badge.
-  const [pending, setPending] = useState<Party | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const value = email.trim();
-    if (!value) return;
-    setBusy(true);
+    const driver = drivers.find((candidate) => candidate.id === driverId);
+    if (!driver) return;
     setMsg(null);
-    setPending(null);
-    try {
-      const driver = await findDriver(value);
-      if (!driver) {
-        setMsg({ ok: false, text: "No driver found. Add them under Organisation first." });
-        return;
-      }
-      if (driver.verification !== "VERIFIED") {
-        setPending(driver);
-        return;
-      }
-      onLink(driver);
-      setMsg({ ok: true, text: `${driver.contactName} assigned.` });
-      setEmail("");
-    } catch {
-      setMsg({ ok: false, text: "Lookup failed — please try again." });
-    } finally {
-      setBusy(false);
+    if (driver.verification !== "VERIFIED") {
+      setMsg({ ok: false, text: `${driver.contactName} is awaiting verification.` });
+      return;
     }
+    onLink(driver);
+    setMsg({ ok: true, text: `${driver.contactName} assigned.` });
+    setDriverId("");
   };
 
   return (
@@ -561,46 +549,38 @@ function AssignDriver({
         </p>
       )}
       <label className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-        {assigned ? "Reassign driver by email" : "Assign a driver by email"}
+        {assigned ? "Reassign organisation driver" : "Assign organisation driver"}
       </label>
       <form onSubmit={submit} className="flex gap-2">
-        <input
-          type="email"
-          value={email}
+        <select
+          value={driverId}
           onChange={(e) => {
-            setEmail(e.target.value);
+            setDriverId(e.target.value);
             setMsg(null);
-            setPending(null);
           }}
-          placeholder="driver@email.co.za"
           className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-signal"
-        />
+        >
+          <option value="">Select a driver</option>
+          {drivers.map((driver) => (
+            <option key={driver.id} value={driver.id} disabled={driver.verification !== "VERIFIED"}>
+              {driver.contactName}
+              {driver.verification !== "VERIFIED" ? ` — ${driver.verification.toLowerCase()}` : ""}
+            </option>
+          ))}
+        </select>
         <button
           type="submit"
-          disabled={busy || !email.trim()}
+          disabled={!driverId}
           className="inline-flex items-center gap-1.5 rounded-md bg-signal px-3 py-2 text-xs font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105 disabled:opacity-50"
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
+          <UserPlus className="size-3.5" />
           Assign
         </button>
       </form>
-      {pending && (
-        <div className="space-y-1 rounded-md border border-border bg-graphite px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold">{pending.contactName}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">
-                {pending.email}
-              </span>
-            </span>
-            <VerificationBadge status={pending.verification} />
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            {pending.verification === "REJECTED"
-              ? "This driver's account was rejected — they can't be assigned."
-              : "Awaiting administrator approval — you can assign them once verified."}
-          </p>
-        </div>
+      {!drivers.length && (
+        <p className="text-[11px] text-muted-foreground">
+          No organisation drivers yet. Add drivers under Organisation.
+        </p>
       )}
       {msg && (
         <p className={`text-[11px] font-medium ${msg.ok ? "text-positive" : "text-danger"}`}>
@@ -616,26 +596,10 @@ function AssignDriver({
         </button>
       )}
       <p className="text-[10px] leading-snug text-muted-foreground">
-        Enter an organisation driver's email. Add new drivers under Organisation; they do not need
-        to sign up themselves.
+        Only verified drivers from this organisation can be assigned. Add drivers under Organisation;
+        they do not need to sign up themselves.
       </p>
     </div>
-  );
-}
-
-function VerificationBadge({ status }: { status: Party["verification"] }) {
-  const tone =
-    status === "VERIFIED"
-      ? "bg-positive/15 text-positive"
-      : status === "REJECTED"
-        ? "bg-danger/15 text-danger"
-        : "bg-signal/20 text-foreground";
-  return (
-    <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${tone}`}
-    >
-      {status}
-    </span>
   );
 }
 

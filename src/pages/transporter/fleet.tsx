@@ -53,6 +53,7 @@ function FleetPage() {
   const { me, authParty, loads, trucks, vehicles, matches, parties, addTruck, updateTruck } = useTamp();
   const isDriver = me.role === "DRIVER";
   const canManageFleet = authParty?.permissions?.includes("trucks.manage") ?? false;
+  const ownerOperatorAtLimit = Boolean(me.ownerOperator && trucks.length >= 1);
   const [searchParams] = useSearchParams();
   const openLoads = useMemo(() => loads.filter((l) => l.status === "POSTED"), [loads]);
   const [adding, setAdding] = useState(
@@ -107,7 +108,7 @@ function FleetPage() {
     <AppShell>
       <PageHeader
         title={isDriver ? "My Vehicles" : activeOnly ? "Active Vehicles" : "All Vehicles"}
-        actions={canManageFleet ? (
+        actions={canManageFleet && !ownerOperatorAtLimit ? (
           <button
             onClick={() => setAdding((a) => !a)}
             className="inline-flex items-center gap-1.5 rounded-md bg-signal px-4 py-2 text-xs font-bold uppercase tracking-wide text-signal-foreground hover:brightness-105"
@@ -126,7 +127,14 @@ function FleetPage() {
         any time, and see its best-matching open loads.
       </p>
 
-      {adding && canManageFleet && (
+      {ownerOperatorAtLimit && (
+        <div className="mx-4 mt-4 rounded-xl border border-signal/35 bg-signal/5 px-4 py-3 text-xs text-muted-foreground sm:mx-6">
+          <span className="font-bold text-foreground">Owner-operator account:</span>{" "}
+          your registered truck is automatically assigned to you. Owner-operators can manage one truck only.
+        </div>
+      )}
+
+      {adding && canManageFleet && !ownerOperatorAtLimit && (
         <AddTruckForm onDone={() => setAdding(false)} onAdd={addTruck} />
       )}
 

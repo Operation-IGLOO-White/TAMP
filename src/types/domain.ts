@@ -21,6 +21,8 @@ export interface User {
   avatarUrl?: string | undefined;
   onboardingComplete?: boolean;
   onboardingUserType?: OnboardingUserType;
+  ownerOperator?: boolean;
+  ownerOperatorTruckId?: UUID;
   kycDocument?: { name: string; uploadedAt: string; url?: string } | undefined;
   id: UUID;
   role: Role;
