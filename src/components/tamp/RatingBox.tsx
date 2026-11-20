@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import { Send, Star } from "lucide-react";
 import { useState } from "react";
 import type { Rating } from "@/types/domain";
 
@@ -32,6 +32,7 @@ export function RatingBox({
 }) {
   const [note, setNote] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [selectedStars, setSelectedStars] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const toggle = (t: string) =>
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
@@ -66,16 +67,41 @@ export function RatingBox({
               placeholder="Optional feedback"
               className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-signal"
             />
-            <div className="flex gap-1">
+            <div className="flex items-center justify-center gap-1 rounded-lg border border-border bg-background/50 p-2">
               {([1, 2, 3, 4, 5] as const).map((n) => (
                 <button
                   key={n}
-                  onClick={() => onRate(n, note || "No comment", tags)}
-                  className="flex-1 rounded-md border border-border py-1.5 text-xs font-bold hover:bg-signal hover:text-signal-foreground"
+                  type="button"
+                  onClick={() => setSelectedStars(n)}
+                  aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                  aria-pressed={selectedStars === n}
+                  className="group grid size-9 place-items-center rounded-md transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
                 >
-                  {n}
+                  <Star
+                    className={`size-6 transition-colors ${
+                      selectedStars !== null && n <= selectedStars
+                        ? "fill-signal text-signal"
+                        : "text-muted-foreground/45 group-hover:text-signal"
+                    }`}
+                  />
                 </button>
               ))}
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-semibold text-muted-foreground">
+                {selectedStars ? `${selectedStars} out of 5 selected` : "Choose a rating"}
+              </span>
+              <button
+                type="button"
+                disabled={selectedStars === null}
+                onClick={() => {
+                  if (selectedStars === null) return;
+                  onRate(selectedStars, note.trim(), tags);
+                }}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-signal px-4 text-[10px] font-black uppercase tracking-wide text-signal-foreground transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Send className="size-3.5" /> Submit rating
+              </button>
             </div>
           </div>
         )}

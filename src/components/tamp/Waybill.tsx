@@ -1,3 +1,4 @@
+import { Send, Star } from "lucide-react";
 import { useState } from "react";
 import { formatMoney } from "@/lib/tamp-data";
 import {
@@ -39,6 +40,7 @@ export function Waybill({ load }: { load: Load }) {
   } = useTamp();
   const [note, setNote] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [selectedStars, setSelectedStars] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const toggleTag = (t: string) =>
@@ -241,21 +243,37 @@ export function Waybill({ load }: { load: Load }) {
                     placeholder="Optional feedback"
                     className="w-full border border-paper-foreground/20 bg-paper-foreground/5 px-2 py-1.5 text-xs outline-none focus:border-paper-foreground/60"
                   />
-                  <div className="flex gap-1">
+                  <div className="flex items-center justify-center gap-1 border border-paper-foreground/20 bg-paper-foreground/5 p-2">
                     {([1, 2, 3, 4, 5] as const).map((n) => (
                       <button
                         key={n}
-                        onClick={() => rateLoad(load.id, n, note || "No comment", tags)}
-                        className="flex-1 border border-paper-foreground/20 py-1.5 text-xs font-bold hover:bg-signal"
+                        type="button"
+                        onClick={() => setSelectedStars(n)}
+                        aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                        aria-pressed={selectedStars === n}
+                        className="group grid size-9 place-items-center transition-transform hover:scale-110"
                       >
-                        {n}
+                        <Star className={`size-6 ${selectedStars !== null && n <= selectedStars ? "fill-signal text-signal" : "text-paper-foreground/30 group-hover:text-signal"}`} />
                       </button>
                     ))}
                   </div>
-                  <p className="text-[9px] text-paper-foreground/50">
-                    Pick a star rating to submit
-                    {tags.length > 0 ? ` with ${tags.length} tag(s)` : ""}.
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[9px] text-paper-foreground/60">
+                      {selectedStars ? `${selectedStars} out of 5 selected` : "Choose a rating"}
+                      {tags.length > 0 ? ` · ${tags.length} tag(s)` : ""}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={selectedStars === null}
+                      onClick={() => {
+                        if (selectedStars === null) return;
+                        rateLoad(load.id, selectedStars, note.trim(), tags);
+                      }}
+                      className="inline-flex min-h-9 items-center gap-1.5 bg-signal px-4 text-[10px] font-black uppercase tracking-wide text-signal-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Send className="size-3.5" /> Submit
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

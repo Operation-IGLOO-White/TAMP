@@ -12,7 +12,7 @@ import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import type { TruckPosting } from "@/types/domain";
 
 function DriverDashboard() {
-  const { me, trucks, matches, loads, trips, dispatches, disputes } = useTamp();
+  const { me, trucks, matches, loads, trips, dispatches, disputes, ratings } = useTamp();
 
   // Jobs for the trucks this driver is on (data is already scoped server-side).
   const jobs = trips
@@ -38,6 +38,15 @@ function DriverDashboard() {
   const pendingAssignments = dispatches.filter(
     (assignment) => assignment.driverId === me.id && assignment.status === "OFFERED",
   ).length;
+
+  const rideRatings = jobs
+    .map(({ trip, load }) =>
+      ratings.find((rating) => rating.tripId === trip.id && rating.raterId === load.ownerId),
+    )
+    .filter((rating): rating is NonNullable<typeof rating> => Boolean(rating));
+  const driverRating = rideRatings.length
+    ? rideRatings.reduce((total, rating) => total + rating.stars, 0) / rideRatings.length
+    : null;
 
   const first = me.contactName.split(" ")[0];
 
@@ -65,7 +74,7 @@ function DriverDashboard() {
           <Stat label="On-time" value={onTimePct === null ? "—" : `${onTimePct}%`} icon={<TrendingUp className="size-4" />} />
           <Stat
             label="Rating"
-            value={me.ratingAvg ? `${me.ratingAvg}` : "—"}
+            value={driverRating === null ? "New" : `${driverRating.toFixed(1)} / 5`}
             icon={<Star className="size-4 fill-signal text-signal" />}
           />
         </div>

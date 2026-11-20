@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   Truck,
   Radio,
+  Star,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,7 +32,7 @@ import { TripRouteMap } from "@/components/tamp/TripRouteMap";
 import { zar } from "@/lib/tamp-data";
 import { estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { useTamp } from "@/context/TampContext";
-import type { Load, Party, Trip, TruckPosting } from "@/types/domain";
+import type { Load, Party, Rating, Trip, TruckPosting } from "@/types/domain";
 import { useDriverLocationSharing } from "@/hooks/useLiveTracking";
 import {
   consumeExternalNavigationReturn,
@@ -91,6 +92,7 @@ function DriverJobs() {
     parties,
     incidents,
     dispatches,
+    ratings,
     advanceTrip,
     updateDispatch,
   } = useTamp();
@@ -182,6 +184,25 @@ function DriverJobs() {
         .sort((a, b) => Number(isActiveTrip(b.trip.status)) - Number(isActiveTrip(a.trip.status))),
     [trips, matches, trucks, loads, parties, me.id, me.role, latestDispatchByTrip],
   );
+
+  // A freight owner's completed-ride rating applies to the driver who was
+  // assigned to that trip as well as the carrier's service record. This keeps
+  // the existing carrier rating model intact while giving drivers transparent
+  // per-ride and overall feedback.
+  const driverRatingsByTrip = useMemo(() => {
+    const result = new Map<string, Rating>();
+    for (const job of jobs) {
+      const rating = ratings.find(
+        (item) => item.tripId === job.trip.id && item.raterId === job.load.ownerId,
+      );
+      if (rating) result.set(job.trip.id, rating);
+    }
+    return result;
+  }, [jobs, ratings]);
+  const driverRatings = [...driverRatingsByTrip.values()];
+  const overallDriverRating = driverRatings.length
+    ? driverRatings.reduce((total, rating) => total + rating.stars, 0) / driverRatings.length
+    : null;
 
   const respondToAssignment = async (
     tripId: string,
@@ -286,6 +307,15 @@ function DriverJobs() {
           <div className="border-b border-border p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h1 className="text-xl font-extrabold tracking-tight">My jobs</h1>
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-graphite px-2.5 py-1 text-[10px] font-bold"
+                  title={`${driverRatings.length} rated ride${driverRatings.length === 1 ? "" : "s"}`}
+                >
+                  <Star className={`size-3.5 ${overallDriverRating !== null ? "fill-signal text-signal" : "text-muted-foreground"}`} />
+                  {overallDriverRating !== null ? overallDriverRating.toFixed(1) : "New"}
+                  <span className="text-muted-foreground">({driverRatings.length})</span>
+                </div>
               {activeTripIds.length > 0 && (
                 <div
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
@@ -301,6 +331,7 @@ function DriverJobs() {
                   {gpsLabel}
                 </div>
               )}
+              </div>
             </div>
             {activeTripIds.length > 0 && locationSharing.error && (
               <div className="mb-3 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-xs text-danger">
@@ -434,6 +465,7 @@ function DriverJobs() {
                     // On mobile the map is hidden — open the fullscreen map.
                     if (window.matchMedia("(max-width: 1023px)").matches) openMap(job, true);
                   }}
+                  rating={driverRatingsByTrip.get(job.trip.id)}
                 />
               ))
             )}
@@ -453,6 +485,7 @@ function DriverJobs() {
               />
               <TrackingPanel
                 job={selected}
+                rating={driverRatingsByTrip.get(selected.trip.id)}
                 disputed={incidents.some(
                   (item) => item.tripId === selected.trip.id && item.status === "OPEN",
                 )}
@@ -746,10 +779,12 @@ function LoadCard({
   job,
   selected,
   onSelect,
+  rating,
 }: {
   job: Job;
   selected: boolean;
   onSelect: () => void;
+  rating: Rating | undefined;
 }) {
   const { trip, load, owner } = job;
   const meta = statusMeta(trip.status);
@@ -778,6 +813,19 @@ function LoadCard({
         <span className="max-w-[45%] truncate">{load.origin.label}</span>
         <span className="max-w-[45%] truncate text-right">{load.destination.label}</span>
       </div>
+
+      {!isActiveTrip(trip.status) && (
+        <div className="mt-3 flex items-center justify-between rounded-lg bg-steel/30 px-3 py-2 text-[11px]">
+          <span className="font-semibold text-muted-foreground">Your rating for this ride</span>
+          {rating ? (
+            <span className="inline-flex items-center gap-1 font-black text-foreground">
+              <Star className="size-3.5 fill-signal text-signal" /> {rating.stars.toFixed(1)} / 5
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Not rated yet</span>
+          )}
+        </div>
+      )}
 
       {owner && (
         <div className="mt-3 flex items-center gap-2.5 border-t border-border pt-3">
@@ -831,12 +879,14 @@ type PanelTab = "info" | "tracking" | "docs";
 
 function TrackingPanel({
   job,
+  rating,
   disputed,
   onAdvance,
   onFlag,
   onFullscreen,
 }: {
   job: Job;
+  rating: Rating | undefined;
   disputed: boolean;
   onAdvance: () => void;
   onFlag: () => void;
@@ -957,6 +1007,16 @@ function TrackingPanel({
                     })}
                   </div>
                 )}
+                <div className="mt-2 flex items-center justify-between border-t border-positive/15 pt-2 text-[10px]">
+                  <span className="font-semibold text-muted-foreground">Ride rating</span>
+                  {rating ? (
+                    <span className="inline-flex items-center gap-1 font-black text-foreground">
+                      <Star className="size-3.5 fill-signal text-signal" /> {rating.stars} / 5
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Awaiting customer rating</span>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="mt-3 border-t border-border pt-3">
