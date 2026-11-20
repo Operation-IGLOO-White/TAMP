@@ -133,6 +133,10 @@ interface NewLoadInput {
   cargoType: CargoType;
   weightKg: number;
   volumeM3?: number | undefined;
+  trucksRequired?: number;
+  pricingMode?: "PLATFORM" | "CUSTOM";
+  rateBasis?: "PER_TRIP" | "PER_TRUCK" | "PER_TONNE" | "PER_KM";
+  offeredRate?: Load["offeredRate"];
   origin: Load["origin"];
   destination: Load["destination"];
   distanceKm: number;
@@ -775,7 +779,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
         // The platform derives the equipment and the price — the cargo owner
         // supplies neither. Cargo type → compatible bodies; pricing engine →
         // quoted rate. Computed server-side (src/fns/matching.ts, src/fns/pricing.ts).
-        const [requiredBodyTypes, targetRate] = await Promise.all([
+        const [requiredBodyTypes, platformQuote] = await Promise.all([
           bodyTypesForCargo(input.cargoType),
           priceLoadMoney(input.distanceKm, input.weightKg, input.cargoType),
         ]);
@@ -785,8 +789,15 @@ export function TampProvider({ children }: { children: ReactNode }) {
           status: "POSTED",
           createdAt: new Date().toISOString(),
           ...input,
+          trucksRequired: input.trucksRequired ?? 1,
+          pricingMode: input.pricingMode ?? "PLATFORM",
+          rateBasis: input.rateBasis ?? "PER_TRIP",
           requiredBodyTypes,
-          targetRate,
+          platformQuote,
+          targetRate:
+            input.pricingMode === "CUSTOM" && input.offeredRate
+              ? input.offeredRate
+              : platformQuote,
         };
         const ownerParty = state.parties.find((p) => p.id === load.ownerId)!;
         const available = state.trucks.filter((t) => t.status === "AVAILABLE");
@@ -833,7 +844,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
       updateLoad: async (loadId, input) => {
         const existing = state.loads.find((load) => load.id === loadId);
         if (!existing || existing.status !== "POSTED") return;
-        const [requiredBodyTypes, targetRate] = await Promise.all([
+        const [requiredBodyTypes, platformQuote] = await Promise.all([
           bodyTypesForCargo(input.cargoType),
           priceLoadMoney(input.distanceKm, input.weightKg, input.cargoType),
         ]);
@@ -844,8 +855,15 @@ export function TampProvider({ children }: { children: ReactNode }) {
           reference: existing.reference,
           status: "POSTED",
           createdAt: existing.createdAt,
+          trucksRequired: input.trucksRequired ?? 1,
+          pricingMode: input.pricingMode ?? "PLATFORM",
+          rateBasis: input.rateBasis ?? "PER_TRIP",
           requiredBodyTypes,
-          targetRate,
+          platformQuote,
+          targetRate:
+            input.pricingMode === "CUSTOM" && input.offeredRate
+              ? input.offeredRate
+              : platformQuote,
         };
         const ownerParty = state.parties.find((party) => party.id === load.ownerId)!;
         const available = state.trucks.filter((truck) => truck.status === "AVAILABLE");

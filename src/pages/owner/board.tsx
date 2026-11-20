@@ -399,7 +399,7 @@ function LoadCard({
           </Link>
           <div className="mt-0.5 text-xs text-muted-foreground">
             {(load.weightKg / 1000).toFixed(0)}t · {load.requiredBodyTypes.join("/")} ·{" "}
-            {load.cargoType.replaceAll("_", " ")}
+            {load.cargoType.replaceAll("_", " ")} · {load.trucksRequired ?? 1} truck{(load.trucksRequired ?? 1) === 1 ? "" : "s"} required
           </div>
         </div>
         <div className="text-right">
@@ -426,7 +426,9 @@ function LoadCard({
             {load.targetRate ? formatMoney(load.targetRate) : "—"}
           </div>
           <div className="text-[10px] uppercase text-muted-foreground">
-            {trip
+            {load.pricingMode === "CUSTOM" && !trip
+              ? `Freight Owner rate · ${(load.rateBasis ?? "PER_TRIP").replaceAll("_", " ")}`
+              : trip
               ? `Progress ${trip.progressPct}%`
               : `Pick-up ${new Date(load.pickupWindow.from).toLocaleDateString("en-ZA")}`}
           </div>

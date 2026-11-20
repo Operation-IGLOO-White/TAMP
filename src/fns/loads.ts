@@ -10,6 +10,10 @@ export interface CreateLoadInput {
   cargoType: CargoType;
   weightKg: number;
   volumeM3?: number | undefined;
+  trucksRequired?: number;
+  pricingMode?: "PLATFORM" | "CUSTOM";
+  rateBasis?: "PER_TRIP" | "PER_TRUCK" | "PER_TONNE" | "PER_KM";
+  offeredRate?: Load["offeredRate"];
   origin: Place;
   destination: Place;
   distanceKm: number;

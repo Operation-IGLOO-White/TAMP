@@ -189,7 +189,7 @@ export default function OwnerShipments() {
                     {load.origin.label} → {load.destination.label}
                   </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {Math.round(load.weightKg / 100) / 10} t · {load.cargoType.replaceAll("_", " ")} · {load.distanceKm.toFixed(0)} km
+                    {Math.round(load.weightKg / 100) / 10} t · {load.cargoType.replaceAll("_", " ")} · {load.distanceKm.toFixed(0)} km · {load.trucksRequired ?? 1} truck{(load.trucksRequired ?? 1) === 1 ? "" : "s"}
                   </p>
                   {load.customerId && <p className="mt-1 text-[10px] font-semibold text-signal">{workspace?.customers.find((item) => item.id === load.customerId)?.name ?? "Customer record"}</p>}
                 </div>

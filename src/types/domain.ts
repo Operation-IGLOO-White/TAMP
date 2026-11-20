@@ -81,6 +81,11 @@ export interface Load {
   cargoType: CargoType;
   weightKg: number;
   volumeM3?: number | undefined;
+  trucksRequired?: number | undefined;
+  pricingMode?: "PLATFORM" | "CUSTOM" | undefined;
+  rateBasis?: "PER_TRIP" | "PER_TRUCK" | "PER_TONNE" | "PER_KM" | undefined;
+  platformQuote?: Money | undefined;
+  offeredRate?: Money | undefined;
   requiredBodyTypes: BodyType[];
   origin: Place;
   destination: Place;
