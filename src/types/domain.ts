@@ -218,6 +218,13 @@ export interface Match {
   hardFilterResults: RuleResult[];
   status: MatchStatus;
   initiatedBy: "FREIGHT_OWNER" | "TRANSPORTER" | "SYSTEM";
+  fleetPlanRank?: number | undefined;
+  operatorEligibleCount?: number | undefined;
+  operatorAverageScore?: number | undefined;
+  recommendedAllocation?: number | undefined;
+  selectedForFleetPlan?: boolean | undefined;
+  operatorCoveragePct?: number | undefined;
+  companyRating?: number | null | undefined;
   agreedRate?: Money;
   activeOfferId?: string;
   offerRevision?: number;
@@ -332,6 +339,7 @@ export interface Rating {
   tripId: UUID;
   raterId: UUID;
   rateeId: UUID;
+  driverId?: UUID | undefined;
   stars: 1 | 2 | 3 | 4 | 5;
   tags: string[]; // "On time", "Good communication", "Cargo handled well"
   comment?: string | undefined;

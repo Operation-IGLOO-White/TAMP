@@ -1418,12 +1418,17 @@ export function TampProvider({ children }: { children: ReactNode }) {
               ? (truck?.transporterId ?? match.truckPostingId) // owner rates carrier
               : (load?.ownerId ?? ""); // carrier rates owner
           if (!rateeId) return s;
+          const driverId =
+            state.role === "FREIGHT_OWNER"
+              ? (trip.assignedDriverId ?? truck?.driverId)
+              : undefined;
 
           const rating: Rating = {
             id: nextRef("RT"),
             tripId: trip.id,
             raterId: actorId,
             rateeId,
+            ...(driverId ? { driverId } : {}),
             stars,
             tags,
             comment,
@@ -1433,7 +1438,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
           // Roll the score into the ratee's running rating (preserves the
           // seeded reputation rather than clobbering it).
           const parties = s.parties.map((p) => {
-            if (p.id !== rateeId) return p;
+            if (p.id !== rateeId && p.id !== driverId) return p;
             const base = p.ratingAvg ?? stars;
             const count = p.ratingCount + 1;
             return {

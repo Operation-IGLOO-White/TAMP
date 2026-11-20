@@ -10,6 +10,13 @@ export interface ScoredMatch {
   breakdown: import("@/types/domain").MatchScoreComponent[];
   hardFilterResults: import("@/types/domain").RuleResult[];
   passed: boolean;
+  fleetPlanRank?: number;
+  operatorEligibleCount?: number;
+  operatorAverageScore?: number;
+  recommendedAllocation?: number;
+  selectedForFleetPlan?: boolean;
+  operatorCoveragePct?: number;
+  companyRating?: number | null;
 }
 
 export const scoreLoadAgainstTrucks = (
