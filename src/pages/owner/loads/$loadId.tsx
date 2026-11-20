@@ -7,6 +7,8 @@ import {
   History,
   MessageCircle,
   Route,
+  Truck,
+  XCircle,
 } from "lucide-react";
 
 import { Link, useNavigate } from "@/lib/nav";
@@ -23,6 +25,8 @@ import { scoreLoadAgainstTrucks, type ScoredMatch } from "@/fns/matching";
 import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import { hasPermission } from "@/lib/access";
+import { fleetVehicleAsset } from "@/lib/fleet-assets";
+import { maskRegistration } from "@/lib/tamp-mask";
 import type { Load, MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
 
 // §6.2 weighted score rules — the matching-rules explainer, stated plainly
@@ -113,6 +117,8 @@ function LoadDetail() {
   const [reviewTruck, setReviewTruck] = useState<TruckPosting | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
+  const [issueMode, setIssueMode] = useState<"incident" | "cancel">("incident");
+  const [allocationCancellation, setAllocationCancellation] = useState<{ truckId: string; label: string } | null>(null);
 
   const load = loads.find((l) => l.id === loadId);
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
@@ -161,6 +167,18 @@ function LoadDetail() {
     // waybill alongside a trip timeline and the load's audit history.
     const match = activeMatchForLoad(load.id, matches);
     const trip = tripForMatch(match?.id, trips);
+    const allocations = matches
+      .filter((item) => item.loadId === load.id && ["ACCEPTED", "CONFIRMED"].includes(item.status))
+      .map((item) => {
+        const allocationTruck = trucks.find((candidate) => candidate.id === item.truckPostingId);
+        return {
+          match: item,
+          truck: allocationTruck,
+          trip: tripForMatch(item.id, trips),
+          carrier: parties.find((candidate) => candidate.id === allocationTruck?.transporterId),
+        };
+      })
+      .filter((item) => item.truck);
     const loadEvents = audit
       .filter(
         (e) => e.subjectId === load.id || e.subjectId === trip?.id || e.subjectId === match?.id,
@@ -215,6 +233,21 @@ function LoadDetail() {
                     danger
                     onClick={() => {
                       setMobileMenuOpen(false);
+                      setAllocationCancellation(null);
+                      setIssueMode("incident");
+                      setIssueOpen(true);
+                    }}
+                  />
+                )}
+                {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canReportIncidents && (
+                  <MobileAction
+                    icon={XCircle}
+                    label="Cancel shipment"
+                    danger
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setAllocationCancellation(null);
+                      setIssueMode("cancel");
                       setIssueOpen(true);
                     }}
                   />
@@ -229,7 +262,22 @@ function LoadDetail() {
               <h1 className="font-mono text-sm font-bold tracking-tight">{load.id}</h1>
               <StatusChip status={status} />
             </div>
-            <div className="truncate font-mono text-xs text-muted-foreground">{load.origin.label} → {load.destination.label}</div>
+            <div className="flex items-center gap-3">
+              <div className="max-w-xl truncate font-mono text-xs text-muted-foreground">{load.origin.label} → {load.destination.label}</div>
+              {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canReportIncidents && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAllocationCancellation(null);
+                    setIssueMode("cancel");
+                    setIssueOpen(true);
+                  }}
+                  className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-danger/40 px-3 text-[10px] font-black uppercase text-danger transition hover:bg-danger/10"
+                >
+                  <XCircle className="size-4" /> Cancel shipment
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -237,6 +285,48 @@ function LoadDetail() {
           <Waybill load={load} />
 
           <aside className="space-y-6">
+            {allocations.length > 0 && (
+              <section className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wide"><Truck className="size-4 text-signal" /> Truck allocations</h3>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Cancel one vehicle without cancelling the whole shipment.</p>
+                  </div>
+                  <span className="rounded-lg bg-steel px-2 py-1 font-mono text-xs font-bold">{allocations.length}/{load.trucksRequired ?? 1}</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {allocations.map((allocation) => {
+                    const allocationTruck = allocation.truck!;
+                    const closed = allocation.trip && ["COMPLETED", "CANCELLED"].includes(allocation.trip.status);
+                    return (
+                      <div key={allocation.match.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+                        <div className="size-20 shrink-0 overflow-hidden rounded-xl border border-border bg-white">
+                          <img src={fleetVehicleAsset(allocationTruck)} alt={`${allocationTruck.bodyType} ${allocationTruck.registration}`} className="h-full w-full object-contain p-1" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm font-black">{maskRegistration(allocationTruck.registration)}</span><StatusChip status={allocation.trip?.status ?? allocation.match.status} /></div>
+                          <p className="mt-1 text-xs font-semibold">{allocation.carrier?.companyName ?? allocation.carrier?.contactName ?? "Transporter"}</p>
+                          <p className="text-[10px] text-muted-foreground">{allocationTruck.bodyType.replaceAll("_", " ")} · {allocationTruck.payloadCapacityKg.toLocaleString("en-ZA")} kg{allocationTruck.driverId ? " · Driver assigned" : " · Needs a driver"}</p>
+                        </div>
+                        {canReportIncidents && allocation.trip && !closed && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAllocationCancellation({ truckId: allocationTruck.id, label: `${allocationTruck.registration} · ${allocation.carrier?.companyName ?? "Transporter"}` });
+                              setIssueMode("cancel");
+                              setIssueOpen(true);
+                            }}
+                            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-danger/40 px-3 text-[10px] font-black uppercase text-danger hover:bg-danger/10"
+                          >
+                            <XCircle className="size-3.5" /> Cancel allocation
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={trip} />}
             {trip && <ShareTrackingLink loadId={load.id} />}
             {trip && (
@@ -390,8 +480,14 @@ function LoadDetail() {
       {canReportIncidents && (
         <IncidentDialog
           loadId={load.id}
+          truckId={allocationCancellation?.truckId}
+          truckLabel={allocationCancellation?.label}
           open={issueOpen}
-          onClose={() => setIssueOpen(false)}
+          initialMode={issueMode}
+          onClose={() => {
+            setIssueOpen(false);
+            setAllocationCancellation(null);
+          }}
         />
       )}
       </AppShell>

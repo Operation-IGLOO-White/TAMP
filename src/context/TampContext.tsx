@@ -219,7 +219,7 @@ interface Store extends State {
     description: string,
     delayMinutes?: number,
   ) => Promise<boolean>;
-  cancelTrip: (loadId: string, reason: string) => Promise<boolean>;
+  cancelTrip: (loadId: string, reason: string, truckId?: string) => Promise<boolean>;
   updateIncident: (
     incidentId: string,
     action: IncidentAction,
@@ -1347,10 +1347,10 @@ export function TampProvider({ children }: { children: ReactNode }) {
         }
       },
 
-      cancelTrip: async (loadId, reason) => {
+      cancelTrip: async (loadId, reason, truckId) => {
         try {
           await flushPending();
-          await cancelTripCmd(loadId, reason);
+          await cancelTripCmd(loadId, reason, truckId);
           await hydrateDomain();
           return true;
         } catch (err) {

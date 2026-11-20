@@ -73,5 +73,9 @@ export const reportIncidentCmd = (loadId: string, kind: OperationalIncidentKind,
     ...(delayMinutes ? { delayMinutes } : {}),
   });
 
-export const cancelTripCmd = (loadId: string, reason: string) =>
-  trpc.mutation<{ ok: true; incidentId: string }>("commands.cancelTrip", { loadId, reason });
+export const cancelTripCmd = (loadId: string, reason: string, truckId?: string) =>
+  trpc.mutation<{ ok: true; incidentId: string | null }>("commands.cancelTrip", {
+    loadId,
+    reason,
+    ...(truckId ? { truckId } : {}),
+  });
