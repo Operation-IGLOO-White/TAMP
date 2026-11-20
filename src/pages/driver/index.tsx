@@ -69,8 +69,10 @@ const STATUS_ORDER: Record<string, number> = {
 
 // Colour-coded status pill matching the tracking design.
 function statusMeta(status: string): { label: string; cls: string } {
-  if (status === "DELIVERED" || status === "COMPLETED")
-    return { label: "Delivered", cls: "bg-positive/15 text-positive" };
+  if (status === "COMPLETED")
+    return { label: "Completed", cls: "bg-positive/15 text-positive" };
+  if (status === "DELIVERED")
+    return { label: "Delivery recorded", cls: "bg-positive/15 text-positive" };
   if (status === "CANCELLED") return { label: "Cancelled", cls: "bg-danger/15 text-danger" };
   if (status === "SCHEDULED")
     return { label: "Upcoming", cls: "bg-signal/20 text-signal-foreground" };
@@ -627,7 +629,8 @@ function MobileTripControls({
     trip.status === "SCHEDULED" || trip.status === "EN_ROUTE_PICKUP"
       ? stop?.place.label || load.origin.label
       : stop?.place.label || load.destination.label;
-  const delivered = trip.status === "DELIVERED" || trip.status === "COMPLETED";
+  const completed = trip.status === "COMPLETED";
+  const displayProgress = trip.status === "DELIVERED" || completed ? 100 : trip.progressPct;
 
   if (collapsed) {
     return (
@@ -643,7 +646,7 @@ function MobileTripControls({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-              {meta.label} · {Math.round(trip.progressPct)}%
+              {meta.label} · {Math.round(displayProgress)}%
             </span>
             <span className="block truncate text-sm font-bold text-foreground">{destination}</span>
           </span>
@@ -697,12 +700,12 @@ function MobileTripControls({
 
           <div className="mt-4 flex items-center justify-between text-[10px] font-semibold text-muted-foreground">
             <span>Trip progress</span>
-            <span>{Math.round(trip.progressPct)}%</span>
+            <span>{Math.round(displayProgress)}%</span>
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-steel/60">
             <div
               className="h-full rounded-full bg-signal transition-[width] duration-500"
-              style={{ width: `${Math.max(3, Math.min(100, trip.progressPct))}%` }}
+              style={{ width: `${Math.max(3, Math.min(100, displayProgress))}%` }}
             />
           </div>
 
@@ -712,7 +715,7 @@ function MobileTripControls({
             </div>
           )}
 
-          {!delivered && nextStep && (
+          {!completed && nextStep && (
             <button
               type="button"
               onClick={onAdvance}
@@ -722,7 +725,7 @@ function MobileTripControls({
             </button>
           )}
 
-          {!delivered && (
+          {!completed && (
             <button
               type="button"
               onClick={onFlag}
@@ -849,7 +852,15 @@ function TrackingPanel({
       ? `Head to next ${followingStop.kind === "PICKUP" ? "pickup" : "drop-off"}`
       : NEXT_STEP[trip.status];
   const eta = estimateEta(load, trip);
-  const delivered = trip.status === "DELIVERED" || trip.status === "COMPLETED";
+  const deliveryRecorded = trip.status === "DELIVERED" || trip.status === "COMPLETED";
+  const completed = trip.status === "COMPLETED";
+  const currentStop = load.stops?.[trip.currentStopIndex ?? 0];
+  const currentZone = currentStop?.kind === "DROPOFF" ? "DESTINATION" : "PICKUP";
+  const currentFence =
+    trip.geofences?.CURRENT_STOP ?? trip.geofences?.[currentZone];
+  const deliveredAt = [...trip.events]
+    .reverse()
+    .find((event) => event.status === "DELIVERED")?.at;
 
   // Minimized: a compact pill that expands back to the full panel.
   if (minimized) {
@@ -931,30 +942,40 @@ function TrackingPanel({
           <>
             <StageTimeline job={job} />
             {load.stops && load.stops.length > 2 && <StopPlan job={job} />}
-            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
-              {(["CURRENT_STOP", "DESTINATION"] as const).map((zone) => {
-                const fence = trip.geofences?.[zone];
-                const stop = load.stops?.[trip.currentStopIndex ?? 0];
-                return (
-                  <div key={zone} className="rounded-lg bg-steel/35 px-3 py-2">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                      {zone === "CURRENT_STOP"
-                        ? `${stop?.kind === "DROPOFF" ? "Drop-off" : "Pickup"} zone`
-                        : "Final zone"}
-                    </div>
-                    <div
-                      className={`mt-0.5 text-xs font-bold ${fence?.inside ? "text-positive" : "text-foreground"}`}
-                    >
-                      {fence?.inside
-                        ? "Inside geofence"
-                        : fence?.distanceM != null
-                          ? `${fence.distanceM.toLocaleString("en-ZA")} m away`
-                          : "Awaiting GPS"}
-                    </div>
+            {deliveryRecorded ? (
+              <div className="mt-3 rounded-lg border border-positive/25 bg-positive/10 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-positive">
+                  <CheckCircle2 className="size-4" /> Delivery confirmed
+                </div>
+                {deliveredAt && (
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    Recorded {new Date(deliveredAt).toLocaleString("en-ZA", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-3 border-t border-border pt-3">
+                <div className="rounded-lg bg-steel/35 px-3 py-2">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {currentStop?.kind === "DROPOFF" ? "Drop-off zone" : "Pickup zone"}
+                  </div>
+                  <div
+                    className={`mt-0.5 text-xs font-bold ${currentFence?.inside ? "text-positive" : "text-foreground"}`}
+                  >
+                    {currentFence?.inside
+                      ? "Inside geofence"
+                      : currentFence?.distanceM != null
+                        ? `${currentFence.distanceM.toLocaleString("en-ZA")} m away`
+                        : "Waiting for current location"}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -991,15 +1012,15 @@ function TrackingPanel({
             <DocRow label="Waybill" status={`#${load.id}`} />
             <DocRow
               label="Proof of delivery"
-              status={delivered ? "Captured" : "Pending"}
-              done={delivered}
+              status={deliveryRecorded ? "Captured" : "Pending"}
+              done={deliveryRecorded}
             />
           </div>
         )}
       </div>
 
       {/* Action footer */}
-      {!delivered && (
+      {!completed && (
         <div className="space-y-2 border-t border-border p-3">
           {trip.suggestedAction && (
             <div className="rounded-lg border border-positive/25 bg-positive/10 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-positive">
