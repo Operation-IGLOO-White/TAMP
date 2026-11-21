@@ -392,10 +392,10 @@ function TruckCard({
             payload capacity and either an availability window or “Always available”. VIN is optional,
             but must be exactly 17 valid characters when supplied.
           </p>
-          <Field label="Registration *">
+          <Field label="Registration" required>
             <input value={form.registration} onChange={(e) => setForm({ ...form, registration: e.target.value })} className={inputCls} />
           </Field>
-          <Field label="Body type">
+          <Field label="Body type" required>
             <select value={form.bodyType} onChange={(e) => setForm({ ...form, bodyType: e.target.value as BodyType })} className={inputCls}>
               {bodyTypes.map((type) => <option key={type} value={type}>{BODY_TYPE_LABEL[type]}</option>)}
             </select>
@@ -409,16 +409,16 @@ function TruckCard({
           <Field label="Model">
             <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} className={inputCls} />
           </Field>
-          <Field label="Year *">
+          <Field label="Year" required>
             <input type="number" min={1950} max={new Date().getFullYear() + 1} value={form.year} onChange={(e) => setForm({ ...form, year: Number(e.target.value) })} className={inputCls} />
           </Field>
-          <Field label="Vehicle licence number *">
+          <Field label="Vehicle licence number" required>
             <input value={form.licenceNumber} onChange={(e) => setForm({ ...form, licenceNumber: e.target.value })} className={inputCls} />
           </Field>
-          <Field label="Licence expiry *">
+          <Field label="Licence expiry" required>
             <input type="date" value={form.licenceExpiry} onChange={(e) => setForm({ ...form, licenceExpiry: e.target.value })} className={inputCls} />
           </Field>
-          <Field label="Status">
+          <Field label="Status" required>
             <select
               value={form.status}
               onChange={(e) =>
@@ -430,7 +430,7 @@ function TruckCard({
               <option value="OFFLINE">Offline</option>
             </select>
           </Field>
-          <Field label="Payload capacity (kg) *">
+          <Field label="Payload capacity (kg)" required>
             <input
               type="number"
               value={form.capacityKg}
@@ -441,14 +441,14 @@ function TruckCard({
           <Field label="Volume capacity (m³)">
             <input type="number" min={0} value={form.volumeCapacityM3} onChange={(e) => setForm({ ...form, volumeCapacityM3: Number(e.target.value) })} className={inputCls} />
           </Field>
-          <Field label="Current location *">
+          <Field label="Current location" required>
             <AddressInput
               value={form.location}
               onSelect={(p) => setForm({ ...form, location: p })}
               placeholder="Where is the truck?"
             />
           </Field>
-          <Field label="Available from">
+          <Field label="Available from" required={!form.alwaysAvailable}>
             <input
               type="date"
               value={form.availableFrom}
@@ -457,7 +457,7 @@ function TruckCard({
               className={inputCls}
             />
           </Field>
-          <Field label="Available until">
+          <Field label="Available until" required={!form.alwaysAvailable}>
             <input type="date" min={form.availableFrom} value={form.availableTo} disabled={form.alwaysAvailable} onChange={(e) => setForm({ ...form, availableTo: e.target.value })} className={inputCls} />
           </Field>
           <label className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 sm:col-span-2">
@@ -601,6 +601,7 @@ function AddTruckForm({
     capacityKg: 30000,
     volumeCapacityM3: 60,
     location: null as Place | null,
+    preferredDestination: null as Place | null,
     availableFrom: today,
     availableTo: defaultAvailableTo,
     vin: "",
@@ -697,7 +698,14 @@ function AddTruckForm({
           ? new Date("2100-12-31T23:59:59Z").toISOString()
           : southAfricaDateTime(form.availableTo, true),
         alwaysAvailable: form.alwaysAvailable,
-        preferredLanes: [],
+        preferredLanes: form.preferredDestination
+          ? [{
+              origin: form.location.label,
+              destination: form.preferredDestination.label,
+              originPlace: form.location,
+              destinationPlace: form.preferredDestination,
+            }]
+          : [],
         photos: uploadedPhotos.map((upload) => upload.url),
         documents: uploadedDocs.map((upload) => upload.url),
         ...(form.vin.trim() ? { vin: form.vin.trim().toUpperCase() } : {}),
@@ -724,7 +732,7 @@ function AddTruckForm({
   return (
     <form onSubmit={submit} className="space-y-5 border-b border-border bg-graphite/60 p-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label="Registration">
+        <Field label="Registration" required>
           <input
             value={form.registration}
             onChange={(e) => setForm({ ...form, registration: e.target.value })}
@@ -741,7 +749,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Make">
+        <Field label="Make (optional)">
           <input
             value={form.make}
             onChange={(e) => setForm({ ...form, make: e.target.value })}
@@ -749,7 +757,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Model">
+        <Field label="Model (optional)">
           <input
             value={form.model}
             onChange={(e) => setForm({ ...form, model: e.target.value })}
@@ -757,7 +765,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Year">
+        <Field label="Year" required>
           <input
             type="number"
             min={1950}
@@ -767,7 +775,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Licence expiry">
+        <Field label="Licence expiry" required>
           <input
             type="date"
             value={form.licenceExpiry}
@@ -775,7 +783,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Vehicle licence number">
+        <Field label="Vehicle licence number" required>
           <input
             value={form.licenceNumber}
             onChange={(e) => setForm({ ...form, licenceNumber: e.target.value })}
@@ -786,7 +794,7 @@ function AddTruckForm({
         </Field>
         <div className="col-span-2 sm:col-span-4">
           <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Body type
+            Body type <span className="text-danger">*</span>
           </label>
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {bodyTypes.map((t) => {
@@ -811,7 +819,7 @@ function AddTruckForm({
             })}
           </div>
         </div>
-        <Field label="Payload capacity (kg)">
+        <Field label="Payload capacity (kg)" required>
           <input
             type="number"
             value={form.capacityKg}
@@ -819,7 +827,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Volume capacity (m³)">
+        <Field label="Volume capacity (m³) (optional)">
           <input
             type="number"
             min={1}
@@ -828,14 +836,24 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Current location">
+        <Field label="Current location" required>
           <AddressInput
             value={form.location}
             onSelect={(p) => setForm({ ...form, location: p })}
             placeholder="Truck's base / current address…"
           />
         </Field>
-        <Field label="Available from">
+        <Field label="Preferred destination (optional)">
+          <AddressInput
+            value={form.preferredDestination}
+            onSelect={(p) => setForm({ ...form, preferredDestination: p })}
+            placeholder="Preferred destination or operating area…"
+          />
+          <span className="mt-1 block text-[10px] text-muted-foreground">
+            Used with the current location to improve preferred-lane matching.
+          </span>
+        </Field>
+        <Field label="Available from" required={!form.alwaysAvailable}>
           <input
             type="date"
             min={today}
@@ -845,7 +863,7 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Available until">
+        <Field label="Available until" required={!form.alwaysAvailable}>
           <input
             type="date"
             min={form.availableFrom || today}
@@ -1006,11 +1024,20 @@ function DocRow({
 const inputCls =
   "w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm text-foreground outline-none focus:border-signal";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required = false,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
+        {required ? <span className="text-danger"> *</span> : null}
       </span>
       {children}
     </label>
