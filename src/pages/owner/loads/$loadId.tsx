@@ -2,11 +2,14 @@ import { useParams } from "react-router-dom";
 import {
   ArrowLeft,
   BadgeCheck,
+  CalendarClock,
   EllipsisVertical,
   Flag,
   History,
+  MapPin,
   MessageCircle,
   Route,
+  ShieldCheck,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -16,7 +19,6 @@ import { useEffect, useMemo, useState } from "react";
 import { LaneRail } from "@/components/tamp/LaneRail";
 import { AppShell } from "@/components/tamp/AppShell";
 import { IncidentDialog } from "@/components/tamp/IncidentDialog";
-import { MatchTicket } from "@/components/tamp/MatchTicket";
 import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
 import { ShareTrackingLink } from "@/components/tamp/ShareTrackingLink";
 import { StatusChip } from "@/components/tamp/StatusChip";
@@ -26,8 +28,9 @@ import { activeMatchForLoad, displayStatusForLoad, tripForMatch } from "@/lib/ta
 import { useTamp } from "@/context/TampContext";
 import { hasPermission } from "@/lib/access";
 import { fleetVehicleAsset } from "@/lib/fleet-assets";
+import { formatMoney } from "@/lib/tamp-data";
 import { maskRegistration } from "@/lib/tamp-mask";
-import type { Load, MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
+import type { Load, Match, MatchScoreComponent, Trip, TripStatus, TruckPosting } from "@/types/domain";
 
 // §6.2 weighted score rules — the matching-rules explainer, stated plainly
 // and never collapsed away (C2 obligation).
@@ -139,15 +142,50 @@ function LoadDetail() {
     };
   }, [load, owner, trucks, parties]);
 
+  const actionableMatches = useMemo(
+    () =>
+      matches.filter(
+        (match) =>
+          match.loadId === loadId &&
+          ["OFFERED", "SUGGESTED", "ACCEPTED"].includes(match.status),
+      ),
+    [matches, loadId],
+  );
+
   const suggestions = useMemo(() => {
-    const passed = scored.filter((m) => m.passed);
-    return [...passed].sort((a, b) => {
+    const byTruck = new Map(scored.filter((match) => match.passed).map((match) => [match.truck.id, match]));
+    for (const match of actionableMatches) {
+      const truck = trucks.find((candidate) => candidate.id === match.truckPostingId);
+      const operator = parties.find((candidate) => candidate.id === truck?.transporterId);
+      if (!truck || !operator) continue;
+      byTruck.set(truck.id, {
+        truck,
+        operator,
+        score: match.score,
+        breakdown: match.breakdown,
+        hardFilterResults: match.hardFilterResults,
+        passed: true,
+        ...(match.fleetPlanRank != null ? { fleetPlanRank: match.fleetPlanRank } : {}),
+        ...(match.operatorEligibleCount != null ? { operatorEligibleCount: match.operatorEligibleCount } : {}),
+        ...(match.operatorAverageScore != null ? { operatorAverageScore: match.operatorAverageScore } : {}),
+        ...(match.recommendedAllocation != null ? { recommendedAllocation: match.recommendedAllocation } : {}),
+        ...(match.selectedForFleetPlan != null ? { selectedForFleetPlan: match.selectedForFleetPlan } : {}),
+        ...(match.operatorCoveragePct != null ? { operatorCoveragePct: match.operatorCoveragePct } : {}),
+        ...(match.companyRating !== undefined ? { companyRating: match.companyRating } : {}),
+      });
+    }
+    return [...byTruck.values()].sort((a, b) => {
       const av = sortKey === "score" ? a.score : ruleEarned(a.breakdown, sortKey);
       const bv = sortKey === "score" ? b.score : ruleEarned(b.breakdown, sortKey);
       if (bv !== av) return bv - av;
       return new Date(a.truck.createdAt).getTime() - new Date(b.truck.createdAt).getTime();
     });
-  }, [scored, sortKey]);
+  }, [scored, actionableMatches, trucks, parties, sortKey]);
+
+  const actionableByTruck = useMemo(
+    () => new Map(actionableMatches.map((match) => [match.truckPostingId, match])),
+    [actionableMatches],
+  );
 
   const unqualified = scored.filter((m) => !m.passed);
 
@@ -536,6 +574,7 @@ function LoadDetail() {
       <div className="grid grid-cols-1 gap-4 p-3 sm:p-6 lg:grid-cols-[1fr_360px] lg:gap-6">
         <section className="space-y-4">
           {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={undefined} />}
+          <LoadDecisionSummary load={load} suggestionCount={suggestions.length} />
           <div className="flex items-center justify-between">
             <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Suggested trucks ({suggestions.length})
@@ -567,15 +606,14 @@ function LoadDetail() {
 
           <div className="space-y-3">
             {suggestions.slice(0, 10).map((m, i) => (
-              <MatchTicket
+              <DecisionTruckCard
                 key={m.truck.id}
                 rank={i + 1}
                 load={load}
-                truck={m.truck}
-                operator={m.operator}
-                score={m.score}
-                breakdown={m.breakdown}
-                variant="suggested"
+                suggestion={m}
+                {...(actionableByTruck.get(m.truck.id)
+                  ? { savedMatch: actionableByTruck.get(m.truck.id)! }
+                  : {})}
                 {...(canManageMatches ? {
                   onAccept: () => setReviewTruck(m.truck),
                   onReject: () => rejectMatch(load.id, m.truck.id),
@@ -667,6 +705,193 @@ function LoadDetail() {
       )}
     </main>
     </AppShell>
+  );
+}
+
+function LoadDecisionSummary({ load, suggestionCount }: { load: Load; suggestionCount: number }) {
+  const rate = load.offeredRate ?? load.targetRate ?? load.platformQuote;
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-border bg-steel/15 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-black">Load decision summary</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Confirm the shipment requirements before selecting a recommended truck.
+          </p>
+        </div>
+        <span className="rounded-full bg-signal/15 px-3 py-1.5 text-[10px] font-black uppercase text-signal">
+          {suggestionCount} eligible {suggestionCount === 1 ? "truck" : "trucks"}
+        </span>
+      </div>
+      <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
+        <DecisionFact
+          label="Cargo requirement"
+          value={`${(load.weightKg / 1000).toFixed(1)} t · ${load.cargoType.replaceAll("_", " ")}`}
+          detail={`${load.trucksRequired ?? 1} truck${(load.trucksRequired ?? 1) === 1 ? "" : "s"} · ${load.requiredBodyTypes.join(" / ").replaceAll("_", " ")}`}
+        />
+        <DecisionFact
+          label="Pickup window"
+          value={new Date(load.pickupWindow.from).toLocaleDateString("en-ZA", { dateStyle: "medium" })}
+          detail={`${new Date(load.pickupWindow.from).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}–${new Date(load.pickupWindow.to).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}`}
+        />
+        <DecisionFact
+          label="Delivery required"
+          value={new Date(load.deliveryBy).toLocaleDateString("en-ZA", { dateStyle: "medium" })}
+          detail={new Date(load.deliveryBy).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+        />
+        <DecisionFact
+          label={load.pricingMode === "CUSTOM" ? "Freight owner offer" : "Target rate"}
+          value={rate ? formatMoney(rate) : "Not specified"}
+          detail={(load.rateBasis ?? "PER_TRIP").replaceAll("_", " ").toLowerCase()}
+        />
+      </div>
+      <div className="grid gap-3 border-t border-border p-4 md:grid-cols-2">
+        <div className="rounded-xl border border-border bg-steel/10 p-3">
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            <MapPin className="size-3.5 text-signal" /> Route
+          </div>
+          <p className="mt-2 text-xs font-semibold leading-5">{load.origin.label}</p>
+          <p className="my-1 text-[10px] font-black uppercase text-signal">to</p>
+          <p className="text-xs font-semibold leading-5">{load.destination.label}</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">{load.distanceKm.toFixed(1)} km freight distance</p>
+        </div>
+        <div className="rounded-xl border border-border bg-steel/10 p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Special requirements</div>
+          <p className="mt-2 text-xs leading-5 text-foreground">
+            {load.specialRequirements?.trim() || "No additional loading, access or handling instructions were supplied."}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DecisionFact({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="min-w-0 bg-background p-4">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-sm font-black" title={value}>{value}</p>
+      <p className="mt-1 truncate text-[10px] text-muted-foreground" title={detail}>{detail}</p>
+    </div>
+  );
+}
+
+function DecisionTruckCard({
+  rank,
+  load,
+  suggestion,
+  savedMatch,
+  onAccept,
+  onReject,
+}: {
+  rank: number;
+  load: Load;
+  suggestion: ScoredMatch;
+  savedMatch?: Match;
+  onAccept?: () => void;
+  onReject?: () => void;
+}) {
+  const { truck, operator, score, breakdown } = suggestion;
+  const accepted = savedMatch?.status === "ACCEPTED";
+  const capacityUse = Math.min(999, (load.weightKg / truck.payloadCapacityKg) * 100);
+  const rate = savedMatch?.agreedRate ?? load.offeredRate ?? load.targetRate ?? load.platformQuote;
+  return (
+    <article className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+      <div className="relative h-52 overflow-hidden border-b border-border bg-gradient-to-br from-white via-[#f7f7f4] to-[#ecebe5]">
+        <img
+          src={fleetVehicleAsset(truck)}
+          onError={(event) => { event.currentTarget.src = "/fleet/tamp-heavy-truck.png"; }}
+          alt={`${truck.bodyType.replaceAll("_", " ")} ${truck.registration}`}
+          className="size-full object-contain p-4 drop-shadow-[0_14px_14px_rgba(0,0,0,.18)]"
+        />
+        <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1.5 text-[9px] font-black uppercase tracking-wide shadow backdrop-blur">
+          #{rank} recommended truck
+        </span>
+        <span className="absolute right-3 top-3 rounded-xl bg-background/95 px-3 py-2 font-mono text-2xl font-black text-signal shadow backdrop-blur">
+          {score.toFixed(1)}<small className="text-[9px] text-muted-foreground">/100</small>
+        </span>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{operator.companyName}</p>
+            <h3 className="mt-1 text-lg font-black">
+              {[truck.year, truck.make, truck.model].filter(Boolean).join(" ") || truck.bodyType.replaceAll("_", " ")}
+            </h3>
+            <p className="font-mono text-xs text-muted-foreground">{maskRegistration(truck.registration)}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-positive/10 px-2.5 py-1 text-[9px] font-black uppercase text-positive">
+              <ShieldCheck className="size-3" /> {truck.vehicleVerification === "VERIFIED" ? "Verified" : "Eligible"}
+            </span>
+            <span className="rounded-full bg-steel px-2.5 py-1 text-[9px] font-bold uppercase text-muted-foreground">
+              Company {operator.ratingAvg != null ? `★ ${operator.ratingAvg.toFixed(1)}` : "new"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <TruckFact label="Body type" value={truck.bodyType.replaceAll("_", " ")} />
+          <TruckFact label="Payload fit" value={`${(truck.payloadCapacityKg / 1000).toFixed(1)} t · ${capacityUse.toFixed(0)}% used`} />
+          <TruckFact label="Availability" value={`${new Date(truck.availableFrom).toLocaleDateString("en-ZA")}–${new Date(truck.availableTo).toLocaleDateString("en-ZA")}`} icon={CalendarClock} />
+          <TruckFact label="Current location" value={truck.currentLocation.label} icon={MapPin} />
+        </div>
+
+        <div className="rounded-xl border border-border bg-steel/10 p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-black">Why this truck matches</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Every scoring factor remains visible before confirmation.</p>
+            </div>
+            <span className="font-mono text-xs font-bold">{rate ? formatMoney(rate) : "Rate not specified"}</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {breakdown.map((component) => (
+              <div key={component.ruleId} className="rounded-lg border border-border bg-background p-2.5">
+                <div className="flex items-start justify-between gap-2 text-[10px]">
+                  <span className="font-bold">{component.label}</span>
+                  <span className="shrink-0 font-mono font-black text-positive">+{component.earned.toFixed(1)}/{component.weight}</span>
+                </div>
+                <p className="mt-1 text-[9px] leading-4 text-muted-foreground">{component.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {!truck.driverId && (
+          <p className="rounded-lg border border-signal/30 bg-signal/5 px-3 py-2 text-[10px] text-muted-foreground">
+            Driver not assigned yet. The Transporter can assign a compliant driver in Dispatch after both parties confirm the engagement.
+          </p>
+        )}
+
+        {accepted ? (
+          <div className="rounded-lg bg-positive/10 px-4 py-3 text-center text-xs font-black uppercase text-positive">
+            Selected · awaiting Transporter confirmation
+          </div>
+        ) : (onAccept || onReject) ? (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={onAccept} className="min-h-11 flex-1 rounded-lg bg-signal px-4 text-xs font-black uppercase text-signal-foreground hover:brightness-105">
+              Review route & terms
+            </button>
+            <button type="button" onClick={onReject} className="min-h-11 rounded-lg border border-danger/40 px-5 text-xs font-bold uppercase text-danger hover:bg-danger/5">
+              Reject suggestion
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function TruckFact({ label, value, icon: Icon }: { label: string; value: string; icon?: typeof MapPin }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-border p-3">
+      <p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+        {Icon ? <Icon className="size-3" /> : null}{label}
+      </p>
+      <p className="mt-1 line-clamp-2 text-xs font-semibold" title={value}>{value}</p>
+    </div>
   );
 }
 
