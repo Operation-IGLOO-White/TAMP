@@ -26,6 +26,8 @@ export function userFacingError(error: unknown, fallback = "We could not complet
     return "This job is no longer assigned to this account. Refresh My Jobs or ask the dispatcher to assign it again.";
   if (/required permission:\s*dispatch\.respond|dispatch\.respond/i.test(raw))
     return "This driver needs the ‘Respond to driver assignments’ permission in the transporter's organisation.";
+  if (/required permission:\s*matches\.manage|matches\.manage/i.test(raw))
+    return "This account needs ‘Manage matches and truck allocations’ (matches.manage). A platform administrator can enable it under Access Control → Permission matrix.";
   if (/organisation role does not include|required permission|permission to perform/i.test(raw))
     return "Your organisation role does not allow this change. Ask your organisation administrator or the platform administrator to review your access rights.";
   if (status === 403)

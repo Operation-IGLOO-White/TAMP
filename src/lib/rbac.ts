@@ -13,7 +13,7 @@ export const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   "trucks.read": "View permitted trucks",
   "trucks.manage": "Create and manage fleet vehicles",
   "matches.read": "View match suggestions and offers",
-  "matches.manage": "Negotiate and accept matches",
+  "matches.manage": "Review and accept matches, transporter offers and multi-truck allocations",
   "trips.read": "View assigned trips",
   "trips.manage": "Advance and manage trips",
   "dispatch.manage": "Assign drivers to trips",
