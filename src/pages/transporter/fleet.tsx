@@ -1,5 +1,5 @@
 import { Camera, CheckCircle2, FileUp, MapPin, Pencil, Plus, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { truckRegistrationError } from "@/lib/api-errors";
@@ -59,8 +59,17 @@ function FleetPage() {
   const [adding, setAdding] = useState(
     canManageFleet && searchParams.get("add") === "true",
   );
+  const addTruckFormRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const activeOnly = searchParams.get("status") === "active";
+
+  useEffect(() => {
+    if (!adding) return;
+    const frame = window.requestAnimationFrame(() => {
+      addTruckFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [adding]);
 
   // Search across registration, body type, location and status.
   const filtered = useMemo(() => {
@@ -135,7 +144,9 @@ function FleetPage() {
       )}
 
       {adding && canManageFleet && !ownerOperatorAtLimit && (
-        <AddTruckForm onDone={() => setAdding(false)} onAdd={addTruck} />
+        <div ref={addTruckFormRef} id="add-truck-form" className="scroll-mt-24">
+          <AddTruckForm onDone={() => setAdding(false)} onAdd={addTruck} />
+        </div>
       )}
 
       {trucks.length === 0 ? (
