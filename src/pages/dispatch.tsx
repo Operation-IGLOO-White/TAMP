@@ -2,11 +2,12 @@ import {
   AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, MapPin,
   RefreshCw, Route, Search, Send, Truck, UserPlus, Users, XCircle,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { useTamp } from "@/context/TampContext";
+import { listDriverDocuments, type DriverDocument } from "@/fns/driver-documents";
 import { listOrganisationMembers, type OrganisationMember } from "@/fns/organisations";
 import type { DispatchAssignment, Load, Party, Trip, TruckPosting } from "@/types/domain";
 
@@ -33,6 +34,7 @@ export default function DispatchPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [range, setRange] = useState<Range>("7_DAYS");
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
 
   const { data: members = [], isFetching, refetch } = useQuery({
     queryKey: ["organisation-members", organisationId],
@@ -40,6 +42,18 @@ export default function DispatchPage() {
     enabled: carrierMode && Boolean(organisationId),
   });
   const drivers = useMemo(() => members.filter((m) => m.roleIds.includes("ROLE-DRIVER") && m.verification === "VERIFIED" && !m.suspended), [members]);
+  const documentQueries = useQueries({
+    queries: drivers.map((driver) => ({
+      queryKey: ["driver-documents", organisationId, driver.id],
+      queryFn: () => listDriverDocuments(organisationId!, driver.id),
+      enabled: carrierMode && Boolean(organisationId),
+      staleTime: 60_000,
+    })),
+  });
+  const documentsByDriver = useMemo(
+    () => new Map(drivers.map((driver, index) => [driver.id, documentQueries[index]?.data ?? []])),
+    [drivers, documentQueries],
+  );
 
   const jobs = useMemo<Job[]>(() => trips
     .filter((trip) => activeStatuses.has(trip.status))
@@ -86,6 +100,42 @@ export default function DispatchPage() {
     } finally { setBusy(null); }
   };
 
+  const autoPlanDrivers = (loadJobs: Job[]) => {
+    const planned = new Set<string>();
+    const next = { ...emails };
+    for (const job of loadJobs.filter((candidate) => queueFor(candidate) !== "ACCEPTED")) {
+      const driver = drivers.find((candidate) =>
+        !planned.has(candidate.id) &&
+        driverEligibleForJob(candidate, documentsByDriver.get(candidate.id) ?? [], job).eligible &&
+        driverCanTake(candidate.id, job, jobs),
+      );
+      if (!driver) continue;
+      planned.add(driver.id);
+      next[job.trip.id] = driver.email;
+    }
+    setEmails(next);
+  };
+
+  const sendFleetOffers = async (loadId: string, loadJobs: Job[]) => {
+    const assignable = loadJobs.filter(
+      (job) => queueFor(job) !== "ACCEPTED" && (emails[job.trip.id] ?? "").includes("@"),
+    );
+    if (!assignable.length) return;
+    setBulkBusy(loadId);
+    try {
+      for (const job of assignable) {
+        const driverEmail = emails[job.trip.id]!;
+        const note = notes[job.trip.id]?.trim();
+        await updateDispatch(job.trip.id, "ASSIGN", {
+          driverEmail,
+          ...(note ? { note } : {}),
+        });
+      }
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
   if (!carrierMode) return <DriverOffers jobs={jobs} meId={me.id} notes={notes} setNotes={setNotes} busy={busy} act={act} />;
 
   const counts = (queue: Queue) => jobs.filter((j) => queueFor(j) === queue).length;
@@ -109,9 +159,22 @@ export default function DispatchPage() {
             <label className="relative flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search load, route, truck or driver…" className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-3 text-sm outline-none focus:border-signal" /></label>
             <div className="flex rounded-xl border border-border bg-background p-1">{(["TODAY", "7_DAYS", "ALL"] as Range[]).map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase ${range === item ? "bg-signal text-signal-foreground" : "text-muted-foreground"}`}>{item === "7_DAYS" ? "7 days" : item.toLowerCase()}</button>)}</div>
           </div>
+          <FleetReadinessPlanner
+            jobs={visible}
+            allJobs={jobs}
+            drivers={drivers}
+            members={members}
+            parties={parties}
+            documentsByDriver={documentsByDriver}
+            emails={emails}
+            setEmails={setEmails}
+            bulkBusy={bulkBusy}
+            onAutoPlan={autoPlanDrivers}
+            onSend={sendFleetOffers}
+          />
           <Schedule jobs={jobs} />
           <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-            {(Object.keys(queues) as Queue[]).map((queue) => <QueueColumn key={queue} queue={queue} jobs={visible.filter((j) => queueFor(j) === queue)} drivers={drivers} members={members} parties={parties} emails={emails} notes={notes} setEmails={setEmails} setNotes={setNotes} busy={busy} expanded={expanded} setExpanded={setExpanded} driverConflicts={driverConflicts} truckConflicts={truckConflicts} act={act} />)}
+            {(Object.keys(queues) as Queue[]).map((queue) => <QueueColumn key={queue} queue={queue} jobs={visible.filter((j) => queueFor(j) === queue)} allJobs={jobs} drivers={drivers} members={members} parties={parties} documentsByDriver={documentsByDriver} emails={emails} notes={notes} setEmails={setEmails} setNotes={setNotes} busy={busy} expanded={expanded} setExpanded={setExpanded} driverConflicts={driverConflicts} truckConflicts={truckConflicts} act={act} />)}
           </div>
         </div>
         <aside className="space-y-4">
@@ -123,8 +186,131 @@ export default function DispatchPage() {
   </AppShell>;
 }
 
+function FleetReadinessPlanner({
+  jobs,
+  allJobs,
+  drivers,
+  members,
+  parties,
+  documentsByDriver,
+  emails,
+  setEmails,
+  bulkBusy,
+  onAutoPlan,
+  onSend,
+}: {
+  jobs: Job[];
+  allJobs: Job[];
+  drivers: OrganisationMember[];
+  members: OrganisationMember[];
+  parties: Party[];
+  documentsByDriver: Map<string, DriverDocument[]>;
+  emails: Record<string, string>;
+  setEmails: Dispatch<SetStateAction<Record<string, string>>>;
+  bulkBusy: string | null;
+  onAutoPlan: (jobs: Job[]) => void;
+  onSend: (loadId: string, jobs: Job[]) => Promise<void>;
+}) {
+  const groups = useMemo(() => {
+    const grouped = new Map<string, Job[]>();
+    jobs.forEach((job) => grouped.set(job.load.id, [...(grouped.get(job.load.id) ?? []), job]));
+    return [...grouped.values()].filter(
+      (group) => (group[0]?.load.trucksRequired ?? 1) > 1 || group.length > 1,
+    );
+  }, [jobs]);
+  if (!groups.length) return null;
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="border-b border-border p-4">
+        <div className="flex items-center gap-2"><Users className="size-4 text-signal" /><h2 className="text-sm font-black">Multi-truck dispatch readiness</h2></div>
+        <p className="mt-1 text-[10px] text-muted-foreground">Plan verified drivers across every allocation, then send the offers as one dispatch action.</p>
+      </div>
+      <div className="divide-y divide-border">
+        {groups.map((group) => {
+          const load = group[0]!.load;
+          const required = load.trucksRequired ?? group.length;
+          const ready = group.filter((job) => queueFor(job) === "ACCEPTED").length;
+          const awaiting = group.filter((job) => queueFor(job) === "OFFERED").length;
+          const open = group.filter((job) => queueFor(job) === "NEEDS_DRIVER" || queueFor(job) === "EXCEPTION").length;
+          const planned = group.filter((job) => queueFor(job) !== "ACCEPTED" && (emails[job.trip.id] ?? "").includes("@")).length;
+          return (
+            <article key={load.id} className="p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <p className="font-mono text-[10px] text-muted-foreground">{load.reference || load.id}</p>
+                  <h3 className="mt-1 line-clamp-2 text-xs font-black uppercase">{shortPlace(load.origin.label)} → {shortPlace(load.destination.label)}</h3>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Pickup {formatDate(load.pickupWindow.from)} · {group.length}/{required} truck allocations confirmed</p>
+                </div>
+                <div className="grid min-w-72 grid-cols-3 gap-2">
+                  <ReadinessMetric label="Driver ready" value={`${ready}/${group.length}`} positive={ready === group.length} />
+                  <ReadinessMetric label="Awaiting" value={String(awaiting)} />
+                  <ReadinessMetric label="Unassigned" value={String(open)} danger={open > 0} />
+                </div>
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-border">
+                <table className="w-full min-w-[760px] text-left">
+                  <thead className="border-b border-border bg-steel/25 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                    <tr><th className="px-3 py-2">Truck</th><th className="px-3 py-2">Dispatch state</th><th className="px-3 py-2">Assigned driver</th><th className="px-3 py-2">Compliance</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {group.map((job) => {
+                      const queue = queueFor(job);
+                      const assigned = findDriver(job.assignment?.driverId, members, parties);
+                      const selectedEmail = emails[job.trip.id] ?? "";
+                      const selectedDriver = drivers.find((driver) => driver.email === selectedEmail);
+                      const selectedEligibility = selectedDriver ? driverEligibleForJob(selectedDriver, documentsByDriver.get(selectedDriver.id) ?? [], job) : null;
+                      return (
+                        <tr key={job.trip.id}>
+                          <td className="px-3 py-3"><p className="font-mono text-xs font-black">{job.truck.registration}</p><p className="mt-0.5 text-[9px] text-muted-foreground">{job.truck.bodyType.replaceAll("_", " ")} · {job.trip.id}</p></td>
+                          <td className="px-3 py-3"><Badge queue={queue} /></td>
+                          <td className="px-3 py-3">
+                            {queue === "ACCEPTED" ? <p className="text-xs font-bold text-positive">{assigned?.contactName ?? "Accepted driver"}</p> : (
+                              <select
+                                value={selectedEmail}
+                                onChange={(event) => setEmails((current) => ({ ...current, [job.trip.id]: event.target.value }))}
+                                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs outline-none focus:border-signal"
+                              >
+                                <option value="">Select compliant driver</option>
+                                {drivers.map((driver) => {
+                                  const eligibility = driverEligibleForJob(driver, documentsByDriver.get(driver.id) ?? [], job);
+                                  const selectedElsewhere = Object.entries(emails).some(([tripId, email]) => tripId !== job.trip.id && email === driver.email);
+                                  const available = eligibility.eligible && driverCanTake(driver.id, job, allJobs) && !selectedElsewhere;
+                                  return <option key={driver.id} value={driver.email} disabled={!available}>{driver.contactName}{available ? "" : ` — ${selectedElsewhere ? "already planned" : eligibility.reason}`}</option>;
+                                })}
+                              </select>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {queue === "ACCEPTED" ? <span className="text-[10px] font-bold text-positive">Cleared</span> : selectedEligibility ? <span className={`text-[10px] font-bold ${selectedEligibility.eligible ? "text-positive" : "text-danger"}`}>{selectedEligibility.reason}</span> : <span className="text-[10px] text-muted-foreground">Choose a driver</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => onAutoPlan(group)} className="min-h-10 rounded-lg border border-border px-4 text-[10px] font-black uppercase hover:border-signal">Auto-plan compliant drivers</button>
+                <button type="button" disabled={!planned || bulkBusy === load.id} onClick={() => void onSend(load.id, group)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-signal px-4 text-[10px] font-black uppercase text-signal-foreground disabled:opacity-40"><Send className="size-3.5" />{bulkBusy === load.id ? "Sending offers…" : `Send ${planned} driver ${planned === 1 ? "offer" : "offers"}`}</button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ReadinessMetric({ label, value, positive = false, danger = false }: { label: string; value: string; positive?: boolean; danger?: boolean }) {
+  return <div className="rounded-lg border border-border bg-background p-2 text-center"><p className={`font-mono text-base font-black ${positive ? "text-positive" : danger ? "text-danger" : "text-foreground"}`}>{value}</p><p className="text-[8px] font-bold uppercase text-muted-foreground">{label}</p></div>;
+}
+
 type ColumnProps = {
-  queue: Queue; jobs: Job[]; drivers: OrganisationMember[]; members: OrganisationMember[]; parties: Party[];
+  queue: Queue; jobs: Job[]; allJobs: Job[]; drivers: OrganisationMember[]; members: OrganisationMember[]; parties: Party[];
+  documentsByDriver: Map<string, DriverDocument[]>;
   emails: Record<string, string>; notes: Record<string, string>;
   setEmails: Dispatch<SetStateAction<Record<string, string>>>; setNotes: Dispatch<SetStateAction<Record<string, string>>>;
   busy: string | null; expanded: string | null; setExpanded: Dispatch<SetStateAction<string | null>>;
@@ -142,6 +328,13 @@ function QueueColumn(p: ColumnProps) {
 function JobCard(p: ColumnProps & { job: Job }) {
   const { job } = p; const { trip, load, truck, assignment } = job;
   const driver = findDriver(assignment?.driverId, p.members, p.parties);
+  const selectedDriver = p.drivers.find((candidate) => candidate.email === p.emails[trip.id]);
+  const selectedEligibility = selectedDriver
+    ? driverEligibleForJob(selectedDriver, p.documentsByDriver.get(selectedDriver.id) ?? [], job)
+    : null;
+  const selectedAvailable = selectedDriver
+    ? selectedEligibility?.eligible === true && driverCanTake(selectedDriver.id, job, p.allJobs)
+    : false;
   const open = p.expanded === trip.id; const late = +new Date(load.pickupWindow.from) < Date.now() && trip.status === "SCHEDULED";
   return <article className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
     <button onClick={() => p.setExpanded(open ? null : trip.id)} className="w-full p-3 text-left">
@@ -155,9 +348,10 @@ function JobCard(p: ColumnProps & { job: Job }) {
       <div className="grid grid-cols-2 gap-2"><SmallBox label="Trip" value={trip.id} /><SmallBox label="Distance" value={`${load.distanceKm.toLocaleString("en-ZA")} km`} /></div>
       {assignment?.note && <p className="rounded-lg bg-steel/30 p-2 text-xs text-muted-foreground">{assignment.note}</p>}
       {p.queue !== "ACCEPTED" ? <>
-        <select value={p.emails[trip.id] ?? ""} onChange={(e) => p.setEmails((old) => ({ ...old, [trip.id]: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs"><option value="">Select verified driver</option>{p.drivers.map((d) => <option key={d.id} value={d.email}>{d.contactName}</option>)}</select>
+        <select value={p.emails[trip.id] ?? ""} onChange={(e) => p.setEmails((old) => ({ ...old, [trip.id]: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs"><option value="">Select compliant driver</option>{p.drivers.map((candidate) => { const eligibility = driverEligibleForJob(candidate, p.documentsByDriver.get(candidate.id) ?? [], job); const available = eligibility.eligible && driverCanTake(candidate.id, job, p.allJobs); return <option key={candidate.id} value={candidate.email} disabled={!available}>{candidate.contactName}{available ? "" : ` — ${eligibility.eligible ? "schedule conflict" : eligibility.reason}`}</option>; })}</select>
+        {selectedEligibility && <p className={`text-[10px] font-semibold ${selectedAvailable ? "text-positive" : "text-danger"}`}>{selectedAvailable ? selectedEligibility.reason : selectedEligibility.eligible ? "Driver has another offer or accepted trip in this time window" : selectedEligibility.reason}</p>}
         <textarea value={p.notes[trip.id] ?? ""} onChange={(e) => p.setNotes((old) => ({ ...old, [trip.id]: e.target.value }))} placeholder="Pickup or route instructions (optional)" className="min-h-20 w-full rounded-lg border border-border bg-background p-3 text-xs outline-none focus:border-signal" />
-        <button disabled={p.busy === trip.id || !(p.emails[trip.id] ?? "").includes("@")} onClick={() => void p.act(trip.id, "ASSIGN")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-signal text-xs font-black uppercase text-signal-foreground disabled:opacity-40"><Send className="size-3.5" />{assignment ? "Reassign and send" : "Send driver offer"}</button>
+        <button disabled={p.busy === trip.id || !selectedAvailable} onClick={() => void p.act(trip.id, "ASSIGN")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-signal text-xs font-black uppercase text-signal-foreground disabled:opacity-40"><Send className="size-3.5" />{assignment ? "Reassign and send" : "Send driver offer"}</button>
         {p.drivers.length === 0 && <p className="text-[10px] text-danger">Add and verify a driver under Organisation first.</p>}
       </> : <button disabled={p.busy === trip.id} onClick={() => void p.act(trip.id, "CANCEL")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-danger/40 text-xs font-bold text-danger"><XCircle className="size-4" />Cancel assignment</button>}
       {assignment?.timeline?.length ? <div className="border-t border-border pt-2 text-[10px] text-muted-foreground">Latest: {assignment.timeline.at(-1)?.status.replaceAll("_", " ")} · {new Date(assignment.timeline.at(-1)!.at).toLocaleString("en-ZA")}</div> : null}
@@ -185,6 +379,34 @@ function DriverOffers({ jobs, meId, notes, setNotes, busy, act }: { jobs: Job[];
 }
 
 function queueFor(j:Job):Queue { if(j.assignment?.status==="ACCEPTED")return"ACCEPTED";if(j.assignment?.status==="OFFERED")return"OFFERED";if(["DECLINED","CANCELLED"].includes(j.assignment?.status??""))return"EXCEPTION";return"NEEDS_DRIVER"; }
+const requiredDriverDocuments = ["DRIVING_LICENCE", "PRDP", "MEDICAL_CERTIFICATE"] as const;
+const driverDocumentLabels: Record<(typeof requiredDriverDocuments)[number], string> = {
+  DRIVING_LICENCE: "Driving licence",
+  PRDP: "PrDP",
+  MEDICAL_CERTIFICATE: "Medical certificate",
+};
+function driverEligibleForJob(driver: OrganisationMember, documents: DriverDocument[], job: Job) {
+  if (driver.suspended || driver.verification !== "VERIFIED") return { eligible: false, reason: "Driver is not verified" };
+  const deliveryAt = +new Date(job.load.deliveryBy);
+  for (const type of requiredDriverDocuments) {
+    const document = documents
+      .filter((candidate) => candidate.documentType === type)
+      .sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))[0];
+    const label = driverDocumentLabels[type];
+    if (!document) return { eligible: false, reason: `${label} missing` };
+    if (document.reviewStatus && document.reviewStatus !== "APPROVED") return { eligible: false, reason: `${label} awaiting approval` };
+    if (document.status === "EXPIRED") return { eligible: false, reason: `${label} expired` };
+    if (document.expiresAt && +new Date(document.expiresAt) < deliveryAt) return { eligible: false, reason: `${label} expires before delivery` };
+  }
+  return { eligible: true, reason: "Documents valid for this trip" };
+}
+function driverCanTake(driverId: string, target: Job, jobs: Job[]) {
+  return !jobs.some((job) => job.trip.id !== target.trip.id
+    && job.assignment?.driverId === driverId
+    && (job.assignment.status === "OFFERED" || job.assignment.status === "ACCEPTED")
+    && +new Date(job.load.pickupWindow.from) <= +new Date(target.load.deliveryBy)
+    && +new Date(target.load.pickupWindow.from) <= +new Date(job.load.deliveryBy));
+}
 function conflicts(jobs:Job[],resource:"driver"|"truck"){const out=new Set<string>();jobs.forEach((a,i)=>{const id=resource==="driver"?a.assignment?.driverId:a.truck.id;if(!id||(resource==="driver"&&a.assignment?.status!=="ACCEPTED"))return;jobs.slice(i+1).forEach(b=>{const bid=resource==="driver"?b.assignment?.driverId:b.truck.id;if(resource==="driver"&&b.assignment?.status!=="ACCEPTED")return;if(id===bid&&+new Date(a.load.pickupWindow.from)<=+new Date(b.load.deliveryBy)&&+new Date(b.load.pickupWindow.from)<=+new Date(a.load.deliveryBy)){out.add(a.trip.id);out.add(b.trip.id);}})});return out;}
 function findDriver(id:string|undefined,members:OrganisationMember[],parties:Party[]){return members.find(m=>m.id===id)??parties.find(p=>p.id===id)}
 function formatDate(value:string){return new Date(value).toLocaleString("en-ZA",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}

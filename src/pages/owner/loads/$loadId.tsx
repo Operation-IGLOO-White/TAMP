@@ -107,6 +107,7 @@ function LoadDetail() {
     trips,
     disputes,
     incidents,
+    dispatches,
     audit,
     proofs,
     authParty,
@@ -123,6 +124,7 @@ function LoadDetail() {
   const [issueOpen, setIssueOpen] = useState(false);
   const [issueMode, setIssueMode] = useState<"incident" | "cancel">("incident");
   const [allocationCancellation, setAllocationCancellation] = useState<{ truckId: string; label: string } | null>(null);
+  const [replacementOpen, setReplacementOpen] = useState(false);
 
   const load = loads.find((l) => l.id === loadId);
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
@@ -207,17 +209,48 @@ function LoadDetail() {
     const match = activeMatchForLoad(load.id, matches);
     const trip = tripForMatch(match?.id, trips);
     const allocations = matches
-      .filter((item) => item.loadId === load.id && ["ACCEPTED", "CONFIRMED"].includes(item.status))
+      .filter(
+        (item) =>
+          item.loadId === load.id &&
+          (["ACCEPTED", "CONFIRMED"].includes(item.status) ||
+            trips.some((candidate) => candidate.matchId === item.id)),
+      )
       .map((item) => {
         const allocationTruck = trucks.find((candidate) => candidate.id === item.truckPostingId);
+        const allocationTrip = tripForMatch(item.id, trips);
+        const assignment = allocationTrip
+          ? [...dispatches].reverse().find((candidate) => candidate.tripId === allocationTrip.id)
+          : undefined;
         return {
           match: item,
           truck: allocationTruck,
-          trip: tripForMatch(item.id, trips),
+          trip: allocationTrip,
+          assignment,
+          driver: parties.find((candidate) => candidate.id === assignment?.driverId),
+          proof: allocationTrip
+            ? proofs.find((candidate) => candidate.tripId === allocationTrip.id && (candidate.kind ?? "DELIVERY") === "DELIVERY")
+            : undefined,
+          incidents: allocationTrip
+            ? incidents.filter((candidate) => candidate.tripId === allocationTrip.id && candidate.status !== "RESOLVED")
+            : [],
           carrier: parties.find((candidate) => candidate.id === allocationTruck?.transporterId),
         };
       })
       .filter((item) => item.truck);
+    const requiredAllocations = load.trucksRequired ?? 1;
+    const liveAllocations = allocations.filter(
+      (item) => !item.trip || item.trip.status !== "CANCELLED",
+    );
+    const awaitingAllocations = liveAllocations.filter((item) => item.match.status === "ACCEPTED");
+    const deliveredAllocations = liveAllocations.filter((item) => item.trip && ["DELIVERED", "COMPLETED"].includes(item.trip.status));
+    const driverReadyAllocations = liveAllocations.filter((item) => item.assignment?.status === "ACCEPTED");
+    const exceptionAllocations = liveAllocations.filter((item) => item.incidents.length || ["DELAYED", "ACTION_REQUIRED"].includes(item.trip?.operationalStatus ?? ""));
+    const outstandingAllocations = Math.max(0, requiredAllocations - liveAllocations.length);
+    const shipmentComplete = deliveredAllocations.length === requiredAllocations && outstandingAllocations === 0;
+    const allocatedTruckIds = new Set(allocations.map((item) => item.match.truckPostingId));
+    const replacementCandidates = suggestions
+      .filter((candidate) => !allocatedTruckIds.has(candidate.truck.id))
+      .slice(0, Math.max(3, outstandingAllocations));
     const loadEvents = audit
       .filter(
         (e) => e.subjectId === load.id || e.subjectId === trip?.id || e.subjectId === match?.id,
@@ -326,26 +359,58 @@ function LoadDetail() {
           <aside className="space-y-6">
             {allocations.length > 0 && (
               <section className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
-                <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wide"><Truck className="size-4 text-signal" /> Truck allocations</h3>
-                    <p className="mt-1 text-[10px] text-muted-foreground">Cancel one vehicle without cancelling the whole shipment.</p>
+                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wide"><Truck className="size-4 text-signal" /> Fleet allocation lifecycle</h3>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Every truck remains independently traceable from selection through delivery or replacement.</p>
                   </div>
-                  <span className="rounded-lg bg-steel px-2 py-1 font-mono text-xs font-bold">{allocations.length}/{load.trucksRequired ?? 1}</span>
+                  <span className={`rounded-lg px-3 py-2 font-mono text-xs font-bold ${outstandingAllocations ? "bg-signal/15 text-signal" : "bg-positive/10 text-positive"}`}>
+                    {liveAllocations.length}/{requiredAllocations} active
+                  </span>
+                </div>
+                <div className="grid gap-px border-b border-border bg-border sm:grid-cols-5">
+                  <AllocationMetric label="Delivered" value={deliveredAllocations.length} tone={shipmentComplete ? "positive" : "neutral"} />
+                  <AllocationMetric label="Driver ready" value={driverReadyAllocations.length} tone="positive" />
+                  <AllocationMetric label="Awaiting carrier" value={awaitingAllocations.length} tone="signal" />
+                  <AllocationMetric label="Open slots" value={outstandingAllocations} tone={outstandingAllocations ? "danger" : "neutral"} />
+                  <AllocationMetric label="Exceptions" value={exceptionAllocations.length} tone={exceptionAllocations.length ? "danger" : "neutral"} />
+                </div>
+                <div className="h-1.5 bg-steel">
+                  <div
+                    className="h-full bg-positive transition-[width] duration-500"
+                    style={{ width: `${Math.min(100, (deliveredAllocations.length / requiredAllocations) * 100)}%` }}
+                  />
+                </div>
+                <div className={`border-b border-border px-4 py-2 text-[10px] font-semibold ${shipmentComplete ? "bg-positive/10 text-positive" : "bg-steel/20 text-muted-foreground"}`}>
+                  {shipmentComplete
+                    ? `Shipment complete — all ${requiredAllocations} truck allocations delivered.`
+                    : `${deliveredAllocations.length}/${requiredAllocations} delivered. The shipment remains open until every required allocation is delivered or an open slot is explicitly closed.`}
                 </div>
                 <div className="divide-y divide-border">
                   {allocations.map((allocation) => {
                     const allocationTruck = allocation.truck!;
                     const closed = allocation.trip && ["COMPLETED", "CANCELLED"].includes(allocation.trip.status);
+                    const cancelled = allocation.trip?.status === "CANCELLED";
                     return (
-                      <div key={allocation.match.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+                      <div key={allocation.match.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-center ${cancelled ? "bg-danger/5 opacity-70" : ""}`}>
                         <div className="size-20 shrink-0 overflow-hidden rounded-xl border border-border bg-white">
                           <img src={fleetVehicleAsset(allocationTruck)} alt={`${allocationTruck.bodyType} ${allocationTruck.registration}`} className="h-full w-full object-contain p-1" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm font-black">{maskRegistration(allocationTruck.registration)}</span><span className="rounded bg-steel px-2 py-1 text-[9px] font-black uppercase text-muted-foreground">{(allocation.trip?.status ?? allocation.match.status).replaceAll("_", " ")}</span></div>
+                          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm font-black">{maskRegistration(allocationTruck.registration)}</span><span className={`rounded px-2 py-1 text-[9px] font-black uppercase ${cancelled ? "bg-danger/10 text-danger" : allocation.match.status === "ACCEPTED" ? "bg-signal/15 text-signal" : "bg-positive/10 text-positive"}`}>{cancelled ? "Cancelled · replacement needed" : (allocation.trip?.status ?? allocation.match.status).replaceAll("_", " ")}</span></div>
                           <p className="mt-1 text-xs font-semibold">{allocation.carrier?.companyName ?? allocation.carrier?.contactName ?? "Transporter"}</p>
-                          <p className="text-[10px] text-muted-foreground">{allocationTruck.bodyType.replaceAll("_", " ")} · {allocationTruck.payloadCapacityKg.toLocaleString("en-ZA")} kg{allocationTruck.driverId ? " · Driver assigned" : " · Needs a driver"}</p>
+                          <p className="text-[10px] text-muted-foreground">{allocationTruck.bodyType.replaceAll("_", " ")} · {allocationTruck.payloadCapacityKg.toLocaleString("en-ZA")} kg · {allocation.driver?.contactName ?? (allocation.assignment?.status === "OFFERED" ? "Driver response pending" : "Needs a driver")}</p>
+                          {allocation.trip && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[9px] font-semibold uppercase text-muted-foreground">
+                              <span>{allocation.trip.progressPct}% complete</span>
+                              <span>·</span>
+                              <span>{allocation.trip.etaAt ? `ETA ${new Date(allocation.trip.etaAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : "ETA pending"}</span>
+                              <span>·</span>
+                              <span>{allocation.trip.livePosition?.updatedAt || allocation.trip.simulatedPosition?.updatedAt ? `GPS ${gpsAge(allocation.trip.livePosition?.updatedAt ?? allocation.trip.simulatedPosition?.updatedAt)}` : "GPS unavailable"}</span>
+                            </div>
+                          )}
+                          {allocation.incidents.length > 0 && <p className="mt-2 inline-flex rounded-full bg-danger/10 px-2 py-1 text-[9px] font-black uppercase text-danger">{allocation.incidents.length} active {allocation.incidents.length === 1 ? "exception" : "exceptions"} · {allocation.incidents[0]!.kind.replaceAll("_", " ")}</p>}
+                          {allocation.trip && ["DELIVERED", "COMPLETED"].includes(allocation.trip.status) && <p className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-black uppercase ${allocation.proof ? "bg-positive/10 text-positive" : "bg-warning/10 text-warning"}`}><BadgeCheck className="size-3" />{allocation.proof ? `POD received · ${allocation.proof.recipientName}` : "POD required before settlement"}</p>}
                         </div>
                         {canCancelTrips && allocation.trip && !closed && (
                           <button
@@ -364,6 +429,35 @@ function LoadDetail() {
                     );
                   })}
                 </div>
+                {outstandingAllocations > 0 && (
+                  <div className="border-t border-border bg-signal/5 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black">{outstandingAllocations} fleet {outstandingAllocations === 1 ? "slot" : "slots"} still open</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">Select replacement capacity without changing the confirmed trucks already assigned to this shipment.</p>
+                      </div>
+                      <button type="button" onClick={() => setReplacementOpen((open) => !open)} className="min-h-10 rounded-lg bg-signal px-4 text-[10px] font-black uppercase text-signal-foreground hover:brightness-105">
+                        {replacementOpen ? "Hide replacements" : "Find replacement trucks"}
+                      </button>
+                    </div>
+                    {replacementOpen && (
+                      <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                        {replacementCandidates.map((candidate) => (
+                          <ReplacementCandidate
+                            key={candidate.truck.id}
+                            candidate={candidate}
+                            onReview={() => setReviewTruck(candidate.truck)}
+                          />
+                        ))}
+                        {replacementCandidates.length === 0 && (
+                          <div className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground xl:col-span-2">
+                            No eligible replacement is available yet. The open slot remains visible and will receive new recommendations as capacity is posted.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
             )}
             {load.stops && load.stops.length > 2 && <ConsignmentStops load={load} trip={trip} />}
@@ -526,6 +620,15 @@ function LoadDetail() {
             setIssueOpen(false);
             setAllocationCancellation(null);
           }}
+        />
+      )}
+      {canManageMatches && reviewTruck && (
+        <MatchReviewDialog
+          load={load}
+          truck={reviewTruck}
+          actionLabel="Select replacement truck"
+          onClose={() => setReviewTruck(null)}
+          onConfirm={(proof) => acceptMatch(load.id, reviewTruck.id, proof)}
         />
       )}
       </AppShell>
@@ -895,6 +998,60 @@ function TruckFact({ label, value, icon: Icon }: { label: string; value: string;
   );
 }
 
+function AllocationMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "positive" | "signal" | "danger" | "neutral";
+}) {
+  const toneClass = {
+    positive: "text-positive",
+    signal: "text-signal",
+    danger: "text-danger",
+    neutral: "text-foreground",
+  }[tone];
+  return (
+    <div className="bg-background px-4 py-3">
+      <p className={`font-mono text-xl font-black ${toneClass}`}>{value}</p>
+      <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function ReplacementCandidate({ candidate, onReview }: { candidate: ScoredMatch; onReview: () => void }) {
+  const { truck, operator } = candidate;
+  return (
+    <article className="flex flex-col gap-3 rounded-xl border border-border bg-background p-3 sm:flex-row sm:items-center">
+      <div className="h-20 w-full shrink-0 overflow-hidden rounded-lg bg-white sm:w-28">
+        <img
+          src={fleetVehicleAsset(truck)}
+          onError={(event) => { event.currentTarget.src = "/fleet/tamp-heavy-truck.png"; }}
+          alt={`${truck.bodyType} ${truck.registration}`}
+          className="size-full object-contain p-1"
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="truncate text-xs font-black">{operator.companyName}</p>
+            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{maskRegistration(truck.registration)}</p>
+          </div>
+          <span className="shrink-0 font-mono text-base font-black text-signal">{candidate.score.toFixed(1)}</span>
+        </div>
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          {truck.bodyType.replaceAll("_", " ")} · {(truck.payloadCapacityKg / 1000).toFixed(1)} t · {truck.driverId ? "driver assigned" : "driver pending"}
+        </p>
+        <button type="button" onClick={onReview} className="mt-2 min-h-9 w-full rounded-lg border border-signal px-3 text-[9px] font-black uppercase text-signal hover:bg-signal/10">
+          Review replacement
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function scrollToSection(id: string, close: (open: boolean) => void) {
   close(false);
   window.requestAnimationFrame(() =>
@@ -1019,6 +1176,14 @@ function TripTimeline({ trip }: { trip: Trip }) {
       })}
     </ol>
   );
+}
+
+function gpsAge(value?: string | null) {
+  if (!value) return "unavailable";
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return "updated now";
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ago`;
 }
 
 export default LoadDetail;

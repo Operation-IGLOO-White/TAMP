@@ -40,7 +40,7 @@ function formatDate(value: string) {
 }
 
 export default function OwnerShipments() {
-  const { loads, matches, trips, disputes, trucks, parties } = useTamp();
+  const { loads, matches, trips, disputes, trucks, parties, incidents } = useTamp();
   const [params, setParams] = useSearchParams();
   const requestedView = params.get("view") as View | null;
   const view: View = requestedView && requestedView in viewLabels ? requestedView : "all";
@@ -53,13 +53,34 @@ export default function OwnerShipments() {
     () =>
       loads
         .map((load) => {
-          const match = activeMatchForLoad(load.id, matches);
-          const trip = tripForMatch(match?.id, trips);
-          const truck = trucks.find((item) => item.id === match?.truckPostingId);
-          const carrier = truck
-            ? parties.find((party) => party.id === truck.transporterId)
-            : undefined;
-          return { load, match, trip, truck, carrier };
+          const allocations = matches
+            .filter(
+              (match) =>
+                match.loadId === load.id &&
+                (["ACCEPTED", "CONFIRMED"].includes(match.status) ||
+                  trips.some((trip) => trip.matchId === match.id)),
+            )
+            .map((match) => {
+              const trip = tripForMatch(match.id, trips);
+              const truck = trucks.find((item) => item.id === match.truckPostingId);
+              const carrier = truck
+                ? parties.find((party) => party.id === truck.transporterId)
+                : undefined;
+              return { match, trip, truck, carrier };
+            });
+          const liveAllocations = allocations.filter(
+            (allocation) => allocation.trip?.status !== "CANCELLED",
+          );
+          const primary = liveAllocations[0] ?? allocations[0];
+          return {
+            load,
+            allocations,
+            liveAllocations,
+            match: primary?.match ?? activeMatchForLoad(load.id, matches),
+            trip: primary?.trip,
+            truck: primary?.truck,
+            carrier: primary?.carrier,
+          };
         })
         .sort(
           (a, b) =>
@@ -73,22 +94,29 @@ export default function OwnerShipments() {
     trip?.status === "SCHEDULED" ||
     (new Date(load.pickupWindow.from).getTime() > Date.now() &&
       !["COMPLETED", "CANCELLED", "CLOSED"].includes(load.status));
-  const activeCount = rows.filter(
-    ({ trip }) => trip && isActiveTrip(trip.status) && trip.status !== "SCHEDULED",
+  const activeCount = rows.filter(({ liveAllocations }) =>
+    liveAllocations.some(({ trip }) => trip && isActiveTrip(trip.status) && trip.status !== "SCHEDULED"),
   ).length;
-  const scheduledCount = rows.filter(({ load, trip }) => isScheduled(load, trip)).length;
+  const scheduledCount = rows.filter(({ load, liveAllocations, trip }) =>
+    liveAllocations.length
+      ? liveAllocations.some((allocation) => isScheduled(load, allocation.trip))
+      : isScheduled(load, trip),
+  ).length;
   const recurringCount = rows.filter(({ load }) => load.recurrence?.active).length;
   const attentionCount = rows.filter(
-    ({ trip }) =>
-      trip?.operationalStatus === "DELAYED" ||
-      trip?.operationalStatus === "ACTION_REQUIRED" ||
-      (trip && disputes.some((item) => item.tripId === trip.id && item.status !== "RESOLVED")),
+    ({ liveAllocations }) =>
+      liveAllocations.some(
+        ({ trip }) =>
+          trip?.operationalStatus === "DELAYED" ||
+          trip?.operationalStatus === "ACTION_REQUIRED" ||
+          (trip && disputes.some((item) => item.tripId === trip.id && item.status !== "RESOLVED")),
+      ),
   ).length;
 
-  const filtered = rows.filter(({ load, trip, truck, carrier }) => {
-    if (view === "active" && !(trip && isActiveTrip(trip.status) && trip.status !== "SCHEDULED"))
+  const filtered = rows.filter(({ load, trip, truck, carrier, liveAllocations }) => {
+    if (view === "active" && !liveAllocations.some(({ trip: allocationTrip }) => allocationTrip && isActiveTrip(allocationTrip.status) && allocationTrip.status !== "SCHEDULED"))
       return false;
-    if (view === "scheduled" && !isScheduled(load, trip)) return false;
+    if (view === "scheduled" && !(liveAllocations.length ? liveAllocations.some((allocation) => isScheduled(load, allocation.trip)) : isScheduled(load, trip))) return false;
     if (view === "recurring" && !load.recurrence?.active) return false;
     if (customerId && load.customerId !== customerId) return false;
     const displayStatus = displayStatusForLoad(load, matches, trips, disputes);
@@ -102,6 +130,7 @@ export default function OwnerShipments() {
       load.cargoType,
       truck?.registration,
       carrier?.contactName,
+      ...liveAllocations.flatMap((allocation) => [allocation.truck?.registration, allocation.carrier?.companyName, allocation.carrier?.contactName]),
       customer?.name,
     ]
       .filter(Boolean)
@@ -168,7 +197,15 @@ export default function OwnerShipments() {
                 </p>
               </div>
             )}
-            {filtered.map(({ load, trip, truck, carrier }) => (
+            {filtered.map(({ load, trip, truck, carrier, allocations, liveAllocations }) => {
+              const required = load.trucksRequired ?? 1;
+              const carrierNames = [...new Set(liveAllocations.map((allocation) => allocation.carrier?.companyName ?? allocation.carrier?.contactName).filter(Boolean))];
+              const tripProgress = liveAllocations.map((allocation) => allocation.trip?.progressPct).filter((value): value is number => value != null);
+              const averageProgress = tripProgress.length ? Math.round(tripProgress.reduce((total, value) => total + value, 0) / tripProgress.length) : null;
+              const delivered = liveAllocations.filter((allocation) => allocation.trip && ["DELIVERED", "COMPLETED"].includes(allocation.trip.status)).length;
+              const allocationTripIds = new Set(liveAllocations.map((allocation) => allocation.trip?.id).filter(Boolean));
+              const activeExceptions = incidents.filter((incident) => allocationTripIds.has(incident.tripId) && incident.status !== "RESOLVED").length;
+              return (
               <Link
                 key={load.id}
                 to="/owner/loads/$loadId"
@@ -199,9 +236,11 @@ export default function OwnerShipments() {
                   <p className="text-[10px] text-muted-foreground">Deliver by {formatDate(load.deliveryBy)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Carrier</p>
-                  <p className="mt-1 text-xs font-semibold">{carrier?.contactName ?? "Not assigned"}</p>
-                  <p className="text-[10px] text-muted-foreground">{truck?.registration ?? "Awaiting match"}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Fleet allocation</p>
+                  <p className="mt-1 text-xs font-semibold">{liveAllocations.length}/{required} trucks active</p>
+                  <p className="line-clamp-1 text-[10px] text-muted-foreground">{carrierNames.length ? carrierNames.join(", ") : carrier?.contactName ?? "Awaiting match"}</p>
+                  {allocations.some((allocation) => allocation.trip?.status === "CANCELLED") && <p className="mt-0.5 text-[9px] font-bold uppercase text-danger">Replacement history available</p>}
+                  {activeExceptions > 0 && <p className="mt-0.5 text-[9px] font-bold uppercase text-danger">{activeExceptions} active {activeExceptions === 1 ? "exception" : "exceptions"}</p>}
                 </div>
                 <div className="text-left lg:text-right">
                   <p className="font-mono text-sm font-bold">
@@ -209,10 +248,11 @@ export default function OwnerShipments() {
                       ? `R ${load.targetRate.amount.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`
                       : "Rate open"}
                   </p>
-                  {trip && <p className="mt-1 text-[10px] text-muted-foreground">{trip.progressPct}% complete</p>}
+                  {required > 1 ? <p className={`mt-1 text-[10px] font-semibold ${delivered === required ? "text-positive" : "text-muted-foreground"}`}>{delivered}/{required} delivered{averageProgress != null ? ` · ${averageProgress}% average` : ""}</p> : averageProgress != null ? <p className="mt-1 text-[10px] text-muted-foreground">{averageProgress}% fleet progress</p> : trip && <p className="mt-1 text-[10px] text-muted-foreground">{trip.progressPct}% complete</p>}
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </section>
       </div>

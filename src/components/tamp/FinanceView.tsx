@@ -1,8 +1,9 @@
-import { Banknote, CheckCircle2, Clock3, ReceiptText, WalletCards } from "lucide-react";
+import { AlertTriangle, Banknote, CheckCircle2, Clock3, FileCheck2, ReceiptText, Truck, WalletCards } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Panel } from "@/components/tamp/StatCard";
 import { useTamp } from "@/context/TampContext";
+import { Link } from "@/lib/nav";
 import type { Invoice, InvoiceStatus } from "@/types/domain";
 
 const money = (value: number) =>
@@ -15,7 +16,7 @@ const tone: Record<InvoiceStatus, string> = {
 };
 
 export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
-  const { invoices, transactions, loads, parties, updateInvoice } = useTamp();
+  const { invoices, transactions, loads, parties, matches, trips, trucks, proofs, disputes, updateInvoice } = useTamp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,6 +63,18 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
             icon={CheckCircle2}
           />
         </div>
+        {mode === "owner" && (
+          <ShipmentSettlementWorkspace
+            loads={loads}
+            matches={matches}
+            trips={trips}
+            trucks={trucks}
+            parties={parties}
+            proofs={proofs}
+            disputes={disputes}
+            invoices={invoices}
+          />
+        )}
         <div className="grid overflow-hidden rounded-xl border border-border bg-graphite lg:grid-cols-[390px_1fr]">
           <div className="border-b border-border lg:border-b-0 lg:border-r">
             <div className="border-b border-border p-4">
@@ -171,6 +184,102 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
     </AppShell>
   );
 }
+
+type FinanceStore = ReturnType<typeof useTamp>;
+type SettlementStage = "DRAFT" | "AWAITING_POD" | "UNDER_REVIEW" | "INVOICED" | "PAID";
+const settlementTone: Record<SettlementStage, string> = {
+  DRAFT: "bg-steel text-muted-foreground",
+  AWAITING_POD: "bg-warning/15 text-warning",
+  UNDER_REVIEW: "bg-signal/15 text-signal",
+  INVOICED: "bg-sky-500/10 text-sky-700",
+  PAID: "bg-positive/10 text-positive",
+};
+
+function ShipmentSettlementWorkspace({
+  loads,
+  matches,
+  trips,
+  trucks,
+  parties,
+  proofs,
+  disputes,
+  invoices,
+}: Pick<FinanceStore, "loads" | "matches" | "trips" | "trucks" | "parties" | "proofs" | "disputes" | "invoices">) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const rows = useMemo(() => loads.map((load) => {
+    const allocations = matches
+      .filter((match) => match.loadId === load.id && (["ACCEPTED", "CONFIRMED"].includes(match.status) || trips.some((trip) => trip.matchId === match.id)))
+      .map((match) => {
+        const trip = trips.find((candidate) => candidate.matchId === match.id);
+        const truck = trucks.find((candidate) => candidate.id === match.truckPostingId);
+        const carrier = parties.find((candidate) => candidate.id === truck?.transporterId);
+        const pod = trip ? proofs.find((candidate) => candidate.tripId === trip.id && (candidate.kind ?? "DELIVERY") === "DELIVERY") : undefined;
+        const invoice = trip ? invoices.find((candidate) => candidate.tripId === trip.id && candidate.status !== "VOID") : undefined;
+        const dispute = trip ? disputes.find((candidate) => candidate.tripId === trip.id && candidate.status !== "RESOLVED") : undefined;
+        const agreedRate = invoice?.total ?? match.agreedRate?.amount ?? load.targetRate?.amount ?? 0;
+        return { match, trip, truck, carrier, pod, invoice, dispute, agreedRate };
+      });
+    const live = allocations.filter((allocation) => allocation.trip?.status !== "CANCELLED");
+    const required = load.trucksRequired ?? 1;
+    const delivered = live.filter((allocation) => allocation.trip && ["DELIVERED", "COMPLETED"].includes(allocation.trip.status));
+    const withPod = delivered.filter((allocation) => allocation.pod);
+    const activeInvoices = live.map((allocation) => allocation.invoice).filter((invoice): invoice is Invoice => Boolean(invoice));
+    const paidInvoices = activeInvoices.filter((invoice) => ["PAID", "SETTLED"].includes(invoice.status));
+    const stage: SettlementStage = delivered.length === 0
+      ? "DRAFT"
+      : withPod.length < delivered.length || delivered.length < required
+        ? "AWAITING_POD"
+        : activeInvoices.length < delivered.length
+          ? "UNDER_REVIEW"
+          : paidInvoices.length < activeInvoices.length
+            ? "INVOICED"
+            : "PAID";
+    return {
+      load, allocations, live, required, delivered: delivered.length, pods: withPod.length,
+      invoices: activeInvoices.length, paid: paidInvoices.length, stage,
+      total: activeInvoices.reduce((sum, invoice) => sum + invoice.total, 0),
+      payout: activeInvoices.reduce((sum, invoice) => sum + invoice.carrierPayout, 0),
+      platformFee: activeInvoices.reduce((sum, invoice) => sum + invoice.platformFee, 0),
+      disputes: live.filter((allocation) => allocation.dispute).length,
+    };
+  }).filter((row) => row.allocations.length).sort((a, b) => +new Date(b.load.pickupWindow.from) - +new Date(a.load.pickupWindow.from)), [disputes, invoices, loads, matches, parties, proofs, trips, trucks]);
+
+  const missingPods = rows.reduce((sum, row) => sum + Math.max(0, row.delivered - row.pods), 0);
+  const underReview = rows.filter((row) => row.stage === "UNDER_REVIEW").length;
+  const payable = rows.reduce((sum, row) => sum + row.payout, 0);
+
+  return <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div><h2 className="font-black">Shipment POD & settlement</h2><p className="mt-1 text-xs text-muted-foreground">Every truck is reviewed independently; one disputed allocation does not hide completed trucks.</p></div>
+      <div className="grid grid-cols-3 gap-2"><SettlementMetric label="PODs missing" value={missingPods} alert={missingPods > 0} /><SettlementMetric label="Under review" value={underReview} /><SettlementMetric label="Carrier payable" value={money(payable)} /></div>
+    </div>
+    <div className="divide-y divide-border">
+      {rows.length === 0 && <div className="p-10 text-center text-sm text-muted-foreground">Shipment settlements appear after trucks are allocated.</div>}
+      {rows.map((row) => {
+        const open = expanded === row.load.id;
+        const completion = Math.min(100, Math.round((row.delivered / row.required) * 100));
+        return <article key={row.load.id}>
+          <button type="button" onClick={() => setExpanded(open ? null : row.load.id)} className="grid w-full gap-3 p-4 text-left hover:bg-steel/20 lg:grid-cols-[minmax(0,1.7fr)_repeat(4,minmax(100px,.45fr))] lg:items-center">
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[10px] text-muted-foreground">{row.load.reference || row.load.id}</span><span className={`rounded px-2 py-1 text-[8px] font-black uppercase ${settlementTone[row.stage]}`}>{row.stage.replaceAll("_", " ")}</span>{row.disputes > 0 && <span className="rounded bg-danger/10 px-2 py-1 text-[8px] font-black uppercase text-danger">{row.disputes} disputed</span>}</div><p className="mt-1 line-clamp-2 text-xs font-black uppercase">{row.load.origin.label} → {row.load.destination.label}</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-steel"><div className="h-full bg-positive" style={{ width: `${completion}%` }} /></div></div>
+            <FinanceCell label="Delivered" value={`${row.delivered}/${row.required}`} />
+            <FinanceCell label="POD received" value={`${row.pods}/${row.delivered || row.required}`} warning={row.pods < row.delivered} />
+            <FinanceCell label="Invoices" value={`${row.invoices}/${row.delivered}`} />
+            <FinanceCell label="Consolidated total" value={row.total ? money(row.total) : "Pending"} />
+          </button>
+          {open && <div className="border-t border-border bg-background/50 p-4">
+            <div className="mb-3 grid gap-2 sm:grid-cols-4"><FinanceSummary label="Invoice total" value={money(row.total)} /><FinanceSummary label="Carrier settlement" value={money(row.payout)} /><FinanceSummary label="Platform fee" value={money(row.platformFee)} /><FinanceSummary label="Cost / tonne" value={row.total && row.load.weightKg ? money(row.total / (row.load.weightKg / 1000)) : "Pending"} /></div>
+            <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[880px] text-left"><thead className="border-b border-border bg-steel/25 text-[9px] uppercase text-muted-foreground"><tr><th className="px-3 py-2">Truck / transporter</th><th className="px-3 py-2">Trip status</th><th className="px-3 py-2">POD</th><th className="px-3 py-2">Agreed rate</th><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Settlement</th></tr></thead><tbody className="divide-y divide-border">{row.allocations.map((allocation) => <tr key={allocation.match.id} className={allocation.dispute ? "bg-danger/5" : ""}><td className="px-3 py-3"><p className="font-mono text-xs font-black">{allocation.truck?.registration ?? "Truck pending"}</p><p className="text-[9px] text-muted-foreground">{allocation.carrier?.companyName ?? allocation.carrier?.contactName ?? "Transporter"}</p></td><td className="px-3 py-3 text-[10px] font-bold uppercase">{allocation.trip?.status.replaceAll("_", " ") ?? allocation.match.status}</td><td className="px-3 py-3">{allocation.pod ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-positive"><FileCheck2 className="size-3.5" /> Received · {allocation.pod.recipientName}</span> : <span className="text-[10px] font-bold text-warning">Awaiting POD</span>}</td><td className="px-3 py-3 font-mono text-xs font-bold">{allocation.agreedRate ? money(allocation.agreedRate) : "Pending"}</td><td className="px-3 py-3 text-[10px] font-bold uppercase">{allocation.invoice?.status ?? "Not issued"}</td><td className="px-3 py-3">{allocation.dispute ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-danger"><AlertTriangle className="size-3.5" /> Held · dispute</span> : allocation.invoice?.payoutStatus === "PAID" ? <span className="text-[10px] font-bold text-positive">Paid</span> : <span className="text-[10px] text-muted-foreground">Pending</span>}</td></tr>)}</tbody></table></div>
+            <div className="mt-3 flex justify-end"><Link to="/owner/loads/$loadId" params={{ loadId: row.load.id }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-[10px] font-black uppercase hover:border-signal"><Truck className="size-4" /> Open shipment records</Link></div>
+          </div>}
+        </article>;
+      })}
+    </div>
+  </section>;
+}
+
+function SettlementMetric({ label, value, alert = false }: { label: string; value: string | number; alert?: boolean }) { return <div className={`min-w-24 rounded-lg border px-3 py-2 text-center ${alert ? "border-danger/30 bg-danger/5" : "border-border bg-background"}`}><p className={`font-mono text-sm font-black ${alert ? "text-danger" : ""}`}>{value}</p><p className="text-[8px] font-bold uppercase text-muted-foreground">{label}</p></div>; }
+function FinanceCell({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) { return <div><p className="text-[8px] font-bold uppercase text-muted-foreground">{label}</p><p className={`mt-1 font-mono text-xs font-black ${warning ? "text-warning" : ""}`}>{value}</p></div>; }
+function FinanceSummary({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-border bg-card p-3"><p className="text-[8px] font-bold uppercase text-muted-foreground">{label}</p><p className="mt-1 font-mono text-sm font-black">{value}</p></div>; }
 
 function InvoiceDetail({
   invoice,
