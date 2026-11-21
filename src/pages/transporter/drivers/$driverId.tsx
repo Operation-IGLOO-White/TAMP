@@ -11,7 +11,7 @@ import { deleteDriverDocument, listDriverDocuments, uploadDriverDocument, type D
 import { Link } from "@/lib/nav";
 import { DRIVER_ROLE_ID, driverAvailability, driverTrips, statusStyle } from "./driver-data";
 
-const DOCUMENT_LABELS: Record<DriverDocumentType, string> = { IDENTITY_DOCUMENT: "Identity document", DRIVING_LICENCE: "Driving licence", PRDP: "Professional Driving Permit", MEDICAL_CERTIFICATE: "Medical certificate", EMPLOYMENT_CONTRACT: "Employment contract" };
+const DOCUMENT_LABELS: Record<DriverDocumentType, string> = { IDENTITY_DOCUMENT: "Identity document", DRIVING_LICENCE: "Driving licence", PRDP: "Professional Driving Permit (PrDP)", MEDICAL_CERTIFICATE: "Medical certificate", EMPLOYMENT_CONTRACT: "Employment contract" };
 
 export default function DriverProfilePage() {
   const { driverId = "" } = useParams();
@@ -83,8 +83,13 @@ function DriverDocumentFolder({ organisationId, driverId, canManage }: { organis
   const [issuedAt, setIssuedAt] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const issuedIso = strictDateToIso(issuedAt);
+  const expiresIso = strictDateToIso(expiresAt);
+  const invalidIssued = Boolean(issuedAt) && !issuedIso;
+  const invalidExpires = Boolean(expiresAt) && !expiresIso;
+  const invalidOrder = Boolean(issuedIso && expiresIso && expiresIso < issuedIso);
   const upload = useMutation({
-    mutationFn: () => uploadDriverDocument({ organisationId, driverId, documentType, documentNumber, issuedAt, expiresAt, file: file! }),
+    mutationFn: () => uploadDriverDocument({ organisationId, driverId, documentType, documentNumber, issuedAt: issuedIso ?? "", expiresAt: expiresIso ?? "", file: file! }),
     onSuccess: () => { void client.invalidateQueries({ queryKey: key }); setOpen(false); setFile(null); setDocumentNumber(""); setIssuedAt(""); setExpiresAt(""); toast.success("Driver document filed"); },
     onError: (error) => toast.error("Upload failed", { description: error.message }),
   });
@@ -101,9 +106,11 @@ function DriverDocumentFolder({ organisationId, driverId, canManage }: { organis
       {open && <div className="mb-3 space-y-3 rounded-xl border border-border bg-background p-3">
         <select value={documentType} onChange={(event) => setDocumentType(event.target.value as DriverDocumentType)} className={documentInput}>{Object.entries(DOCUMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <input value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} placeholder="Document number (optional)" className={documentInput} />
-        <div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-bold uppercase text-muted-foreground">Issued<input type="date" value={issuedAt} onChange={(event) => setIssuedAt(event.target.value)} className={`${documentInput} mt-1`} /></label><label className="text-[9px] font-bold uppercase text-muted-foreground">Expires<input type="date" value={expiresAt} min={issuedAt} onChange={(event) => setExpiresAt(event.target.value)} className={`${documentInput} mt-1`} /></label></div>
+        <div className="grid grid-cols-2 gap-2"><StrictDateField label="Issued" value={issuedAt} onChange={setIssuedAt} invalid={invalidIssued} /><StrictDateField label="Expires" value={expiresAt} onChange={setExpiresAt} invalid={invalidExpires || invalidOrder} /></div>
+        {(invalidIssued || invalidExpires) && <p className="text-[10px] font-semibold text-danger">Enter a real date in YYYY/MM/DD format.</p>}
+        {invalidOrder && <p className="text-[10px] font-semibold text-danger">Expiry date cannot be before the issue date.</p>}
         <label className="block cursor-pointer rounded-lg border border-dashed border-border p-3 text-center text-xs font-semibold hover:border-signal">{file?.name ?? "Choose image or PDF"}<input type="file" accept="image/*,.pdf" className="sr-only" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
-        <button disabled={!file || upload.isPending} onClick={() => upload.mutate()} className="w-full rounded-lg bg-signal py-2.5 text-xs font-black uppercase text-signal-foreground disabled:opacity-50">{upload.isPending ? "Uploading…" : "File document"}</button>
+        <button disabled={!file || invalidIssued || invalidExpires || invalidOrder || upload.isPending} onClick={() => upload.mutate()} className="w-full rounded-lg bg-signal py-2.5 text-xs font-black uppercase text-signal-foreground disabled:opacity-50">{upload.isPending ? "Uploading…" : "File document"}</button>
       </div>}
       <div className="space-y-2">{(Object.keys(DOCUMENT_LABELS) as DriverDocumentType[]).map((type) => { const document = latest.get(type); return <div key={type} className="flex items-center gap-3 rounded-xl border border-border p-3"><span className={`grid size-9 place-items-center rounded-lg ${document ? "bg-positive/10 text-positive" : "bg-steel/40 text-muted-foreground"}`}><FileText className="size-4" /></span><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{DOCUMENT_LABELS[type]}</div><div className="truncate text-[10px] text-muted-foreground">{document ? `${document.filename}${document.expiresAt ? ` · expires ${new Date(`${document.expiresAt}T12:00:00`).toLocaleDateString("en-ZA")}` : ""}` : "Not uploaded"}</div></div>{document ? <><span className={`text-[9px] font-black uppercase ${document.status === "VALID" ? "text-positive" : document.status === "EXPIRING" ? "text-signal" : "text-danger"}`}>{document.status}</span><a href={document.fileUrl} target="_blank" rel="noreferrer" className="grid size-8 place-items-center rounded-lg border border-border" aria-label={`Download ${DOCUMENT_LABELS[type]}`}><Download className="size-3.5" /></a>{canManage && <button onClick={() => remove.mutate(document.id)} className="grid size-8 place-items-center rounded-lg border border-border text-danger" aria-label={`Remove ${DOCUMENT_LABELS[type]}`}><Trash2 className="size-3.5" /></button>}</> : <span className="text-[9px] font-black uppercase text-signal">Missing</span>}</div>; })}</div>
       {isLoading && <p className="py-3 text-center text-xs text-muted-foreground">Loading documents…</p>}
@@ -112,4 +119,24 @@ function DriverDocumentFolder({ organisationId, driverId, canManage }: { organis
 }
 
 const documentInput = "w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground outline-none focus:border-signal";
+
+function StrictDateField({ label, value, onChange, invalid }: { label: string; value: string; onChange: (value: string) => void; invalid: boolean }) {
+  return <label className="text-[9px] font-bold uppercase text-muted-foreground">{label}<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} placeholder="YYYY/MM/DD" aria-invalid={invalid} value={value} onChange={(event) => onChange(formatDateEntry(event.target.value))} className={`${documentInput} mt-1 font-mono ${invalid ? "border-danger focus:border-danger" : ""}`} /></label>;
+}
+
+function formatDateEntry(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join("/");
+}
+
+function strictDateToIso(value: string): string | null {
+  if (!value) return null;
+  const match = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]); const month = Number(match[2]); const day = Number(match[3]);
+  if (year < 1900 || year > 2100) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
 

@@ -20,11 +20,11 @@ export const BROKER_REGISTRATION_DOCUMENTS = [
 ] as const;
 
 export const DRIVER_REGISTRATION_DOCUMENTS = [
-  "South African ID / passport",
-  "Driver's licence (front & back)",
+  "Identity document",
+  "Driving licence",
   "Professional Driving Permit (PrDP)",
-  "Proof of address",
-  "Profile photo",
+  "Medical certificate",
+  "Employment contract",
 ] as const;
 
 export const OWNER_DRIVER_VEHICLE_DOCUMENTS = [
@@ -38,11 +38,9 @@ export function registrationDocumentLabels(
   driverWorkType?: "OWNER" | "FLEET",
 ): string[] {
   if (userType === "DRIVER") {
-    return DRIVER_REGISTRATION_DOCUMENTS.flatMap((label) =>
-      label === "Proof of address" && driverWorkType === "OWNER"
-        ? [...OWNER_DRIVER_VEHICLE_DOCUMENTS, label]
-        : [label],
-    );
+    return driverWorkType === "OWNER"
+      ? [...DRIVER_REGISTRATION_DOCUMENTS, ...OWNER_DRIVER_VEHICLE_DOCUMENTS]
+      : [...DRIVER_REGISTRATION_DOCUMENTS];
   }
   if (userType === "CARRIER") {
     return [
