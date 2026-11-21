@@ -112,6 +112,7 @@ function LoadDetail() {
   } = useTamp();
   const canManageMatches = hasPermission(authParty, "matches.manage");
   const canReportIncidents = hasPermission(authParty, "incidents.report");
+  const canCancelTrips = hasPermission(authParty, "trips.manage");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [showUnqualified, setShowUnqualified] = useState(false);
   const [reviewTruck, setReviewTruck] = useState<TruckPosting | null>(null);
@@ -239,7 +240,7 @@ function LoadDetail() {
                     }}
                   />
                 )}
-                {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canReportIncidents && (
+                {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canCancelTrips && (
                   <MobileAction
                     icon={XCircle}
                     label="Cancel shipment"
@@ -264,7 +265,7 @@ function LoadDetail() {
             </div>
             <div className="flex items-center gap-3">
               <div className="max-w-xl truncate font-mono text-xs text-muted-foreground">{load.origin.label} → {load.destination.label}</div>
-              {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canReportIncidents && (
+              {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canCancelTrips && (
                 <button
                   type="button"
                   onClick={() => {
@@ -304,11 +305,11 @@ function LoadDetail() {
                           <img src={fleetVehicleAsset(allocationTruck)} alt={`${allocationTruck.bodyType} ${allocationTruck.registration}`} className="h-full w-full object-contain p-1" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm font-black">{maskRegistration(allocationTruck.registration)}</span><StatusChip status={allocation.trip?.status ?? allocation.match.status} /></div>
+                          <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm font-black">{maskRegistration(allocationTruck.registration)}</span><span className="rounded bg-steel px-2 py-1 text-[9px] font-black uppercase text-muted-foreground">{(allocation.trip?.status ?? allocation.match.status).replaceAll("_", " ")}</span></div>
                           <p className="mt-1 text-xs font-semibold">{allocation.carrier?.companyName ?? allocation.carrier?.contactName ?? "Transporter"}</p>
                           <p className="text-[10px] text-muted-foreground">{allocationTruck.bodyType.replaceAll("_", " ")} · {allocationTruck.payloadCapacityKg.toLocaleString("en-ZA")} kg{allocationTruck.driverId ? " · Driver assigned" : " · Needs a driver"}</p>
                         </div>
-                        {canReportIncidents && allocation.trip && !closed && (
+                        {canCancelTrips && allocation.trip && !closed && (
                           <button
                             type="button"
                             onClick={() => {
@@ -477,11 +478,10 @@ function LoadDetail() {
           </aside>
         </div>
       </main>
-      {canReportIncidents && (
+      {(canReportIncidents || canCancelTrips) && (
         <IncidentDialog
           loadId={load.id}
-          truckId={allocationCancellation?.truckId}
-          truckLabel={allocationCancellation?.label}
+          {...(allocationCancellation ? { truckId: allocationCancellation.truckId, truckLabel: allocationCancellation.label } : {})}
           open={issueOpen}
           initialMode={issueMode}
           onClose={() => {
