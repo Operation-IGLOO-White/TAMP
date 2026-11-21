@@ -1,14 +1,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/lib/nav";
-import { ChevronRight, Flag, Star, UserPlus } from "lucide-react";
+import { CheckSquare, ChevronRight, Flag, Star, Truck as TruckIcon, UserPlus } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
+import { BatchEngagementDialog, type BatchEngagementCandidate } from "@/components/tamp/BatchEngagementDialog";
 import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
 import { RatingBox } from "@/components/tamp/RatingBox";
 import { StatusChip } from "@/components/tamp/StatusChip";
 import { TripProgress } from "@/components/tamp/TripProgress";
 import { formatMoney } from "@/lib/tamp-data";
+import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import { maskRegistration } from "@/lib/tamp-mask";
 import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
@@ -29,6 +31,8 @@ type Opportunity = {
   score: number;
 };
 
+type ConfirmationGroup = { load: Load; opportunities: Opportunity[] };
+
 function EngagementsPage() {
   const {
     authParty,
@@ -45,6 +49,7 @@ function EngagementsPage() {
   } = useTamp();
   const canManageMatches = authParty?.permissions?.includes("matches.manage") ?? false;
   const [review, setReview] = useState<{ opportunity: Opportunity; kind: "confirm" | "request" } | null>(null);
+  const [batchReview, setBatchReview] = useState<ConfirmationGroup | null>(null);
 
   const availableTrucks = useMemo(
     () => trucks.filter((t) => t.status === "AVAILABLE"),
@@ -70,18 +75,18 @@ function EngagementsPage() {
     [matches, loads, trucks, parties],
   );
 
-  const { confirmable, postedLoads } = useMemo(() => {
+  const { confirmable, confirmationGroups, postedLoads } = useMemo(() => {
     const requestedLoadIds = new Set(requested.map((r) => r.load.id));
     const nextConfirmable: Opportunity[] = [];
     const nextPosted: { load: Load; owner: Party }[] = [];
     for (const load of activeLoads) {
-      if (requestedLoadIds.has(load.id)) continue;
       const status = displayStatusForLoad(load, matches, trips, disputes);
       const owner = parties.find((p) => p.id === load.ownerId);
-      if (status === "MATCHED") {
-        const accepted = matches.find((m) => m.loadId === load.id && m.status === "ACCEPTED");
-        const truck = accepted ? trucks.find((t) => t.id === accepted.truckPostingId) : undefined;
-        if (accepted && truck) {
+      const acceptedMatches = matches.filter((match) => match.loadId === load.id && match.status === "ACCEPTED");
+      if (acceptedMatches.length > 0) {
+        for (const accepted of acceptedMatches) {
+          const truck = trucks.find((t) => t.id === accepted.truckPostingId);
+          if (!truck) continue;
           nextConfirmable.push({
             load,
             truck,
@@ -89,11 +94,17 @@ function EngagementsPage() {
             score: accepted.score,
           });
         }
-      } else if (status === "POSTED" && owner) {
+      } else if (status === "POSTED" && owner && !requestedLoadIds.has(load.id)) {
         nextPosted.push({ load, owner });
       }
     }
-    return { confirmable: nextConfirmable, postedLoads: nextPosted };
+    const grouped = new Map<string, ConfirmationGroup>();
+    for (const opportunity of nextConfirmable) {
+      const existing = grouped.get(opportunity.load.id);
+      if (existing) existing.opportunities.push(opportunity);
+      else grouped.set(opportunity.load.id, { load: opportunity.load, opportunities: [opportunity] });
+    }
+    return { confirmable: nextConfirmable, confirmationGroups: [...grouped.values()], postedLoads: nextPosted };
   }, [activeLoads, requested, matches, trips, disputes, parties, trucks]);
 
   // Open jobs surfaced only if a truck matches 70+ — scored server-side
@@ -174,8 +185,11 @@ function EngagementsPage() {
               hint="A freight owner picked your truck"
               accent
             />
-            <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
-              {confirmable.map((o) => (
+            <div className="space-y-4">
+              {confirmationGroups.filter((group) => group.opportunities.length > 1).map((group) => <FleetConfirmationCard key={group.load.id} group={group} canManage={canManageMatches} onBatchConfirm={(opportunities) => setBatchReview({ load: group.load, opportunities })} onReview={(opportunity) => setReview({ opportunity, kind: "confirm" })} onDecline={(opportunity) => declineMatch(opportunity.load.id, opportunity.truck.id)} />)}
+              <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">{confirmationGroups.filter((group) => group.opportunities.length === 1).map((group) => {
+                const o = group.opportunities[0]!;
+                return (
                 <OpportunityCard
                   key={`${o.load.id}-${o.truck.id}`}
                   opp={o}
@@ -183,7 +197,8 @@ function EngagementsPage() {
                   onAct={canManageMatches ? () => setReview({ opportunity: o, kind: "confirm" }) : undefined}
                   onDecline={canManageMatches ? () => declineMatch(o.load.id, o.truck.id) : undefined}
                 />
-              ))}
+                );
+              })}</div>
             </div>
           </section>
         )}
@@ -252,8 +267,69 @@ function EngagementsPage() {
           }
         />
       )}
+      {batchReview && (
+        <BatchEngagementDialog
+          mode="transporter-confirm"
+          load={batchReview.load}
+          candidates={batchReview.opportunities.map(toBatchCandidate)}
+          onClose={() => setBatchReview(null)}
+          onConfirm={(candidate, proof) => confirmMatch(batchReview.load.id, candidate.truck.id, proof)}
+        />
+      )}
     </AppShell>
   );
+}
+
+function FleetConfirmationCard({
+  group,
+  canManage,
+  onBatchConfirm,
+  onReview,
+  onDecline,
+}: {
+  group: ConfirmationGroup;
+  canManage: boolean;
+  onBatchConfirm: (opportunities: Opportunity[]) => void;
+  onReview: (opportunity: Opportunity) => void;
+  onDecline: (opportunity: Opportunity) => void;
+}) {
+  const [selected, setSelected] = useState(() => group.opportunities.map((item) => item.truck.id));
+  const selectedOpportunities = group.opportunities.filter((item) => selected.includes(item.truck.id));
+  const toggle = (truckId: string) => setSelected((current) => current.includes(truckId) ? current.filter((id) => id !== truckId) : [...current, truckId]);
+  const owner = group.opportunities[0]?.operator;
+  const readyWithDrivers = group.opportunities.filter((item) => item.truck.driverId).length;
+
+  return <article className="overflow-hidden rounded-2xl border border-signal/35 bg-background shadow-sm">
+    <header className="flex flex-col gap-3 border-b border-border bg-signal/5 p-4 sm:flex-row sm:items-start sm:justify-between">
+      <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-signal px-2.5 py-1 text-[9px] font-black uppercase text-signal-foreground">Fleet engagement</span><span className="font-mono text-[10px] text-muted-foreground">{group.load.reference}</span></div><h3 className="mt-2 text-sm font-black uppercase">{group.load.origin.label} → {group.load.destination.label}</h3><p className="mt-1 text-[11px] text-muted-foreground">Freight Owner selected {group.opportunities.length} of your trucks · pickup {new Date(group.load.pickupWindow.from).toLocaleString("en-ZA", { dateStyle: "medium", timeStyle: "short" })}</p></div>
+      <div className="grid min-w-52 grid-cols-2 gap-2"><MiniMetric label="Selected" value={`${group.opportunities.length}/${group.load.trucksRequired ?? group.opportunities.length}`} /><MiniMetric label="Drivers ready" value={`${readyWithDrivers}/${group.opportunities.length}`} /></div>
+    </header>
+    <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+      {group.opportunities.map((opportunity) => {
+        const checked = selected.includes(opportunity.truck.id);
+        return <div key={opportunity.truck.id} className={`relative rounded-xl border p-3 transition ${checked ? "border-signal bg-signal/5" : "border-border bg-steel/10 opacity-70"}`}>
+          <label className="absolute right-3 top-3 grid size-7 cursor-pointer place-items-center rounded-lg border border-border bg-background shadow-sm"><input type="checkbox" checked={checked} onChange={() => toggle(opportunity.truck.id)} disabled={!canManage} className="accent-[#f2b400]" aria-label={`Select ${opportunity.truck.registration}`} /></label>
+          <div className="h-24 overflow-hidden rounded-lg bg-white"><img src={fleetVehicleAsset(opportunity.truck)} alt={`${opportunity.truck.bodyType} ${opportunity.truck.registration}`} className="h-full w-full object-contain p-2" /></div>
+          <div className="mt-3 pr-8"><p className="font-mono text-sm font-black">{maskRegistration(opportunity.truck.registration)}</p><p className="mt-1 text-[10px] font-semibold uppercase text-muted-foreground">{opportunity.truck.bodyType.replaceAll("_", " ")} · {(opportunity.truck.payloadCapacityKg / 1000).toFixed(1)} t</p><p className={`mt-2 text-[10px] font-bold ${opportunity.truck.driverId ? "text-positive" : "text-signal"}`}>{opportunity.truck.driverId ? "Driver assigned" : "Will enter Needs a driver after confirmation"}</p></div>
+          <div className="mt-3 flex gap-2"><button type="button" onClick={() => onReview(opportunity)} disabled={!canManage} className="flex-1 rounded-lg border border-border px-2 py-2 text-[9px] font-black uppercase hover:bg-steel/30 disabled:opacity-40">Review separately</button><button type="button" onClick={() => onDecline(opportunity)} disabled={!canManage} className="rounded-lg border border-danger/30 px-2 py-2 text-[9px] font-black uppercase text-danger hover:bg-danger/10 disabled:opacity-40">Decline</button></div>
+        </div>;
+      })}
+    </div>
+    <footer className="flex flex-col gap-3 border-t border-border bg-steel/10 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-xs text-muted-foreground"><TruckIcon className="size-4 text-signal" /><span>{selectedOpportunities.length} truck{selectedOpportunities.length === 1 ? "" : "s"} selected for confirmation{owner ? ` · ${owner.companyName}` : ""}</span></div><button type="button" onClick={() => onBatchConfirm(selectedOpportunities)} disabled={!canManage || selectedOpportunities.length === 0} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-signal px-5 text-xs font-black uppercase text-signal-foreground hover:brightness-105 disabled:opacity-40"><CheckSquare className="size-4" /> Confirm {selectedOpportunities.length} selected</button></footer>
+  </article>;
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-border bg-background p-3 text-center"><p className="font-mono text-lg font-black">{value}</p><p className="mt-1 text-[8px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p></div>;
+}
+
+function toBatchCandidate(opportunity: Opportunity): BatchEngagementCandidate {
+  return {
+    truck: opportunity.truck,
+    operator: opportunity.operator ?? ({ id: opportunity.truck.transporterId, companyName: "Transporter" } as Party),
+    score: opportunity.score,
+    kind: "SUGGESTION",
+  };
 }
 
 function StatTile({
