@@ -25,6 +25,12 @@ it("explains the individual file limit", () => {
   );
 });
 
+it("turns a state conflict into a recoverable instruction", () => {
+  expect(userFacingError(new Error("Conflicting record or state"))).toBe(
+    "This information changed while the request was being processed. Refresh the page and try the action again.",
+  );
+});
+
 it("turns the unverified write restriction into a clear status message", () => {
   const error = Object.assign(
     new Error(

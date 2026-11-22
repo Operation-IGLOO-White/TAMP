@@ -33,6 +33,8 @@ export function userFacingError(error: unknown, fallback = "We could not complet
   if (status === 403)
     return "Your organisation role does not allow this change. Ask an administrator to review your access rights.";
   if (status === 429) return "Too many attempts were made. Wait a moment and try again.";
+  if (/conflicting record or state/i.test(raw))
+    return "This information changed while the request was being processed. Refresh the page and try the action again.";
   if (/password.*(?:at least|min(?:imum)?).*(?:8|12)|password.*(?:8|12) characters/i.test(raw))
     return "Use a password of at least 8 characters with an uppercase letter, a lowercase letter and a number.";
   if (status === 502 || status === 503 || status === 504)
