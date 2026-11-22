@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { computeRoute } from "@/fns/routes";
 import { prepareOfferCmd, type OfferProof } from "@/fns/commands";
+import { userFacingError } from "@/lib/api-errors";
 import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import { formatMoney } from "@/lib/tamp-data";
 import { maskRegistration } from "@/lib/tamp-mask";
@@ -129,7 +130,7 @@ export function BatchEngagementDialog({
       onClose();
     } catch (cause) {
       setSubmitError(
-        `${accepted.length} of ${ready.length} trucks were accepted. ${cause instanceof Error ? cause.message : "The remaining allocation could not be accepted."}`,
+        `${accepted.length} of ${ready.length} trucks were accepted. ${userFacingError(cause, "The remaining allocation could not be accepted.")}`,
       );
     } finally {
       setSubmitting(false);
