@@ -247,6 +247,10 @@ function LoadDetail() {
     const exceptionAllocations = liveAllocations.filter((item) => item.incidents.length || ["DELAYED", "ACTION_REQUIRED"].includes(item.trip?.operationalStatus ?? ""));
     const outstandingAllocations = Math.max(0, requiredAllocations - liveAllocations.length);
     const shipmentComplete = deliveredAllocations.length === requiredAllocations && outstandingAllocations === 0;
+    const contractCanBeCancelled =
+      canCancelTrips &&
+      allocations.length > 0 &&
+      !["COMPLETED", "CLOSED", "CANCELLED"].includes(load.status);
     const allocatedTruckIds = new Set(allocations.map((item) => item.match.truckPostingId));
     const replacementCandidates = suggestions
       .filter((candidate) => !allocatedTruckIds.has(candidate.truck.id))
@@ -311,10 +315,10 @@ function LoadDetail() {
                     }}
                   />
                 )}
-                {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canCancelTrips && (
+                {contractCanBeCancelled && (
                   <MobileAction
                     icon={XCircle}
-                    label="Cancel shipment"
+                    label="Cancel contract"
                     danger
                     onClick={() => {
                       setMobileMenuOpen(false);
@@ -336,7 +340,7 @@ function LoadDetail() {
             </div>
             <div className="flex items-center gap-3">
               <div className="max-w-xl truncate font-mono text-xs text-muted-foreground">{load.origin.label} → {load.destination.label}</div>
-              {trip && !["COMPLETED", "CANCELLED"].includes(trip.status) && canCancelTrips && (
+              {contractCanBeCancelled && (
                 <button
                   type="button"
                   onClick={() => {
@@ -346,7 +350,7 @@ function LoadDetail() {
                   }}
                   className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-danger/40 px-3 text-[10px] font-black uppercase text-danger transition hover:bg-danger/10"
                 >
-                  <XCircle className="size-4" /> Cancel shipment
+                  <XCircle className="size-4" /> Cancel contract
                 </button>
               )}
             </div>
@@ -616,6 +620,8 @@ function LoadDetail() {
           {...(allocationCancellation ? { truckId: allocationCancellation.truckId, truckLabel: allocationCancellation.label } : {})}
           open={issueOpen}
           initialMode={issueMode}
+          cancellationScope={!allocationCancellation && allocations.length > 1 ? "contract" : "shipment"}
+          cancelOnly={!allocationCancellation && issueMode === "cancel" && !trip}
           onClose={() => {
             setIssueOpen(false);
             setAllocationCancellation(null);

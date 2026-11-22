@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Loader2, MapPin, ShieldCheck, Truck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { computeRoute } from "@/fns/routes";
 import { prepareOfferCmd, type OfferProof } from "@/fns/commands";
@@ -46,8 +47,13 @@ export function BatchEngagementDialog({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !submitting) onClose();
     };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
   }, [onClose, submitting]);
 
   useEffect(() => {
@@ -137,8 +143,8 @@ export function BatchEngagementDialog({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-3 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] grid place-items-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-6">
       <div role="dialog" aria-modal="true" aria-labelledby="batch-engagement-title" className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
         <header className="flex items-start justify-between border-b border-border px-5 py-4">
           <div>
@@ -180,7 +186,8 @@ export function BatchEngagementDialog({
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={submitting} className="min-h-11 rounded-lg border border-border px-5 text-xs font-black uppercase hover:bg-steel/30 disabled:opacity-40">Cancel</button><button type="button" onClick={() => void confirm()} disabled={!agreed || preparing || submitting || ready.length !== candidates.length || completed.length === ready.length} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-signal px-6 text-xs font-black uppercase text-signal-foreground hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45">{submitting ? <><Loader2 className="size-4 animate-spin" /> {mode === "transporter-confirm" ? "Confirming" : "Accepting"} {Math.min(completed.length + 1, ready.length)} of {ready.length}</> : <><ShieldCheck className="size-4" /> {completed.length ? `Retry ${ready.length - completed.length} remaining` : `${mode === "transporter-confirm" ? "Confirm" : "Accept"} ${ready.length} truck allocations`}</>}</button></div>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

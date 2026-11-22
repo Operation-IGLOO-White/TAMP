@@ -25,7 +25,7 @@ const CANCELLATION_REASONS = [
   { value: "OTHER", label: "Other reason" },
 ] as const;
 
-export function IncidentDialog({ loadId, truckId, truckLabel, open, onClose, initialMode = "incident" }: { loadId: string; truckId?: string; truckLabel?: string; open: boolean; onClose: () => void; initialMode?: "incident" | "cancel" }) {
+export function IncidentDialog({ loadId, truckId, truckLabel, open, onClose, initialMode = "incident", cancellationScope = "shipment", cancelOnly = false }: { loadId: string; truckId?: string; truckLabel?: string; open: boolean; onClose: () => void; initialMode?: "incident" | "cancel"; cancellationScope?: "shipment" | "contract"; cancelOnly?: boolean }) {
   const { reportIncident, cancelTrip } = useTamp();
   const [kind, setKind] = useState<OperationalIncidentKind>("DELAY");
   const [description, setDescription] = useState("");
@@ -60,7 +60,7 @@ export function IncidentDialog({ loadId, truckId, truckLabel, open, onClose, ini
     <div className="fixed inset-0 z-[1000] grid place-items-center bg-black/70 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl border border-border bg-background shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border p-5">
-          <div><h2 className="font-black">{cancelling ? (truckId ? "Cancel truck allocation" : "Cancel shipment") : "Report operational issue"}</h2><p className="text-xs text-muted-foreground">Load {loadId}{truckLabel ? ` · ${truckLabel}` : ""}</p></div>
+          <div><h2 className="font-black">{cancelling ? (truckId ? "Cancel truck allocation" : cancellationScope === "contract" ? "Cancel contract" : "Cancel shipment") : "Report operational issue"}</h2><p className="text-xs text-muted-foreground">Load {loadId}{truckLabel ? ` · ${truckLabel}` : ""}</p></div>
           <button onClick={onClose} aria-label="Close"><X className="size-5" /></button>
         </div>
         <div className="space-y-4 p-5">
@@ -69,7 +69,7 @@ export function IncidentDialog({ loadId, truckId, truckLabel, open, onClose, ini
           ))}</div>}
           {cancelling && (
             <div>
-              <div className="mb-2 text-xs font-bold">Why is this trip being cancelled?</div>
+              <div className="mb-2 text-xs font-bold">Why is this {truckId ? "allocation" : cancellationScope} being cancelled?</div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {CANCELLATION_REASONS.map((reason) => (
                   <button
@@ -86,11 +86,11 @@ export function IncidentDialog({ loadId, truckId, truckLabel, open, onClose, ini
           )}
           {kind === "DELAY" && !cancelling && <label className="block text-xs font-bold">Expected delay (minutes)<input type="number" min={5} max={1440} value={delayMinutes} onChange={(e) => setDelayMinutes(Number(e.target.value))} className="mt-1 w-full rounded-lg border border-border bg-graphite p-2.5" /></label>}
           <label className="block text-xs font-bold">{cancelling ? `Additional details${cancelReason === "OTHER" ? " (required)" : " (optional)"}` : "Details"}<textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder={cancelling ? "Add any useful cancellation details…" : "Describe what happened and what help is needed…"} className="mt-1 w-full resize-none rounded-lg border border-border bg-graphite p-3 text-sm" /></label>
-          {cancelling && <p className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-xs text-danger">{truckId ? "Only this truck allocation will be cancelled. The shipment remains active and the missing fleet slot reopens for matching." : "Cancelling as the Freight Owner cancels every active trip for this shipment."} Before pickup, reserved vehicles are released. After cargo is loaded, the affected vehicle is taken offline for operational review.</p>}
+          {cancelling && <p className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-xs text-danger">{truckId ? "Only this truck allocation will be cancelled. The shipment remains active and the missing fleet slot reopens for matching." : cancellationScope === "contract" ? "This cancels the full contract and every truck allocation, including allocations still awaiting transporter confirmation. All vehicles that have not collected cargo are released for other work." : "Cancelling as the Freight Owner cancels every active trip for this shipment."} {!truckId && cancellationScope === "contract" ? "This action cannot be undone." : "Before pickup, reserved vehicles are released. After cargo is loaded, the affected vehicle is taken offline for operational review."}</p>}
         </div>
         <div className="flex items-center justify-between border-t border-border p-4">
-          <button onClick={() => setCancelling((v) => !v)} className="text-xs font-bold text-danger">{cancelling ? "Report an issue instead" : "Cancel this trip"}</button>
-          <button disabled={busy || (!cancelling && description.trim().length < 5) || (cancelling && cancelReason === "OTHER" && description.trim().length < 5)} onClick={() => void submit()} className={`rounded-lg px-5 py-2.5 text-xs font-black uppercase disabled:opacity-40 ${cancelling ? "bg-danger text-white" : "bg-signal text-signal-foreground"}`}>{busy ? "Submitting…" : cancelling ? "Confirm cancellation" : "Submit report"}</button>
+          {cancelOnly ? <span /> : <button onClick={() => setCancelling((v) => !v)} className="text-xs font-bold text-danger">{cancelling ? "Report an issue instead" : "Cancel this trip"}</button>}
+          <button disabled={busy || (!cancelling && description.trim().length < 5) || (cancelling && cancelReason === "OTHER" && description.trim().length < 5)} onClick={() => void submit()} className={`rounded-lg px-5 py-2.5 text-xs font-black uppercase disabled:opacity-40 ${cancelling ? "bg-danger text-white" : "bg-signal text-signal-foreground"}`}>{busy ? "Submitting…" : cancelling ? cancellationScope === "contract" && !truckId ? "Cancel full contract" : "Confirm cancellation" : "Submit report"}</button>
         </div>
       </div>
     </div>
