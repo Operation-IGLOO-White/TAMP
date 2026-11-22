@@ -40,7 +40,7 @@ export default function OwnerOffers() {
 
   const candidates = useMemo(() => {
     const result = new Map<string, Candidate>();
-    for (const match of matches.filter((item) => item.status === "OFFERED" || item.status === "SUGGESTED" || item.status === "ACCEPTED")) {
+    for (const match of matches.filter((item) => item.status === "OFFERED" || item.status === "SUGGESTED" || item.status === "ACCEPTED" || item.status === "CONFIRMED")) {
       const load = postedLoads.find((item) => item.id === match.loadId);
       const truck = trucks.find((item) => item.id === match.truckPostingId);
       const operator = parties.find((item) => item.id === truck?.transporterId);
@@ -53,20 +53,23 @@ export default function OwnerOffers() {
   const visible = candidates.filter((item) => [item.load.reference, item.load.origin.label, item.load.destination.label, item.truck.registration, item.truck.make, item.truck.model, item.operator.companyName].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase()));
   const fleetPlans = useMemo(() => buildFleetPlans(visible), [visible]);
   const singleTruckCandidates = visible.filter((item) => (item.load.trucksRequired ?? 1) === 1);
-  const pendingCandidates = candidates.filter((item) => item.match?.status !== "ACCEPTED");
+  const pendingCandidates = candidates.filter((item) => item.match?.status === "OFFERED" || item.match?.status === "SUGGESTED");
+  const awaitingTransporterCount = candidates.filter((item) => item.match?.status === "ACCEPTED").length;
   const requestCount = pendingCandidates.filter((item) => item.kind === "REQUEST").length;
+  const suggestionCount = pendingCandidates.length - requestCount;
 
   return <AppShell>
     <PageHeader title="Matches & Offers" />
     <div className="space-y-5 p-4 sm:p-6">
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Summary label="Pending opportunities" value={pendingCandidates.length} icon={Truck} />
         <Summary label="Transporter offers" value={requestCount} icon={PackageOpen} accent={requestCount > 0} />
-        <Summary label="System suggestions" value={pendingCandidates.length - requestCount} icon={Star} />
+        <Summary label="System suggestions" value={suggestionCount} icon={Star} />
+        <Summary label="Awaiting transporter" value={awaitingTransporterCount} icon={ShieldCheck} accent={awaitingTransporterCount > 0} />
       </section>
       <section className="app-surface overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="font-black">Unaccepted matches</h2><p className="mt-1 text-xs text-muted-foreground">Compare eligible vehicles and review the full route and terms before accepting.</p></div>
+          <div><h2 className="font-black">Matches and allocations</h2><p className="mt-1 text-xs text-muted-foreground">Review pending matches and monitor accepted trucks awaiting confirmation from their transporter.</p></div>
           <label className="relative w-full sm:max-w-sm"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search load, truck or transporter" className="h-10 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm outline-none focus:border-signal" /></label>
         </div>
         {visible.length === 0 ? (
@@ -115,7 +118,8 @@ function buildFleetPlans(candidates: Candidate[]): FleetLoadPlan[] {
       .map((group) => {
         const candidatesForOperator = [...group].sort(
           (a, b) =>
-            Number(b.match?.status === "ACCEPTED") - Number(a.match?.status === "ACCEPTED") ||
+            Number(["ACCEPTED", "CONFIRMED"].includes(b.match?.status ?? "")) -
+              Number(["ACCEPTED", "CONFIRMED"].includes(a.match?.status ?? "")) ||
             Number(b.match?.selectedForFleetPlan ?? false) -
               Number(a.match?.selectedForFleetPlan ?? false) || b.score - a.score,
         );
@@ -167,8 +171,8 @@ function buildFleetPlans(candidates: Candidate[]): FleetLoadPlan[] {
 
 function FleetPlanCard({ plan, canManage, onReview, onBatchReview }: { plan: FleetLoadPlan; canManage: boolean; onReview: (candidate: Candidate) => void; onBatchReview: (candidates: Candidate[]) => void }) {
   const complete = plan.covered >= plan.required;
-  const selected = plan.carriers.flatMap((carrier) => carrier.candidates).filter((candidate) => candidate.match?.status === "ACCEPTED").length;
-  const selectable = plan.carriers.flatMap((carrier) => carrier.candidates).filter((candidate) => candidate.match?.status !== "ACCEPTED");
+  const selected = plan.carriers.flatMap((carrier) => carrier.candidates).filter((candidate) => ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? "")).length;
+  const selectable = plan.carriers.flatMap((carrier) => carrier.candidates).filter((candidate) => !["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""));
   const recommendedIds = new Set(plan.carriers.flatMap((carrier) => carrier.candidates.slice(0, carrier.allocation).map((candidate) => candidate.truck.id)));
   const slotsRemaining = Math.max(0, plan.required - selected);
   const [checked, setChecked] = useState<string[]>(() => selectable.filter((candidate) => recommendedIds.has(candidate.truck.id)).slice(0, slotsRemaining).map((candidate) => candidate.truck.id));
@@ -182,16 +186,16 @@ function FleetPlanCard({ plan, canManage, onReview, onBatchReview }: { plan: Fle
     {canManage && slotsRemaining > 1 && <div className="flex flex-col gap-3 border-b border-border bg-signal/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black">Batch engagement</p><p className="mt-0.5 text-[10px] text-muted-foreground">Select up to {slotsRemaining} trucks and accept their individual offers together.</p></div><button type="button" onClick={() => onBatchReview(checkedCandidates)} disabled={checkedCandidates.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-signal px-4 text-xs font-black uppercase text-signal-foreground hover:brightness-105 disabled:opacity-40"><CheckSquare className="size-4" /> Review {checkedCandidates.length} selected</button></div>}
     <div className="divide-y divide-border">
       {plan.carriers.map((carrier) => {
-        const accepted = carrier.candidates.filter((candidate) => candidate.match?.status === "ACCEPTED");
+        const accepted = carrier.candidates.filter((candidate) => ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""));
         const recommended = [
           ...accepted,
           ...carrier.candidates
-            .filter((candidate) => candidate.match?.status !== "ACCEPTED")
+            .filter((candidate) => !["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""))
             .slice(0, Math.max(0, carrier.allocation - accepted.length)),
         ];
         return <div key={carrier.operator.id} className={`p-4 ${carrier.allocation ? "" : "opacity-65"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-full bg-signal/15 font-mono text-xs font-black text-signal">{carrier.rank ?? "–"}</span><div><div className="text-sm font-black">{carrier.operator.companyName}</div><div className="mt-0.5 flex flex-wrap gap-2 text-[10px] text-muted-foreground"><RatingLabel label="Company" value={carrier.operator.ratingAvg} count={carrier.operator.ratingCount} /><span>{carrier.averageScore.toFixed(1)} average match score</span></div></div></div></div><div className="sm:text-right"><div className="font-mono text-lg font-black text-signal">{carrier.allocation} recommended</div><div className="text-[10px] text-muted-foreground">{carrier.eligibleCount} eligible · {carrier.coveragePct.toFixed(0)}% of requirement</div></div></div>
-          {recommended.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{recommended.map((candidate) => { const accepted = candidate.match?.status === "ACCEPTED"; const isChecked = checked.includes(candidate.truck.id); return <div key={candidate.truck.id} className={`relative flex items-center gap-2 rounded-xl border p-2 ${accepted ? "border-positive/40 bg-positive/10" : isChecked ? "border-signal bg-signal/10" : "border-border bg-steel/15"}`}>{canManage && !accepted && slotsRemaining > 1 && <label className="absolute right-2 top-2 grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-background shadow"><input type="checkbox" checked={isChecked} onChange={() => toggle(candidate.truck.id)} className="accent-[#f2b400]" aria-label={`Select ${candidate.truck.registration} for batch engagement`} /></label>}<div className="size-16 shrink-0 overflow-hidden rounded-lg bg-white"><img src={fleetVehicleAsset(candidate.truck)} alt={`${candidate.truck.bodyType} ${candidate.truck.registration}`} className="h-full w-full object-contain p-1" /></div><div className="min-w-0 flex-1 pr-5"><div className="truncate font-mono text-xs font-black">{maskRegistration(candidate.truck.registration)}</div><div className="truncate text-[10px] text-muted-foreground">{candidate.truck.bodyType.replaceAll("_", " ")} · {candidate.score.toFixed(1)}/100</div>{candidate.driver && <div className="mt-1 truncate text-[9px] text-muted-foreground">Driver: {candidate.driver.contactName}{candidate.driver.ratingAvg != null ? ` · ★ ${candidate.driver.ratingAvg}` : " · New"}</div>}</div>{accepted ? <span className="rounded-lg bg-positive/15 px-2 py-2 text-[9px] font-black uppercase text-positive">Awaiting transporter</span> : canManage && slotsRemaining <= 1 && <button type="button" onClick={() => onReview(candidate)} className="rounded-lg bg-signal px-2 py-2 text-[9px] font-black uppercase text-signal-foreground">Review & select</button>}</div>; })}</div>}
+          {recommended.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{recommended.map((candidate) => { const selected = ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""); const confirmed = candidate.match?.status === "CONFIRMED"; const isChecked = checked.includes(candidate.truck.id); return <div key={candidate.truck.id} className={`relative flex items-center gap-2 rounded-xl border p-2 ${selected ? "border-positive/40 bg-positive/10" : isChecked ? "border-signal bg-signal/10" : "border-border bg-steel/15"}`}>{canManage && !selected && slotsRemaining > 1 && <label className="absolute right-2 top-2 grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-background shadow"><input type="checkbox" checked={isChecked} onChange={() => toggle(candidate.truck.id)} className="accent-[#f2b400]" aria-label={`Select ${candidate.truck.registration} for batch engagement`} /></label>}<div className="size-16 shrink-0 overflow-hidden rounded-lg bg-white"><img src={fleetVehicleAsset(candidate.truck)} alt={`${candidate.truck.bodyType} ${candidate.truck.registration}`} className="h-full w-full object-contain p-1" /></div><div className="min-w-0 flex-1 pr-5"><div className="truncate font-mono text-xs font-black">{maskRegistration(candidate.truck.registration)}</div><div className="truncate text-[10px] text-muted-foreground">{candidate.truck.bodyType.replaceAll("_", " ")} · {candidate.score.toFixed(1)}/100</div>{candidate.driver && <div className="mt-1 truncate text-[9px] text-muted-foreground">Driver: {candidate.driver.contactName}{candidate.driver.ratingAvg != null ? ` · ★ ${candidate.driver.ratingAvg}` : " · New"}</div>}</div>{selected ? <span className="rounded-lg bg-positive/15 px-2 py-2 text-[9px] font-black uppercase text-positive">{confirmed ? "Transporter confirmed" : "Awaiting transporter"}</span> : canManage && slotsRemaining <= 1 && <button type="button" onClick={() => onReview(candidate)} className="rounded-lg bg-signal px-2 py-2 text-[9px] font-black uppercase text-signal-foreground">Review & select</button>}</div>; })}</div>}
         </div>;
       })}
     </div>
