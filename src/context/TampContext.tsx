@@ -20,6 +20,7 @@ import {
   advanceTripCmd,
   cancelTripCmd,
   confirmMatchCmd,
+  declineMatchCmd,
   requestJobCmd,
   reportIncidentCmd,
   type PodInput,
@@ -211,7 +212,7 @@ interface Store extends State {
   acceptMatch: (loadId: string, truckId: string, proof: OfferProof) => Promise<void>;
   rejectMatch: (loadId: string, truckId: string) => void;
   confirmMatch: (loadId: string, truckId: string | undefined, proof: OfferProof) => Promise<void>;
-  declineMatch: (loadId: string, truckId?: string) => void;
+  declineMatch: (loadId: string, truckId: string) => Promise<void>;
   advanceTrip: (loadId: string, proof?: PodInput) => Promise<void>;
   reportIncident: (
     loadId: string,
@@ -1102,36 +1103,18 @@ export function TampProvider({ children }: { children: ReactNode }) {
         await hydrateDomain();
       },
 
-      // The truck owner declines an acceptance — the load reopens for matching.
-      declineMatch: (loadId, truckId) =>
-        setState((s) => {
-          const match = s.matches.find(
-            (m) =>
-              m.loadId === loadId &&
-              m.status === "ACCEPTED" &&
-              (truckId ? m.truckPostingId === truckId : true),
-          );
-          if (!match) return s;
-
-          return {
-            ...s,
-            loads: s.loads.map((l) => (l.id === loadId ? { ...l, status: "POSTED" } : l)),
-            matches: s.matches.map((m) =>
-              m.id === match.id
-                ? { ...m, status: "REJECTED", rejectionReason: "Carrier declined" }
-                : m,
-            ),
-            audit: log(
-              s.audit,
-              "MATCH_REJECTED",
-              actorId,
-              state.role,
-              "MATCH",
-              match.id,
-              `${loadId} declined by carrier. Load reopened.`,
-            ),
-          };
-        }),
+      // Authoritative lifecycle action. The backend validates organisation
+      // membership, releases the truck and permanently excludes this exact
+      // load/truck pair from being suggested again.
+      declineMatch: async (loadId, truckId) => {
+        try {
+          await declineMatchCmd(loadId, truckId);
+        } catch (err) {
+          reportSaveError(err);
+          throw err;
+        }
+        await hydrateDomain();
+      },
 
       rejectMatch: (loadId, truckId) =>
         setState((s) => {

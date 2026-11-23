@@ -229,6 +229,10 @@ export interface Match {
   activeOfferId?: string;
   offerRevision?: number;
   termsHash?: string;
+  rejectionReason?: string;
+  excludedFromRematch?: boolean;
+  rejectedAt?: ISODate;
+  rejectedByUserId?: UUID;
   expiresAt: ISODate;
   createdAt: ISODate;
 }

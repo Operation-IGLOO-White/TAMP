@@ -56,6 +56,12 @@ export const confirmMatchCmd = (
 ): Promise<{ ok: true; tripId: string }> =>
   trpc.mutation("commands.confirmMatch", { loadId, truckId, ...proof });
 
+export const declineMatchCmd = (
+  loadId: string,
+  truckId: string,
+): Promise<{ ok: true }> =>
+  trpc.mutation("commands.declineMatch", { loadId, truckId });
+
 export const acceptRequestCmd = (
   loadId: string,
   truckId: string,

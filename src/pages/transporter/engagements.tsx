@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@/lib/nav";
 import { CheckSquare, ChevronRight, Flag, Star, Truck as TruckIcon, UserPlus } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -12,7 +12,6 @@ import { TripProgress } from "@/components/tamp/TripProgress";
 import { formatMoney } from "@/lib/tamp-data";
 import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import { maskRegistration } from "@/lib/tamp-mask";
-import { scoreLoadAgainstTrucks } from "@/fns/matching";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { useTamp } from "@/context/TampContext";
 import type { Load, Party, Rating, Trip, TruckPosting } from "@/types/domain";
@@ -51,51 +50,48 @@ function EngagementsPage() {
   const [review, setReview] = useState<{ opportunity: Opportunity; kind: "confirm" | "request" } | null>(null);
   const [batchReview, setBatchReview] = useState<ConfirmationGroup | null>(null);
 
-  const availableTrucks = useMemo(
-    () => trucks.filter((t) => t.status === "AVAILABLE"),
+  const availableTruckIds = useMemo(
+    () => new Set(trucks.filter((truck) => truck.status === "AVAILABLE").map((truck) => truck.id)),
     [trucks],
   );
   const activeLoads = useMemo(
     () => loads.filter((l) => l.status !== "COMPLETED" && l.status !== "CLOSED"),
     [loads],
   );
+  const loadById = useMemo(() => new Map(loads.map((load) => [load.id, load])), [loads]);
+  const truckById = useMemo(() => new Map(trucks.map((truck) => [truck.id, truck])), [trucks]);
+  const partyById = useMemo(() => new Map(parties.map((party) => [party.id, party])), [parties]);
 
   // Pending requests this carrier has made — awaiting the cargo owner's approval.
   const requested: Opportunity[] = useMemo(
     () => matches
       .filter((m) => m.status === "OFFERED")
       .map((m) => {
-        const load = loads.find((l) => l.id === m.loadId);
-        const truck = trucks.find((t) => t.id === m.truckPostingId);
+        const load = loadById.get(m.loadId);
+        const truck = truckById.get(m.truckPostingId);
         return load && truck
-          ? { load, truck, operator: parties.find((p) => p.id === truck.transporterId), score: m.score }
+          ? { load, truck, operator: partyById.get(truck.transporterId), score: m.score }
           : null;
       })
       .filter((x): x is Opportunity => x !== null),
-    [matches, loads, trucks, parties],
+    [loadById, matches, partyById, truckById],
   );
 
-  const { confirmable, confirmationGroups, postedLoads } = useMemo(() => {
-    const requestedLoadIds = new Set(requested.map((r) => r.load.id));
+  const { confirmable, confirmationGroups } = useMemo(() => {
     const nextConfirmable: Opportunity[] = [];
-    const nextPosted: { load: Load; owner: Party }[] = [];
     for (const load of activeLoads) {
-      const status = displayStatusForLoad(load, matches, trips, disputes);
-      const owner = parties.find((p) => p.id === load.ownerId);
       const acceptedMatches = matches.filter((match) => match.loadId === load.id && match.status === "ACCEPTED");
       if (acceptedMatches.length > 0) {
         for (const accepted of acceptedMatches) {
-          const truck = trucks.find((t) => t.id === accepted.truckPostingId);
+          const truck = truckById.get(accepted.truckPostingId);
           if (!truck) continue;
           nextConfirmable.push({
             load,
             truck,
-            operator: parties.find((p) => p.id === truck.transporterId),
+            operator: partyById.get(truck.transporterId),
             score: accepted.score,
           });
         }
-      } else if (status === "POSTED" && owner && !requestedLoadIds.has(load.id)) {
-        nextPosted.push({ load, owner });
       }
     }
     const grouped = new Map<string, ConfirmationGroup>();
@@ -104,44 +100,31 @@ function EngagementsPage() {
       if (existing) existing.opportunities.push(opportunity);
       else grouped.set(opportunity.load.id, { load: opportunity.load, opportunities: [opportunity] });
     }
-    return { confirmable: nextConfirmable, confirmationGroups: [...grouped.values()], postedLoads: nextPosted };
-  }, [activeLoads, requested, matches, trips, disputes, parties, trucks]);
+    return { confirmable: nextConfirmable, confirmationGroups: [...grouped.values()] };
+  }, [activeLoads, matches, partyById, truckById]);
 
-  // Open jobs surfaced only if a truck matches 70+ — scored server-side
-  // (src/fns/matching.ts), one call per posted load against every available
-  // truck at once.
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const found: Opportunity[] = [];
-      await Promise.all(
-        postedLoads.map(async ({ load, owner }) => {
-          if (availableTrucks.length === 0) return;
-          const scored = await scoreLoadAgainstTrucks(load, availableTrucks, parties, owner);
-          let best: { truck: TruckPosting; score: number } | undefined;
-          for (const m of scored) {
-            if (m.passed && m.score >= 70 && (!best || m.score > best.score)) {
-              best = { truck: m.truck, score: m.score };
-            }
-          }
-          if (best) {
-            found.push({
-              load,
-              truck: best.truck,
-              operator: parties.find((p) => p.id === best!.truck.transporterId),
-              score: best.score,
-            });
-          }
-        }),
-      );
-      found.sort((a, b) => b.score - a.score);
-      if (!cancelled) setOpportunities(found);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [postedLoads, availableTrucks, parties]);
+  // Suggestions are already scored and persisted by the backend whenever
+  // loads or fleet inventory change. Reuse that snapshot here instead of
+  // issuing one expensive load×fleet scoring request per open load on every
+  // page visit.
+  const opportunities = useMemo(() => {
+    const requestedLoadIds = new Set(requested.map((item) => item.load.id));
+    const found: Opportunity[] = [];
+    for (const match of matches) {
+      if (match.status !== "SUGGESTED" || match.score < 70) continue;
+      if (!availableTruckIds.has(match.truckPostingId) || requestedLoadIds.has(match.loadId)) continue;
+      const load = loadById.get(match.loadId);
+      const truck = truckById.get(match.truckPostingId);
+      if (!load || !truck || displayStatusForLoad(load, matches, trips, disputes) !== "POSTED") continue;
+      found.push({
+        load,
+        truck,
+        operator: partyById.get(truck.transporterId),
+        score: match.score,
+      });
+    }
+    return found.sort((left, right) => right.score - left.score);
+  }, [availableTruckIds, disputes, loadById, matches, partyById, requested, trips, truckById]);
 
   const totalOpen = confirmable.length + requested.length + opportunities.length;
 
