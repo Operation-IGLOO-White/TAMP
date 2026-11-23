@@ -213,7 +213,7 @@ interface Store extends State {
   rejectMatch: (loadId: string, truckId: string) => void;
   confirmMatch: (loadId: string, truckId: string | undefined, proof: OfferProof) => Promise<void>;
   declineMatch: (loadId: string, truckId: string) => Promise<void>;
-  advanceTrip: (loadId: string, proof?: PodInput) => Promise<void>;
+  advanceTrip: (loadId: string, proof?: PodInput, tripId?: string) => Promise<void>;
   reportIncident: (
     loadId: string,
     kind: OperationalIncidentKind,
@@ -1304,10 +1304,10 @@ export function TampProvider({ children }: { children: ReactNode }) {
       // Authoritative: the SERVER computes the transition (next status, POD gate,
       // load completion, truck release). We call the command, then re-hydrate so
       // local state reflects exactly what the server wrote.
-      advanceTrip: async (loadId, proof) => {
+      advanceTrip: async (loadId, proof, tripId) => {
         try {
           await flushPending();
-          await advanceTripCmd(loadId, proof);
+          await advanceTripCmd(loadId, proof, tripId);
         } catch (err) {
           reportSaveError(err);
           return;

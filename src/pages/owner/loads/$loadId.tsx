@@ -524,7 +524,26 @@ function LoadDetail() {
 
             {trip &&
               (() => {
-                const tripProofs = proofs.filter((p) => p.tripId === trip.id);
+                // A proof belongs to an allocation trip, not to the shared
+                // load. Older multi-truck records could contain duplicate
+                // pickup proofs because commands were resolved by load ID.
+                // Keep the audit data intact but present only the latest proof
+                // of each kind for the selected trip.
+                const tripProofs = Array.from(
+                  proofs
+                    .filter((p) => p.tripId === trip.id)
+                    .sort(
+                      (left, right) =>
+                        new Date(right.capturedAt).getTime() -
+                        new Date(left.capturedAt).getTime(),
+                    )
+                    .reduce((latest, proof) => {
+                      const kind = proof.kind ?? "DELIVERY";
+                      if (!latest.has(kind)) latest.set(kind, proof);
+                      return latest;
+                    }, new Map<"PICKUP" | "DELIVERY", (typeof proofs)[number]>())
+                    .values(),
+                );
                 if (!tripProofs.length) return null;
                 return (
                   <div className="space-y-3">

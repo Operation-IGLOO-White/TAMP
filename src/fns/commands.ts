@@ -19,8 +19,13 @@ export interface PodInput {
 export const advanceTripCmd = (
   loadId: string,
   proof?: PodInput,
+  tripId?: string,
 ): Promise<{ ok: true; status: string; progressPct: number }> =>
-  trpc.mutation("commands.advanceTrip", { loadId, proof });
+  trpc.mutation("commands.advanceTrip", {
+    loadId,
+    ...(tripId ? { tripId } : {}),
+    ...(proof ? { proof } : {}),
+  });
 
 export const prepareOfferCmd = (
   loadId: string,

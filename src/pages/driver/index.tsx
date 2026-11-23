@@ -122,7 +122,7 @@ function DriverJobs() {
       setPodJob(job);
       return;
     }
-    void advanceTrip(job.load.id);
+    void advanceTrip(job.load.id, undefined, job.trip.id);
     if (job.trip.status === "SCHEDULED") {
       // Starting a trip also starts precise location sharing so navigation can
       // route from the driver's real position to the pickup.
@@ -599,13 +599,17 @@ function DriverJobs() {
           onCancel={() => setPodJob(null)}
           onConfirm={(pod) => {
             // POD + delivery are one authoritative, atomic server command.
-            void advanceTrip(podJob.load.id, {
-              recipientName: pod.recipientName,
-              signature: pod.signature,
-              photoName: pod.photoName,
-              photoUrl: pod.photoUrl,
-              note: pod.note,
-            });
+            void advanceTrip(
+              podJob.load.id,
+              {
+                recipientName: pod.recipientName,
+                signature: pod.signature,
+                photoName: pod.photoName,
+                photoUrl: pod.photoUrl,
+                note: pod.note,
+              },
+              podJob.trip.id,
+            );
             setPodJob(null);
           }}
         />
