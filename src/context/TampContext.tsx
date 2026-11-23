@@ -1427,16 +1427,32 @@ export function TampProvider({ children }: { children: ReactNode }) {
             };
           });
 
+          const nextTrips = s.trips.map((candidate) =>
+            candidate.id === trip.id && candidate.status !== "COMPLETED"
+              ? { ...candidate, status: "COMPLETED" as const }
+              : candidate,
+          );
+          const allocationMatchIds = new Set(
+            s.matches
+              .filter((candidate) => candidate.loadId === loadId && candidate.status === "CONFIRMED")
+              .map((candidate) => candidate.id),
+          );
+          const allocationTrips = nextTrips.filter((candidate) => allocationMatchIds.has(candidate.matchId));
+          const requiredAllocations = load?.trucksRequired ?? 1;
+          const shipmentComplete =
+            allocationTrips.length >= requiredAllocations &&
+            allocationTrips.every((candidate) => candidate.status === "COMPLETED");
+
           return {
             ...s,
             parties,
             ratings: [rating, ...s.ratings],
             loads: s.loads.map((l) =>
-              l.id === loadId && l.status !== "CLOSED" ? { ...l, status: "CLOSED" } : l,
+              l.id === loadId && shipmentComplete && l.status !== "CLOSED"
+                ? { ...l, status: "CLOSED" }
+                : l,
             ),
-            trips: s.trips.map((t) =>
-              t.id === trip.id && t.status !== "COMPLETED" ? { ...t, status: "COMPLETED" } : t,
-            ),
+            trips: nextTrips,
             audit: log(
               s.audit,
               "RATING_SUBMITTED",

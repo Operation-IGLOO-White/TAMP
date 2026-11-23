@@ -125,6 +125,7 @@ function LoadDetail() {
   const [issueMode, setIssueMode] = useState<"incident" | "cancel">("incident");
   const [allocationCancellation, setAllocationCancellation] = useState<{ truckId: string; label: string } | null>(null);
   const [replacementOpen, setReplacementOpen] = useState(false);
+  const [selectedAllocationMatchId, setSelectedAllocationMatchId] = useState<string | null>(null);
 
   const load = loads.find((l) => l.id === loadId);
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
@@ -206,7 +207,11 @@ function LoadDetail() {
   if (load.status !== "POSTED") {
     // Match accepted/confirmed/closed — the engagement is live. Show the
     // waybill alongside a trip timeline and the load's audit history.
-    const match = activeMatchForLoad(load.id, matches);
+    const defaultMatch = activeMatchForLoad(load.id, matches);
+    const selectedMatch = selectedAllocationMatchId
+      ? matches.find((candidate) => candidate.id === selectedAllocationMatchId && candidate.loadId === load.id)
+      : undefined;
+    const match = selectedMatch ?? defaultMatch;
     const trip = tripForMatch(match?.id, trips);
     const allocations = matches
       .filter(
@@ -358,7 +363,10 @@ function LoadDetail() {
         </div>
 
         <div className="grid grid-cols-1 items-start gap-4 p-3 sm:p-6 lg:grid-cols-[minmax(360px,440px)_1fr] lg:gap-6">
-          <Waybill load={load} />
+          <div>
+            {allocations.length > 1 && <div className="mb-2 rounded-lg border border-signal/30 bg-signal/10 px-3 py-2 text-[10px] font-bold text-foreground">Viewing the waybill and timeline for {allocations.find((item) => item.match.id === match?.id)?.truck?.registration ?? "the first allocation"}. Select another truck in Fleet allocation lifecycle to switch.</div>}
+            <Waybill load={load} {...(match?.id ? { matchId: match.id } : {})} />
+          </div>
 
           <aside className="space-y-6">
             {allocations.length > 0 && (
@@ -396,7 +404,7 @@ function LoadDetail() {
                     const closed = allocation.trip && ["COMPLETED", "CANCELLED"].includes(allocation.trip.status);
                     const cancelled = allocation.trip?.status === "CANCELLED";
                     return (
-                      <div key={allocation.match.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-center ${cancelled ? "bg-danger/5 opacity-70" : ""}`}>
+                      <div key={allocation.match.id} role="button" tabIndex={0} onClick={() => setSelectedAllocationMatchId(allocation.match.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedAllocationMatchId(allocation.match.id); }} className={`flex cursor-pointer flex-col gap-3 p-3 transition hover:bg-signal/5 sm:flex-row sm:items-center ${match?.id === allocation.match.id ? "bg-signal/10 ring-1 ring-inset ring-signal/40" : ""} ${cancelled ? "bg-danger/5 opacity-70" : ""}`}>
                         <div className="size-20 shrink-0 overflow-hidden rounded-xl border border-border bg-white">
                           <img src={fleetVehicleAsset(allocationTruck)} alt={`${allocationTruck.bodyType} ${allocationTruck.registration}`} className="h-full w-full object-contain p-1" />
                         </div>
@@ -419,7 +427,8 @@ function LoadDetail() {
                         {canCancelTrips && allocation.trip && !closed && (
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setAllocationCancellation({ truckId: allocationTruck.id, label: `${allocationTruck.registration} · ${allocation.carrier?.companyName ?? "Transporter"}` });
                               setIssueMode("cancel");
                               setIssueOpen(true);

@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Loader2, MapPin, ShieldCheck, Truck, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Eye, Loader2, MapPin, ShieldCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -29,12 +29,14 @@ export function BatchEngagementDialog({
   mode = "owner-accept",
   onClose,
   onConfirm,
+  onReviewCandidate,
 }: {
   load: Load;
   candidates: BatchEngagementCandidate[];
   mode?: "owner-accept" | "transporter-confirm";
   onClose: () => void;
   onConfirm: (candidate: BatchEngagementCandidate, proof: OfferProof) => Promise<void>;
+  onReviewCandidate?: (candidate: BatchEngagementCandidate) => void;
 }) {
   // Keep the reviewed allocation set stable for the whole dialog session.
   // Confirming one truck refreshes the shared domain and causes parent arrays
@@ -47,6 +49,7 @@ export function BatchEngagementDialog({
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState("");
+  const [succeeded, setSucceeded] = useState(false);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -138,7 +141,7 @@ export function BatchEngagementDialog({
         accepted.push(candidate.truck.id);
         setCompleted([...accepted]);
       }
-      onClose();
+      setSucceeded(true);
     } catch (cause) {
       setSubmitError(
         `${accepted.length} of ${ready.length} trucks were accepted. ${userFacingError(cause, "The remaining allocation could not be accepted.")}`,
@@ -172,24 +175,33 @@ export function BatchEngagementDialog({
             <div className="flex items-start gap-3"><MapPin className="mt-0.5 size-4 shrink-0 text-signal" /><div><p className="text-xs font-black uppercase">{load.origin.label}</p><p className="mt-1 text-xs text-muted-foreground">to {load.destination.label}</p></div></div>
           </section>
 
-          <section className="space-y-3 p-4">
+          {succeeded ? (
+            <section className="grid min-h-72 place-items-center p-8 text-center">
+              <div>
+                <span className="mx-auto grid size-16 place-items-center rounded-full bg-positive/10 text-positive"><CheckCircle2 className="size-9" /></span>
+                <h3 className="mt-4 text-xl font-black">{ready.length} truck allocations accepted</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Each truck now has its own allocation. The transporter must confirm every truck before its driver and trip can be dispatched.</p>
+                <button type="button" onClick={onClose} className="mt-6 min-h-11 rounded-lg bg-signal px-7 text-xs font-black uppercase text-signal-foreground">View allocation status</button>
+              </div>
+            </section>
+          ) : <section className="space-y-3 p-4">
             {preparing && <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin text-signal" /> Preparing individual route terms…</div>}
             {!preparing && prepared.map((candidate, index) => {
               const done = completed.includes(candidate.truck.id);
-              return <article key={candidate.truck.id} className={`grid gap-3 rounded-xl border p-3 sm:grid-cols-[5rem_1fr_auto] sm:items-center ${candidate.error ? "border-danger/40 bg-danger/5" : done ? "border-positive/40 bg-positive/5" : "border-border"}`}>
+              return <article key={candidate.truck.id} onClick={() => !done && onReviewCandidate?.(candidate)} className={`grid gap-3 rounded-xl border p-3 transition sm:grid-cols-[5rem_1fr_auto] sm:items-center ${onReviewCandidate && !done ? "cursor-pointer hover:border-signal hover:bg-signal/5" : ""} ${candidate.error ? "border-danger/40 bg-danger/5" : done ? "border-positive/40 bg-positive/5" : "border-border"}`}>
                 <div className="h-16 overflow-hidden rounded-lg bg-white"><img src={fleetVehicleAsset(candidate.truck)} alt={candidate.truck.registration} className="h-full w-full object-contain p-1" /></div>
                 <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="grid size-5 place-items-center rounded-full bg-steel font-mono text-[10px] font-black">{index + 1}</span><span className="font-mono text-sm font-black">{maskRegistration(candidate.truck.registration)}</span><span className="rounded bg-steel px-2 py-1 text-[9px] font-black uppercase text-muted-foreground">{candidate.truck.bodyType.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs font-semibold">{candidate.operator.companyName}</p><p className="mt-1 text-[10px] text-muted-foreground">{candidate.score.toFixed(1)}/100 match · {(candidate.truck.payloadCapacityKg / 1000).toFixed(1)} t capacity · {candidate.kind === "REQUEST" ? "Transporter offer" : "System suggestion"}</p>{candidate.error && <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-danger"><AlertTriangle className="size-3.5" /> {candidate.error}</p>}</div>
-                <div className="text-left sm:text-right">{done ? <span className="inline-flex items-center gap-1 rounded-lg bg-positive/10 px-3 py-2 text-[10px] font-black uppercase text-positive"><Check className="size-3.5" /> Accepted</span> : candidate.offer ? <><p className="font-mono text-base font-black">{allocationRate ? formatMoney(allocationRate) : "On file"}</p><p className="mt-1 text-[9px] uppercase text-muted-foreground">Individual allocation</p></> : null}</div>
+                <div className="text-left sm:text-right">{done ? <span className="inline-flex items-center gap-1 rounded-lg bg-positive/10 px-3 py-2 text-[10px] font-black uppercase text-positive"><Check className="size-3.5" /> Accepted</span> : candidate.offer ? <><p className="font-mono text-base font-black">{allocationRate ? formatMoney(allocationRate) : "On file"}</p><p className="mt-1 text-[9px] uppercase text-muted-foreground">Individual allocation</p>{onReviewCandidate && <span className="mt-2 inline-flex items-center gap-1 text-[9px] font-black uppercase text-signal"><Eye className="size-3" /> Review truck</span>}</> : null}</div>
               </article>;
             })}
-          </section>
+          </section>}
         </div>
 
-        <footer className="border-t border-border bg-background p-4">
+        {!succeeded && <footer className="border-t border-border bg-background p-4">
           {submitError && <div className="mb-3 rounded-lg border border-danger/30 bg-danger/10 p-3 text-xs font-semibold text-danger">{submitError}</div>}
           <label className="mb-3 flex cursor-pointer items-start gap-2 text-xs"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} disabled={preparing || submitting} className="mt-0.5 accent-[#f2b400]" /><span>I agree to the displayed trucks, routes, pickup window and individual rates. {mode === "transporter-confirm" ? "Confirming creates a separate operational trip for every truck." : "I understand that every transporter must confirm its allocated truck."}</span></label>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={onClose} disabled={submitting} className="min-h-11 rounded-lg border border-border px-5 text-xs font-black uppercase hover:bg-steel/30 disabled:opacity-40">Cancel</button><button type="button" onClick={() => void confirm()} disabled={!agreed || preparing || submitting || ready.length !== batchCandidates.length || completed.length >= ready.length} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-signal px-6 text-xs font-black uppercase text-signal-foreground hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45">{submitting ? <><Loader2 className="size-4 animate-spin" /> {mode === "transporter-confirm" ? "Confirming" : "Accepting"} {Math.min(completed.length + 1, ready.length)} of {ready.length}</> : <><ShieldCheck className="size-4" /> {completed.length ? `Retry ${Math.max(0, ready.length - completed.length)} remaining` : `${mode === "transporter-confirm" ? "Confirm" : "Accept"} ${ready.length} truck allocations`}</>}</button></div>
-        </footer>
+        </footer>}
       </div>
     </div>,
     document.body,

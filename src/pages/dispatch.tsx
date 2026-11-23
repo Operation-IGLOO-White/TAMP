@@ -169,8 +169,10 @@ export default function DispatchPage() {
             emails={emails}
             setEmails={setEmails}
             bulkBusy={bulkBusy}
+            busy={busy}
             onAutoPlan={autoPlanDrivers}
             onSend={sendFleetOffers}
+            onAssign={(tripId, email) => act(tripId, "ASSIGN", email)}
           />
           <Schedule jobs={jobs} />
           <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
@@ -196,8 +198,10 @@ function FleetReadinessPlanner({
   emails,
   setEmails,
   bulkBusy,
+  busy,
   onAutoPlan,
   onSend,
+  onAssign,
 }: {
   jobs: Job[];
   allJobs: Job[];
@@ -208,8 +212,10 @@ function FleetReadinessPlanner({
   emails: Record<string, string>;
   setEmails: Dispatch<SetStateAction<Record<string, string>>>;
   bulkBusy: string | null;
+  busy: string | null;
   onAutoPlan: (jobs: Job[]) => void;
   onSend: (loadId: string, jobs: Job[]) => Promise<void>;
+  onAssign: (tripId: string, email: string) => Promise<void>;
 }) {
   const groups = useMemo(() => {
     const grouped = new Map<string, Job[]>();
@@ -258,7 +264,7 @@ function FleetReadinessPlanner({
                     {group.map((job) => {
                       const queue = queueFor(job);
                       const assigned = findDriver(job.assignment?.driverId, members, parties);
-                      const selectedEmail = emails[job.trip.id] ?? "";
+                      const selectedEmail = emails[job.trip.id] ?? assigned?.email ?? "";
                       const selectedDriver = drivers.find((driver) => driver.email === selectedEmail);
                       const selectedEligibility = selectedDriver ? driverEligibleForJob(selectedDriver, documentsByDriver.get(selectedDriver.id) ?? [], job) : null;
                       return (
@@ -266,8 +272,7 @@ function FleetReadinessPlanner({
                           <td className="px-3 py-3"><p className="font-mono text-xs font-black">{job.truck.registration}</p><p className="mt-0.5 text-[9px] text-muted-foreground">{job.truck.bodyType.replaceAll("_", " ")} · {job.trip.id}</p></td>
                           <td className="px-3 py-3"><Badge queue={queue} /></td>
                           <td className="px-3 py-3">
-                            {queue === "ACCEPTED" ? <p className="text-xs font-bold text-positive">{assigned?.contactName ?? "Accepted driver"}</p> : (
-                              <select
+                            <select
                                 value={selectedEmail}
                                 onChange={(event) => setEmails((current) => ({ ...current, [job.trip.id]: event.target.value }))}
                                 className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs outline-none focus:border-signal"
@@ -276,14 +281,14 @@ function FleetReadinessPlanner({
                                 {drivers.map((driver) => {
                                   const eligibility = driverEligibleForJob(driver, documentsByDriver.get(driver.id) ?? [], job);
                                   const selectedElsewhere = Object.entries(emails).some(([tripId, email]) => tripId !== job.trip.id && email === driver.email);
-                                  const available = eligibility.eligible && driverCanTake(driver.id, job, allJobs) && !selectedElsewhere;
+                                  const isCurrent = driver.id === job.assignment?.driverId;
+                                  const available = isCurrent || (eligibility.eligible && driverCanTake(driver.id, job, allJobs) && !selectedElsewhere);
                                   return <option key={driver.id} value={driver.email} disabled={!available}>{driver.contactName}{available ? "" : ` — ${selectedElsewhere ? "already planned" : eligibility.reason}`}</option>;
                                 })}
                               </select>
-                            )}
                           </td>
                           <td className="px-3 py-3">
-                            {queue === "ACCEPTED" ? <span className="text-[10px] font-bold text-positive">Cleared</span> : selectedEligibility ? <span className={`text-[10px] font-bold ${selectedEligibility.eligible ? "text-positive" : "text-danger"}`}>{selectedEligibility.reason}</span> : <span className="text-[10px] text-muted-foreground">Choose a driver</span>}
+                            {queue === "ACCEPTED" ? <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-positive">Cleared</span>{selectedEmail !== assigned?.email && <button type="button" disabled={!selectedEmail || busy === job.trip.id} onClick={() => void onAssign(job.trip.id, selectedEmail)} className="rounded-md bg-signal px-2 py-1 text-[9px] font-black uppercase text-signal-foreground disabled:opacity-40">Change driver</button>}</div> : selectedEligibility ? <span className={`text-[10px] font-bold ${selectedEligibility.eligible ? "text-positive" : "text-danger"}`}>{selectedEligibility.reason}</span> : <span className="text-[10px] text-muted-foreground">Choose a driver</span>}
                           </td>
                         </tr>
                       );
@@ -328,7 +333,8 @@ function QueueColumn(p: ColumnProps) {
 function JobCard(p: ColumnProps & { job: Job }) {
   const { job } = p; const { trip, load, truck, assignment } = job;
   const driver = findDriver(assignment?.driverId, p.members, p.parties);
-  const selectedDriver = p.drivers.find((candidate) => candidate.email === p.emails[trip.id]);
+  const selectedEmail = p.emails[trip.id] ?? driver?.email ?? "";
+  const selectedDriver = p.drivers.find((candidate) => candidate.email === selectedEmail);
   const selectedEligibility = selectedDriver
     ? driverEligibleForJob(selectedDriver, p.documentsByDriver.get(selectedDriver.id) ?? [], job)
     : null;
@@ -347,13 +353,14 @@ function JobCard(p: ColumnProps & { job: Job }) {
     {open && <div className="space-y-3 border-t border-border bg-background/60 p-3">
       <div className="grid grid-cols-2 gap-2"><SmallBox label="Trip" value={trip.id} /><SmallBox label="Distance" value={`${load.distanceKm.toLocaleString("en-ZA")} km`} /></div>
       {assignment?.note && <p className="rounded-lg bg-steel/30 p-2 text-xs text-muted-foreground">{assignment.note}</p>}
-      {p.queue !== "ACCEPTED" ? <>
-        <select value={p.emails[trip.id] ?? ""} onChange={(e) => p.setEmails((old) => ({ ...old, [trip.id]: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs"><option value="">Select compliant driver</option>{p.drivers.map((candidate) => { const eligibility = driverEligibleForJob(candidate, p.documentsByDriver.get(candidate.id) ?? [], job); const available = eligibility.eligible && driverCanTake(candidate.id, job, p.allJobs); return <option key={candidate.id} value={candidate.email} disabled={!available}>{candidate.contactName}{available ? "" : ` — ${eligibility.eligible ? "schedule conflict" : eligibility.reason}`}</option>; })}</select>
+      <>
+        <select value={selectedEmail} onChange={(e) => p.setEmails((old) => ({ ...old, [trip.id]: e.target.value }))} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-xs"><option value="">Select compliant driver</option>{p.drivers.map((candidate) => { const eligibility = driverEligibleForJob(candidate, p.documentsByDriver.get(candidate.id) ?? [], job); const isCurrent = candidate.id === assignment?.driverId; const available = isCurrent || (eligibility.eligible && driverCanTake(candidate.id, job, p.allJobs)); return <option key={candidate.id} value={candidate.email} disabled={!available}>{candidate.contactName}{available ? "" : ` — ${eligibility.eligible ? "schedule conflict" : eligibility.reason}`}</option>; })}</select>
         {selectedEligibility && <p className={`text-[10px] font-semibold ${selectedAvailable ? "text-positive" : "text-danger"}`}>{selectedAvailable ? selectedEligibility.reason : selectedEligibility.eligible ? "Driver has another offer or accepted trip in this time window" : selectedEligibility.reason}</p>}
         <textarea value={p.notes[trip.id] ?? ""} onChange={(e) => p.setNotes((old) => ({ ...old, [trip.id]: e.target.value }))} placeholder="Pickup or route instructions (optional)" className="min-h-20 w-full rounded-lg border border-border bg-background p-3 text-xs outline-none focus:border-signal" />
-        <button disabled={p.busy === trip.id || !selectedAvailable} onClick={() => void p.act(trip.id, "ASSIGN")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-signal text-xs font-black uppercase text-signal-foreground disabled:opacity-40"><Send className="size-3.5" />{assignment ? "Reassign and send" : "Send driver offer"}</button>
+        <button disabled={p.busy === trip.id || !selectedDriver || (p.queue === "ACCEPTED" && selectedEmail === driver?.email) || (!selectedAvailable && selectedDriver.id !== assignment?.driverId)} onClick={() => void p.act(trip.id, "ASSIGN", selectedEmail)} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-signal text-xs font-black uppercase text-signal-foreground disabled:opacity-40"><Send className="size-3.5" />{assignment ? "Change driver and send" : "Send driver offer"}</button>
         {p.drivers.length === 0 && <p className="text-[10px] text-danger">Add and verify a driver under Organisation first.</p>}
-      </> : <button disabled={p.busy === trip.id} onClick={() => void p.act(trip.id, "CANCEL")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-danger/40 text-xs font-bold text-danger"><XCircle className="size-4" />Cancel assignment</button>}
+        {p.queue === "ACCEPTED" && <button disabled={p.busy === trip.id} onClick={() => void p.act(trip.id, "CANCEL")} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-danger/40 text-xs font-bold text-danger"><XCircle className="size-4" />Cancel current assignment</button>}
+      </>
       {assignment?.timeline?.length ? <div className="border-t border-border pt-2 text-[10px] text-muted-foreground">Latest: {assignment.timeline.at(-1)?.status.replaceAll("_", " ")} · {new Date(assignment.timeline.at(-1)!.at).toLocaleString("en-ZA")}</div> : null}
     </div>}
   </article>;

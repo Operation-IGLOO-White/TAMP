@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, CheckSquare, MapPin, PackageOpen, Search, ShieldCheck, Star, Truck } from "lucide-react";
+import { CalendarClock, CheckSquare, Eye, MapPin, PackageOpen, Search, ShieldCheck, Star, Truck, XCircle } from "lucide-react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BatchEngagementDialog, type BatchEngagementCandidate } from "@/components/tamp/BatchEngagementDialog";
 import { MatchReviewDialog } from "@/components/tamp/MatchReviewDialog";
@@ -31,7 +31,7 @@ type FleetCarrierPlan = {
 };
 type FleetLoadPlan = { load: Load; carriers: FleetCarrierPlan[]; covered: number; required: number };
 export default function OwnerOffers() {
-  const { loads, trucks, parties, matches, authParty, acceptMatch, acceptRequest } = useTamp();
+  const { loads, trucks, parties, matches, authParty, acceptMatch, acceptRequest, rejectMatch } = useTamp();
   const canManage = hasPermission(authParty, "matches.manage");
   const [query, setQuery] = useState("");
   const [review, setReview] = useState<Candidate | null>(null);
@@ -76,14 +76,14 @@ export default function OwnerOffers() {
           <div className="p-16 text-center"><Truck className="mx-auto size-9 text-muted-foreground" /><p className="mt-3 text-sm font-bold">No pending matches or offers</p><p className="mt-1 text-xs text-muted-foreground">New eligible trucks and transporter requests will appear here.</p></div>
         ) : (
           <div className="space-y-5 p-4">
-            {fleetPlans.map((plan) => <FleetPlanCard key={plan.load.id} plan={plan} canManage={canManage} onReview={setReview} onBatchReview={(candidates) => setBatchReview({ load: plan.load, candidates: candidates.map(toBatchCandidate) })} />)}
+            {fleetPlans.map((plan) => <FleetPlanCard key={plan.load.id} plan={plan} canManage={canManage} onReview={setReview} onReject={(candidate) => rejectMatch(candidate.load.id, candidate.truck.id)} onBatchReview={(candidates) => setBatchReview({ load: plan.load, candidates: candidates.map(toBatchCandidate) })} />)}
             {singleTruckCandidates.length > 0 && <div className="grid gap-4 lg:grid-cols-2">{singleTruckCandidates.map((candidate) => <OfferCard key={`${candidate.load.id}:${candidate.truck.id}`} candidate={candidate} canManage={canManage} onReview={() => setReview(candidate)} />)}</div>}
           </div>
         )}
       </section>
     </div>
     {review && <MatchReviewDialog load={review.load} truck={review.truck} actionLabel={review.kind === "REQUEST" ? "Approve offer" : "Accept match"} onClose={() => setReview(null)} onConfirm={(proof) => review.kind === "REQUEST" ? acceptRequest(review.load.id, review.truck.id, proof) : acceptMatch(review.load.id, review.truck.id, proof)} />}
-    {batchReview && <BatchEngagementDialog load={batchReview.load} candidates={batchReview.candidates} onClose={() => setBatchReview(null)} onConfirm={(candidate, proof) => candidate.kind === "REQUEST" ? acceptRequest(batchReview.load.id, candidate.truck.id, proof) : acceptMatch(batchReview.load.id, candidate.truck.id, proof)} />}
+    {batchReview && <BatchEngagementDialog load={batchReview.load} candidates={batchReview.candidates} onClose={() => setBatchReview(null)} onReviewCandidate={(candidate) => { const full = candidates.find((item) => item.load.id === batchReview.load.id && item.truck.id === candidate.truck.id); if (full) { setBatchReview(null); setReview(full); } }} onConfirm={(candidate, proof) => candidate.kind === "REQUEST" ? acceptRequest(batchReview.load.id, candidate.truck.id, proof) : acceptMatch(batchReview.load.id, candidate.truck.id, proof)} />}
   </AppShell>;
 }
 
@@ -160,16 +160,17 @@ function buildFleetPlans(candidates: Candidate[]): FleetLoadPlan[] {
       group.allocation = Math.min(remaining, group.eligibleCount);
       remaining -= group.allocation;
     }
+    const visibleGroups = groups.filter((group) => group.allocation > 0 || group.candidates.some((candidate) => ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? "")));
     return {
       load,
-      carriers: groups,
+      carriers: visibleGroups,
       covered: required - remaining,
       required,
     };
   });
 }
 
-function FleetPlanCard({ plan, canManage, onReview, onBatchReview }: { plan: FleetLoadPlan; canManage: boolean; onReview: (candidate: Candidate) => void; onBatchReview: (candidates: Candidate[]) => void }) {
+function FleetPlanCard({ plan, canManage, onReview, onReject, onBatchReview }: { plan: FleetLoadPlan; canManage: boolean; onReview: (candidate: Candidate) => void; onReject: (candidate: Candidate) => void; onBatchReview: (candidates: Candidate[]) => void }) {
   const complete = plan.covered >= plan.required;
   const selected = plan.carriers.flatMap((carrier) => carrier.candidates).filter((candidate) => ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? "")).length;
   const selectable = plan.carriers.flatMap((carrier) => carrier.candidates).filter((candidate) => !["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""));
@@ -183,7 +184,7 @@ function FleetPlanCard({ plan, canManage, onReview, onBatchReview }: { plan: Fle
       <div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-signal px-2.5 py-1 text-[9px] font-black uppercase text-signal-foreground">Fleet requirement</span><span className="font-mono text-[10px] text-muted-foreground">{plan.load.reference}</span></div><h3 className="mt-2 text-sm font-black uppercase">{plan.load.origin.label} → {plan.load.destination.label}</h3><p className="mt-1 text-[11px] text-muted-foreground">{plan.load.requiredBodyTypes.join(" / ").replaceAll("_", " ")} · {(plan.load.weightKg / 1000).toFixed(1)} t · pickup {new Date(plan.load.pickupWindow.from).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p></div>
       <div className={`min-w-40 rounded-xl border p-3 text-right ${selected >= plan.required ? "border-positive/30 bg-positive/10" : "border-signal/40 bg-signal/10"}`}><div className="font-mono text-2xl font-black">{selected} / {plan.required}</div><div className="text-[9px] font-bold uppercase text-muted-foreground">Trucks selected</div><div className="mt-1 text-[9px] text-muted-foreground">{complete ? `${plan.covered} recommended and available` : `${plan.covered} currently available`}</div></div>
     </div>
-    {canManage && slotsRemaining > 1 && <div className="flex flex-col gap-3 border-b border-border bg-signal/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black">Batch engagement</p><p className="mt-0.5 text-[10px] text-muted-foreground">Select up to {slotsRemaining} trucks and accept their individual offers together.</p></div><button type="button" onClick={() => onBatchReview(checkedCandidates)} disabled={checkedCandidates.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-signal px-4 text-xs font-black uppercase text-signal-foreground hover:brightness-105 disabled:opacity-40"><CheckSquare className="size-4" /> Review {checkedCandidates.length} selected</button></div>}
+    {canManage && slotsRemaining > 1 && <div className="flex flex-col gap-3 border-b border-border bg-signal/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black">Batch engagement</p><p className="mt-0.5 text-[10px] text-muted-foreground">Unchecked trucks stay available as recommendations. Use Reject to remove a truck and request the next eligible recommendation.</p></div><button type="button" onClick={() => onBatchReview(checkedCandidates)} disabled={checkedCandidates.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-signal px-4 text-xs font-black uppercase text-signal-foreground hover:brightness-105 disabled:opacity-40"><CheckSquare className="size-4" /> Review {checkedCandidates.length} selected</button></div>}
     <div className="divide-y divide-border">
       {plan.carriers.map((carrier) => {
         const accepted = carrier.candidates.filter((candidate) => ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""));
@@ -195,11 +196,22 @@ function FleetPlanCard({ plan, canManage, onReview, onBatchReview }: { plan: Fle
         ];
         return <div key={carrier.operator.id} className={`p-4 ${carrier.allocation ? "" : "opacity-65"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-full bg-signal/15 font-mono text-xs font-black text-signal">{carrier.rank ?? "–"}</span><div><div className="text-sm font-black">{carrier.operator.companyName}</div><div className="mt-0.5 flex flex-wrap gap-2 text-[10px] text-muted-foreground"><RatingLabel label="Company" value={carrier.operator.ratingAvg} count={carrier.operator.ratingCount} /><span>{carrier.averageScore.toFixed(1)} average match score</span></div></div></div></div><div className="sm:text-right"><div className="font-mono text-lg font-black text-signal">{carrier.allocation} recommended</div><div className="text-[10px] text-muted-foreground">{carrier.eligibleCount} eligible · {carrier.coveragePct.toFixed(0)}% of requirement</div></div></div>
-          {recommended.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{recommended.map((candidate) => { const selected = ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? ""); const confirmed = candidate.match?.status === "CONFIRMED"; const isChecked = checked.includes(candidate.truck.id); return <div key={candidate.truck.id} className={`relative flex items-center gap-2 rounded-xl border p-2 ${selected ? "border-positive/40 bg-positive/10" : isChecked ? "border-signal bg-signal/10" : "border-border bg-steel/15"}`}>{canManage && !selected && slotsRemaining > 1 && <label className="absolute right-2 top-2 grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-background shadow"><input type="checkbox" checked={isChecked} onChange={() => toggle(candidate.truck.id)} className="accent-[#f2b400]" aria-label={`Select ${candidate.truck.registration} for batch engagement`} /></label>}<div className="size-16 shrink-0 overflow-hidden rounded-lg bg-white"><img src={fleetVehicleAsset(candidate.truck)} alt={`${candidate.truck.bodyType} ${candidate.truck.registration}`} className="h-full w-full object-contain p-1" /></div><div className="min-w-0 flex-1 pr-5"><div className="truncate font-mono text-xs font-black">{maskRegistration(candidate.truck.registration)}</div><div className="truncate text-[10px] text-muted-foreground">{candidate.truck.bodyType.replaceAll("_", " ")} · {candidate.score.toFixed(1)}/100</div>{candidate.driver && <div className="mt-1 truncate text-[9px] text-muted-foreground">Driver: {candidate.driver.contactName}{candidate.driver.ratingAvg != null ? ` · ★ ${candidate.driver.ratingAvg}` : " · New"}</div>}</div>{selected ? <span className="rounded-lg bg-positive/15 px-2 py-2 text-[9px] font-black uppercase text-positive">{confirmed ? "Transporter confirmed" : "Awaiting transporter"}</span> : canManage && slotsRemaining <= 1 && <button type="button" onClick={() => onReview(candidate)} className="rounded-lg bg-signal px-2 py-2 text-[9px] font-black uppercase text-signal-foreground">Review & select</button>}</div>; })}</div>}
+          {recommended.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{recommended.map((candidate) => <FleetCandidateTile key={candidate.truck.id} candidate={candidate} checked={checked.includes(candidate.truck.id)} canManage={canManage} batchMode={slotsRemaining > 1} onToggle={() => toggle(candidate.truck.id)} onReview={() => onReview(candidate)} onReject={() => onReject(candidate)} />)}</div>}
         </div>;
       })}
     </div>
   </article>;
+}
+
+function FleetCandidateTile({ candidate, checked, canManage, batchMode, onToggle, onReview, onReject }: { candidate: Candidate; checked: boolean; canManage: boolean; batchMode: boolean; onToggle: () => void; onReview: () => void; onReject: () => void }) {
+  const selected = ["ACCEPTED", "CONFIRMED"].includes(candidate.match?.status ?? "");
+  const confirmed = candidate.match?.status === "CONFIRMED";
+  return <div role={!selected ? "button" : undefined} tabIndex={!selected ? 0 : undefined} onClick={() => !selected && onReview()} onKeyDown={(event) => { if (!selected && (event.key === "Enter" || event.key === " ")) onReview(); }} className={`relative flex cursor-pointer items-center gap-2 rounded-xl border p-2 transition hover:border-signal ${selected ? "border-positive/40 bg-positive/10" : checked ? "border-signal bg-signal/10" : "border-border bg-steel/15"}`}>
+    {canManage && !selected && batchMode && <label onClick={(event) => event.stopPropagation()} className="absolute right-2 top-2 grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-background shadow"><input type="checkbox" checked={checked} onChange={onToggle} className="accent-[#f2b400]" aria-label={`Select ${candidate.truck.registration} for batch engagement`} /></label>}
+    <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-white"><img src={fleetVehicleAsset(candidate.truck)} alt={`${candidate.truck.bodyType} ${candidate.truck.registration}`} className="h-full w-full object-contain p-1" /></div>
+    <div className="min-w-0 flex-1 pr-5"><div className="truncate font-mono text-xs font-black">{maskRegistration(candidate.truck.registration)}</div><div className="truncate text-[10px] text-muted-foreground">{candidate.truck.bodyType.replaceAll("_", " ")} · {candidate.score.toFixed(1)}/100</div>{candidate.driver && <div className="mt-1 truncate text-[9px] text-muted-foreground">Driver: {candidate.driver.contactName}{candidate.driver.ratingAvg != null ? ` · ★ ${candidate.driver.ratingAvg}` : " · New"}</div>} {!selected && <div className="mt-2 flex gap-2"><span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-signal"><Eye className="size-3" /> Review</span>{canManage && <button type="button" onClick={(event) => { event.stopPropagation(); onReject(); }} className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-danger"><XCircle className="size-3" /> Reject</button>}</div>}</div>
+    {selected && <span className="rounded-lg bg-positive/15 px-2 py-2 text-[9px] font-black uppercase text-positive">{confirmed ? "Transporter confirmed" : "Awaiting transporter"}</span>}
+  </div>;
 }
 
 function toBatchCandidate(candidate: Candidate): BatchEngagementCandidate {

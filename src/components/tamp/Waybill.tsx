@@ -23,7 +23,7 @@ const RATING_TAGS = [
   "Doc issues",
 ];
 
-export function Waybill({ load }: { load: Load }) {
+export function Waybill({ load, matchId }: { load: Load; matchId?: string }) {
   const {
     trucks,
     parties,
@@ -47,8 +47,13 @@ export function Waybill({ load }: { load: Load }) {
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
   const owner = parties.find((p) => p.id === load.ownerId);
-  const confirmed = confirmedMatchForLoad(load.id, matches);
-  const pending = acceptedMatchForLoad(load.id, matches); // owner accepted, awaiting carrier
+  const selectedMatch = matchId ? matches.find((candidate) => candidate.id === matchId) : undefined;
+  const confirmed = selectedMatch
+    ? (selectedMatch.status === "CONFIRMED" ? selectedMatch : undefined)
+    : confirmedMatchForLoad(load.id, matches);
+  const pending = selectedMatch
+    ? (selectedMatch.status === "ACCEPTED" ? selectedMatch : undefined)
+    : acceptedMatchForLoad(load.id, matches); // owner accepted, awaiting carrier
   const engaged = confirmed ?? pending;
   const suggestion = engaged ?? topSuggestionForLoad(load.id, matches);
   const truck = suggestion ? trucks.find((t) => t.id === suggestion.truckPostingId) : undefined;
