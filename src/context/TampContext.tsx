@@ -1082,7 +1082,6 @@ export function TampProvider({ children }: { children: ReactNode }) {
       // creates the acceptance receipt, advances the load).
       acceptMatch: async (loadId, truckId, proof) => {
         try {
-          await flushPending();
           await acceptMatchCmd(loadId, truckId, proof);
         } catch (err) {
           reportSaveError(err);
@@ -1095,7 +1094,6 @@ export function TampProvider({ children }: { children: ReactNode }) {
       // server flips the match to CONFIRMED, reserves the truck and opens a trip.
       confirmMatch: async (loadId, truckId, proof) => {
         try {
-          await flushPending();
           await confirmMatchCmd(loadId, truckId, proof);
         } catch (err) {
           reportSaveError(err);
@@ -1226,7 +1224,6 @@ export function TampProvider({ children }: { children: ReactNode }) {
       // offer. The carrier must confirm that exact revision before a trip opens.
       acceptRequest: async (loadId, truckId, proof) => {
         try {
-          await flushPending();
           await acceptRequestCmd(loadId, truckId, proof);
         } catch (err) {
           reportSaveError(err);
@@ -1349,7 +1346,6 @@ export function TampProvider({ children }: { children: ReactNode }) {
 
       cancelTrip: async (loadId, reason, truckId) => {
         try {
-          await flushPending();
           await cancelTripCmd(loadId, reason, truckId);
           await hydrateDomain();
           return true;
