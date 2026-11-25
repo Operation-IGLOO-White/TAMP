@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Forklift, LayoutGrid, List, Plus } from "lucide-react";
+import * as Dropdown from "@radix-ui/react-dropdown-menu";
+import { ChevronDown, ChevronLeft, ChevronRight, Forklift, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -35,17 +36,32 @@ type Asset = Terms & {
   location: Place; mine: boolean; published: boolean; photos: string[]; specifications: string;
   ratedPayloadTonnes?: number; availability: Period; blockedPeriods: Period[]; reservations: Period[];
 };
+type HandoverStage = "DELIVERY" | "RETURN";
+type HandoverSide = "OWNER" | "RENTER";
+type HandoverReport = {
+  condition: "GOOD" | "DAMAGE_FOUND"; meterHours?: number | null; notes: string;
+  photos: string[]; recordedAt: string;
+};
+type RentalInvoice = {
+  number: string; issuedAt: string; subtotal: string; vatRate: string; vat: string;
+  total: string; paid: string; balance: string; status: "OUTSTANDING" | "PARTIALLY_PAID" | "PAID";
+  payments: { id: string; reference: string; amount: string; recordedAt: string }[];
+};
 type Booking = Period & {
   id: string; assetId: string; assetName: string; supplierName: string; renterName: string;
   site: Place; assetLocation?: Place; status: string; total: string; units: number; terms: Terms; incoming: boolean;
+  invoice?: RentalInvoice;
   notes: string; history: { status: string; at: string; reason?: string }[];
+  handovers?: Partial<Record<HandoverStage, Partial<Record<HandoverSide, HandoverReport>>>>;
   moves?: Partial<Record<"DELIVERY" | "COLLECTION", string>>;
 };
 type Move = { id: string; assetName: string; direction: string; destination: string; status: string };
 type Workspace = { assets: Asset[]; bookings: Booking[]; moves: Move[] };
 type Editor =
   | { mode: "asset"; asset?: Asset }
+  | { mode: "unpublish"; asset: Asset }
   | { mode: "hire"; asset: Asset }
+  | { mode: "handover"; booking: Booking; stage: HandoverStage }
   | { mode: "move"; asset?: Asset; booking?: Booking }
   | { mode: "reason"; action: "CANCEL" | "DECLINE"; booking: Booking };
 
@@ -119,7 +135,7 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
   const pendingIncoming = bookings.filter((booking) => booking.incoming && booking.status === "REQUESTED").length;
   const tabs: [string, string][] = [
     ["browse", "Browse assets"], ["requests", "My requests"], ["hires", "My rentals"],
-    ["moves", "Asset moves"], ...(role === "TRANSPORTER" ? ([["assets", "My assets"], ["incoming", "Incoming requests"]] as [string, string][]) : []),
+    ["moves", "Asset moves"], ...(role === "TRANSPORTER" ? ([["assets", "My assets"], ["incoming", "Incoming requests"], ["calendar", "Rental calendar"]] as [string, string][]) : []),
   ];
   const visibleAssets = assets.filter((asset) => tab === "assets" ? asset.mine : asset.published && !asset.mine
     && (!type || asset.type === type) && (!operator || asset.operatorIncluded)
@@ -144,12 +160,19 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
     changeTab(view);
     toast.success(message);
   };
-  const assetActions = (asset: Asset) => <div className="flex flex-wrap items-center gap-2">
-    {asset.mine ? <>
-      {canList && <button className={button} onClick={() => setEditor({ mode: "asset", asset })}>Edit asset</button>}
-      {canMove && <button className={button} onClick={() => setEditor({ mode: "move", asset })}>Move asset</button>}
-    </> : canBook && <button className={primary} onClick={() => setEditor({ mode: "hire", asset })}>Review rental</button>}
-  </div>;
+  const assetActions = (asset: Asset) => asset.mine
+    ? (canList || canMove) && <ActionsMenu label={`Actions for ${asset.make} ${asset.model}`}>
+        {canList && <Dropdown.Item className={menuItem} onSelect={() => setEditor({ mode: "asset", asset })}>
+          <Pencil className="size-4" aria-hidden /> Edit asset
+        </Dropdown.Item>}
+        {canMove && <Dropdown.Item className={menuItem} onSelect={() => setEditor({ mode: "move", asset })}>
+          <Truck className="size-4" aria-hidden /> Move asset
+        </Dropdown.Item>}
+        {canList && asset.published && <Dropdown.Item className={menuItem + " text-danger"} onSelect={() => setEditor({ mode: "unpublish", asset })}>
+          <Trash2 className="size-4" aria-hidden /> Remove from catalogue
+        </Dropdown.Item>}
+      </ActionsMenu>
+    : canBook && <button className={primary} onClick={() => setEditor({ mode: "hire", asset })}>Review rental</button>;
 
   return <AppShell>
     <PageHeader title="Asset Rental" actions={canList && <button className={primary} onClick={() => setEditor({ mode: "asset" })}>
@@ -166,7 +189,7 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
           </span>}
         </button>)}
       </nav>
-      {!linkedBooking && !editor && <div role="group" aria-label="Results layout" className="inline-flex gap-1 rounded-lg border border-border bg-card p-1">
+      {!linkedBooking && !editor && tab !== "calendar" && <div role="group" aria-label="Results layout" className="inline-flex gap-1 rounded-lg border border-border bg-card p-1">
         {([["cards", "Cards", LayoutGrid], ["table", "Table", List]] as const).map(([layout, label, Icon]) =>
           <button key={layout} type="button" aria-pressed={tableView === (layout === "table")}
             className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-semibold aria-pressed:bg-signal aria-pressed:text-signal-foreground"
@@ -180,7 +203,13 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
       </div>
       {editor ? <div className="app-surface max-w-4xl p-4 sm:p-6">
         <button className={button + " mb-4"} onClick={() => setEditor(undefined)}>Cancel</button>
-        {editor.mode === "asset" && <AssetForm asset={editor.asset} done={() => done("Asset saved", "assets")} />}
+        {editor.mode === "asset" && <AssetForm asset={editor.asset} done={() => done("Asset saved", tab === "calendar" ? "calendar" : "assets")} />}
+        {editor.mode === "unpublish" && <UnpublishAsset asset={editor.asset} done={() => done("Asset removed from catalogue", "assets")} />}
+        {editor.mode === "handover" && <HandoverForm booking={editor.booking} stage={editor.stage} done={async () => {
+          await client.invalidateQueries({ queryKey: key });
+          setEditor(undefined);
+          toast.success("Handover recorded");
+        }} />}
         {editor.mode === "hire" && <HireForm asset={editor.asset} start={start} end={end} done={() => done("Rental request sent", "requests")} />}
         {editor.mode === "move" && <MoveForm asset={editor.asset} booking={editor.booking} done={async () => { await refreshDomain(); await done("Asset transport posted", "moves"); }} />}
         {editor.mode === "reason" && <ActionForm booking={editor.booking} action={editor.action} done={() => done("Rental updated")} />}
@@ -189,6 +218,8 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
             This rental is unavailable in your current organisation. Select the organisation that received the notification.
           </p>
         : <>
+        {tab === "calendar" && role === "TRANSPORTER" && <RentalCalendar assets={assets.filter((asset) => asset.mine)}
+          bookings={bookings.filter((booking) => booking.incoming)} onEdit={canList ? (asset) => setEditor({ mode: "asset", asset }) : undefined} />}
         {tab === "browse" && <div className="app-surface mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <Label name="Asset type"><select className={field} value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All asset types</option>
@@ -231,8 +262,8 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
           </article>)}
           {!visibleAssets.length && <p className="text-sm text-muted-foreground">No assets found.</p>}
         </div>}
-        {linkedBooking && <button className={button + " mb-4"} onClick={() => changeTab(tab)}>
-          {tab === "incoming" ? "View all incoming requests" : tab === "requests" ? "View my requests" : "View my rentals"}
+        {linkedBooking && <button className={button + " mb-4"} onClick={() => changeTab(params.get("view") === "calendar" ? "calendar" : tab)}>
+          {params.get("view") === "calendar" ? "Back to rental calendar" : tab === "incoming" ? "View all incoming requests" : tab === "requests" ? "View my requests" : "View my rentals"}
         </button>}
         {rentalTab && tableView && !linkedBooking && <RentalTable title="Asset rentals" columns={["Asset and reference", "Organisation", "Worksite", "Rental period (SAST)", "Total", "Status", "Actions"]} empty="No rentals to show.">
           {visibleBookings.map((booking) => <tr key={booking.id}>
@@ -240,7 +271,9 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
             <td>{booking.incoming ? booking.renterName : booking.supplierName}</td><td className="max-w-52">{booking.site.label}</td>
             <td className="whitespace-nowrap">{date.format(new Date(booking.start))}<br />{date.format(new Date(booking.end))}</td>
             <td className="whitespace-nowrap font-semibold">{money.format(Number(booking.total))} {booking.terms.vat}. VAT</td>
-            <td className="capitalize">{statusText(booking.status)}</td>
+            <td><p className="capitalize">{statusText(booking.status)}</p>
+              {booking.invoice && <p className="text-xs capitalize text-muted-foreground">{statusText(booking.invoice.status)}</p>}
+            </td>
             <td><Link className={button + " inline-flex items-center whitespace-nowrap"} to={`?booking=${encodeURIComponent(booking.id)}&layout=table`}>View rental</Link></td>
           </tr>)}
         </RentalTable>}
@@ -269,6 +302,134 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
       </>}
     </main>
   </AppShell>;
+}
+
+const calendarMonth = new Intl.DateTimeFormat("en-ZA", { month: "long", year: "numeric", timeZone: "UTC" });
+const calendarDay = new Intl.DateTimeFormat("en-ZA", { dateStyle: "full", timeZone: "UTC" });
+
+function RentalCalendar({ assets, bookings, onEdit }: {
+  assets: Asset[]; bookings: Booking[]; onEdit: ((asset: Asset) => void) | undefined;
+}) {
+  const today = dateInput(new Date().toISOString()).slice(0, 10);
+  const [month, setMonth] = useState(() => new Date(today.slice(0, 7) + "-01T00:00:00Z"));
+  const [selection, setSelection] = useState(today);
+  const [assetId, setAssetId] = useState("");
+  const selectedAsset = assets.find((asset) => asset.id === assetId);
+  const calendarAssets = selectedAsset ? [selectedAsset] : assets;
+  const entries = [
+    ...bookings.filter((rental) => (!selectedAsset || rental.assetId === selectedAsset.id)
+      && ["REQUESTED", "CONFIRMED", "IN_HIRE", "COMPLETED"].includes(rental.status)).map((rental) => ({
+      id: rental.id, start: rental.start, end: rental.end, name: rental.assetName,
+      kind: rental.status === "REQUESTED" ? "Pending" : rental.status === "COMPLETED" ? "Completed" : "Reserved",
+      href: `?booking=${encodeURIComponent(rental.id)}&view=calendar`,
+    })),
+    ...calendarAssets.flatMap((asset) => asset.blockedPeriods.map((period, index) => ({
+      ...period, id: `${asset.id}-block-${index}`, name: `${asset.make} ${asset.model}`, kind: "Blocked", href: "",
+    }))),
+  ];
+  const entriesFor = (day: string) => {
+    const start = iso(day + "T00:00");
+    const end = new Date(Date.parse(start) + 86_400_000).toISOString();
+    return entries.filter((entry) => overlap(entry, { start, end }));
+  };
+  const offset = (month.getUTCDay() + 6) % 7;
+  const daysInMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+  const selectedEntries = entriesFor(selection);
+  const navigateMonth = (delta: number) => {
+    const next = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + delta, 1));
+    setMonth(next);
+    setSelection(next.toISOString().slice(0, 10));
+  };
+  const color: Record<string, string> = {
+    Pending: "bg-signal/20 text-foreground", Reserved: "bg-primary/15 text-foreground",
+    Completed: "bg-muted text-muted-foreground", Blocked: "bg-danger/10 text-foreground",
+  };
+  return <section className="app-surface space-y-4 p-4 sm:p-6">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <button className={button} aria-label="Previous month" onClick={() => navigateMonth(-1)}><ChevronLeft className="size-4" /></button>
+        <h2 className="min-w-32 text-center font-bold">{calendarMonth.format(month)}</h2>
+        <button className={button} aria-label="Next month" onClick={() => navigateMonth(1)}><ChevronRight className="size-4" /></button>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Label name="Filter assets"><select className={field} value={assetId} onChange={(event) => setAssetId(event.target.value)}>
+          <option value="">All my assets</option>
+          {assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.make} {asset.model}</option>)}
+        </select></Label>
+        {selectedAsset && onEdit && <button className={button} onClick={() => onEdit(selectedAsset)}>Edit availability</button>}
+      </div>
+    </div>
+    <ul aria-label="Calendar legend" className="flex flex-wrap gap-2 text-xs">
+      {Object.entries(color).map(([kind, classes]) => <li key={kind} className={`rounded px-2 py-1 ${classes}`}>{kind}</li>)}
+    </ul>
+    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-border bg-border">
+      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) =>
+        <span key={day} className="bg-muted py-2 text-center text-xs font-semibold">{day}</span>)}
+      {Array.from({ length: Math.ceil((offset + daysInMonth) / 7) * 7 }, (_, index) => {
+        const number = index - offset + 1;
+        if (number < 1 || number > daysInMonth) return <span key={index} className="bg-muted" />;
+        const day = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), number));
+        const value = day.toISOString().slice(0, 10);
+        const items = entriesFor(value);
+        const kinds = [...new Set(items.map((item) => item.kind))];
+        return <button key={index} type="button" aria-pressed={value === selection}
+          aria-label={`${calendarDay.format(day)}, ${items.length} calendar entries`}
+          onClick={() => setSelection(value)}
+          className="flex min-h-14 flex-col items-center gap-1 bg-card p-1 text-xs font-semibold aria-pressed:bg-signal/15 sm:min-h-20 sm:items-start sm:p-2">
+          {number}
+          <span className="flex flex-wrap justify-center gap-1 sm:justify-start">{kinds.map((kind) =>
+            <span key={kind} className={`rounded px-1 text-[10px] ${color[kind]}`}>
+              <span className="sm:hidden">{kind[0]}</span><span className="hidden sm:inline">{kind}</span>
+            </span>)}</span>
+        </button>;
+      })}
+    </div>
+    <div>
+      <h3 className="mb-2 text-sm font-bold">{calendarDay.format(new Date(selection + "T00:00:00Z"))}</h3>
+      {!selectedEntries.length && <p className="text-sm text-muted-foreground">No rental requests, reservations or blocked periods for this day.</p>}
+      <ul className="divide-y divide-border">
+        {selectedEntries.map((entry) => <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+          <div><strong>{entry.name}</strong><p className="text-xs text-muted-foreground">{date.format(new Date(entry.start))} to {date.format(new Date(entry.end))}</p></div>
+          <span className={`rounded px-2 py-1 text-xs font-semibold ${color[entry.kind]}`}>{entry.kind}</span>
+          {entry.href && <Link className="text-sm font-semibold underline" to={entry.href}>View rental</Link>}
+        </li>)}
+      </ul>
+    </div>
+  </section>;
+}
+
+const menuItem = "flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-[highlighted]:bg-muted";
+
+function ActionsMenu({ label, children }: { label: string; children: ReactNode }) {
+  return <Dropdown.Root>
+    <Dropdown.Trigger className={button + " inline-grid min-w-10 place-items-center p-0"} aria-label={label}>
+      <MoreHorizontal className="size-5" aria-hidden />
+    </Dropdown.Trigger>
+    <Dropdown.Portal>
+      <Dropdown.Content align="end" sideOffset={6} className="z-[100] min-w-44 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg">
+        {children}
+      </Dropdown.Content>
+    </Dropdown.Portal>
+  </Dropdown.Root>;
+}
+
+function UnpublishAsset({ asset, done }: { asset: Asset; done: () => Promise<void> }) {
+  const submission = useSubmission();
+  return <form className="grid gap-4" onSubmit={(event) => void submission.submit(event, async () => {
+    const { id, type, make, model, location, availability, blockedPeriods, photos, specifications,
+      ratedPayloadTonnes, transportWeightKg, dimensions, rate, unit, shiftHours,
+      minimumUnits, vat, operatorIncluded, fuelIncluded } = asset;
+    await trpc.mutation("assetHire.save", {
+      id, type, make, model, location, availability, blockedPeriods, photos, specifications,
+      ratedPayloadTonnes, transportWeightKg, dimensions, rate, unit, shiftHours,
+      minimumUnits, vat, operatorIncluded, fuelIncluded, published: false,
+    });
+    await done();
+  })}>
+    <h2 className="text-xl font-bold">Remove {asset.make} {asset.model} from the catalogue?</h2>
+    <p className="text-sm text-muted-foreground">This pauses the listing. Existing rentals stay on record. Publish the asset again to accept new requests or confirm pending ones.</p>
+    <Submit pending={submission.pending} error={submission.error}>Remove from catalogue</Submit>
+  </form>;
 }
 
 function RentalTable({ title, columns, empty, children }: {
@@ -500,6 +661,9 @@ function BookingCard({ booking, canManage, canMove, onEdit, done }: {
 
       <p className="text-xs opacity-80">{booking.terms.operatorIncluded ? "Operator included" : "Operator excluded"} · {booking.terms.fuelIncluded ? "Fuel included" : "Fuel excluded"}</p>
       {booking.notes && <div><p className={label}>Site instructions</p><p className="mt-1 whitespace-pre-wrap break-words text-sm">{booking.notes}</p></div>}
+      {["CONFIRMED", "IN_HIRE", "COMPLETED"].includes(booking.status) &&
+        <HandoverSummary booking={booking} canManage={canManage} onEdit={onEdit} />}
+      {booking.status === "COMPLETED" && <RentalBilling booking={booking} canIssue={booking.incoming && canManage} done={done} />}
       <details className="group border-t border-paper-foreground/15 pt-3 text-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between font-semibold">
           Rental history <ChevronDown className="size-4 group-open:rotate-180" aria-hidden />
@@ -529,6 +693,166 @@ function BookingCard({ booking, canManage, canMove, onEdit, done }: {
         <button className={button} onClick={() => onEdit({ mode: "move", booking })}>Arrange transport</button>}
     </div>}
   </article>;
+}
+
+function RentalBilling({ booking, canIssue, done }: {
+  booking: Booking; canIssue: boolean; done: () => Promise<void>;
+}) {
+  const invoice = booking.invoice;
+  const submission = useSubmission();
+  const [recording, setRecording] = useState(false);
+  const amount = (value: string) => money.format(Number(value));
+
+  if (!invoice) return <section className="border-t border-paper-foreground/15 pt-3">
+    <h3 className="text-sm font-bold">Rental invoice</h3>
+    {canIssue ? <form className="mt-2" onSubmit={(event) => void submission.submit(event, async () => {
+      await trpc.mutation("assetHire.issueInvoice", { id: booking.id });
+      await done();
+    })}><Submit pending={submission.pending} error={submission.error}>Issue rental invoice</Submit></form>
+      : <p className="mt-1 text-sm opacity-75">Awaiting invoice from the asset owner.</p>}
+  </section>;
+
+  return <section className="space-y-3 rounded-md border border-paper-foreground/20 p-3 sm:p-4">
+    <header className="flex flex-wrap items-start justify-between gap-2">
+      <div className="min-w-0">
+        <h3 className="text-lg font-extrabold uppercase italic">Rental invoice</h3>
+        <p className="break-all font-mono text-xs">{invoice.number}</p>
+        <p className="mt-1 text-xs opacity-75">Issued {date.format(new Date(invoice.issuedAt))}</p>
+      </div>
+      <span className="rounded bg-signal/20 px-2 py-1 text-xs font-bold capitalize">{statusText(invoice.status)}</span>
+    </header>
+    <div className="border-y border-dashed border-paper-foreground/20 py-2 text-sm">
+      <p className="font-semibold">{booking.assetName}</p>
+      <p>{booking.units} × {amount(booking.terms.rate)} per {booking.terms.unit.toLowerCase()} · {booking.terms.vat}. VAT</p>
+    </div>
+    <dl className="space-y-1 text-sm">
+      {[
+        ["Subtotal", invoice.subtotal],
+        [`VAT (${Number(invoice.vatRate) * 100}%)`, invoice.vat],
+        ["Invoice total", invoice.total],
+        ["Payments recorded", invoice.paid],
+      ].map(([name, value]) => <div key={name} className="flex justify-between gap-2">
+        <dt>{name}</dt><dd className="font-mono tabular-nums">{amount(value!)}</dd>
+      </div>)}
+      <div className="mt-2 flex flex-wrap justify-between gap-2 rounded bg-signal/15 px-2 py-2 font-bold">
+        <dt>Outstanding balance</dt><dd className="font-mono tabular-nums">{amount(invoice.balance)}</dd>
+      </div>
+    </dl>
+    {booking.moves && <div className="text-xs opacity-80">
+      <p className="font-semibold">Separately billed transport</p>
+      {Object.entries(booking.moves).map(([leg, reference]) => <p key={leg} className="capitalize">{leg.toLowerCase()} · {reference}</p>)}
+    </div>}
+    {invoice.payments.length > 0 && <details className="text-sm">
+      <summary className="cursor-pointer font-semibold">Payment history</summary>
+      <ul className="mt-2 divide-y divide-paper-foreground/15">
+        {invoice.payments.map((payment) => <li key={payment.id} className="flex flex-wrap justify-between gap-2 py-2">
+          <div><p className="break-all font-semibold">{payment.reference}</p><p className="text-xs opacity-75">{date.format(new Date(payment.recordedAt))}</p></div>
+          <strong className="font-mono">{amount(payment.amount)}</strong>
+        </li>)}
+      </ul>
+    </details>}
+    {canIssue && invoice.status !== "PAID" && (recording
+      ? <form className="grid gap-3" onSubmit={(event) => void submission.submit(event, async (form) => {
+        await trpc.mutation("assetHire.recordPayment", {
+          id: booking.id, amount: read(form, "amount"), reference: read(form, "reference"),
+        });
+        setRecording(false);
+        await done();
+      })}>
+        <Label name="Amount received (ZAR)"><input className={field + " text-foreground"} name="amount" type="number" min="0.01" max={invoice.balance} step="0.01" required /></Label>
+        <Label name="Payment reference"><input className={field + " text-foreground"} name="reference" maxLength={120} required /></Label>
+        <div className="flex flex-wrap gap-2">
+          <Submit pending={submission.pending} error={submission.error}>Save payment</Submit>
+          <button type="button" className={button} disabled={submission.pending} onClick={() => setRecording(false)}>Cancel</button>
+        </div>
+      </form>
+      : <button type="button" className={button} onClick={() => setRecording(true)}>Record payment received</button>)}
+  </section>;
+}
+
+const handoverChecks = {
+  assetIdentity: "Verified the asset and its serial or fleet number",
+  conditionInspected: "Inspected the asset for damage",
+  attachmentsChecked: "Checked the included attachments and accessories",
+};
+
+function HandoverSummary({ booking, canManage, onEdit }: {
+  booking: Booking; canManage: boolean; onEdit: (editor: Editor) => void;
+}) {
+  const ownSide = booking.incoming ? "OWNER" : "RENTER";
+  return <section className="border-t border-paper-foreground/15 pt-3">
+    <h3 className="mb-2 text-sm font-bold">Delivery and return</h3>
+    {(["DELIVERY", "RETURN"] as const).map((stage) => {
+      const reports = booking.handovers?.[stage];
+      const canRecord = canManage && !reports?.[ownSide] && (stage === "DELIVERY" || booking.status !== "CONFIRMED");
+      return <div key={stage} className="border-b border-paper-foreground/15 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <strong className="text-sm capitalize">{stage.toLowerCase()}</strong>
+          {canRecord && <button className={button} onClick={() => onEdit({ mode: "handover", booking, stage })}>Record {stage.toLowerCase()}</button>}
+        </div>
+        {(["OWNER", "RENTER"] as const).map((side) => {
+          const report = reports?.[side];
+          return <div key={side} className="mt-2 text-xs">
+            <strong>{side === "OWNER" ? "Asset owner" : "Renter"}</strong>
+            {report ? <>
+              <p>{report.condition === "GOOD" ? "Good condition" : "Damage recorded"} · {date.format(new Date(report.recordedAt))}{report.meterHours != null && ` · ${report.meterHours} meter hours`}</p>
+              {report.notes && <p className="whitespace-pre-wrap break-words">{report.notes}</p>}
+              <div className="mt-1 flex flex-wrap gap-2">{report.photos.map((photo, index) => <a key={photo} href={photo} target="_blank" rel="noreferrer">
+                <img src={photo} alt={`${stage.toLowerCase()} condition photo ${index + 1}`} loading="lazy" className="size-14 rounded object-cover" />
+              </a>)}</div>
+            </> : <p className="opacity-75">Awaiting record</p>}
+          </div>;
+        })}
+      </div>;
+    })}
+  </section>;
+}
+
+function HandoverForm({ booking, stage, done }: { booking: Booking; stage: HandoverStage; done: () => Promise<void> }) {
+  const submission = useSubmission();
+  const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
+  return <form className="grid gap-4" onSubmit={(event) => void submission.submit(event, async (form) => {
+    const files = form.getAll("photos").filter((value): value is File => value instanceof File && value.size > 0);
+    if (!files.length || files.length > 6) throw new Error("Choose between one and six condition photos.");
+    const notes = read(form, "notes");
+    const condition = read(form, "condition");
+    if (condition === "DAMAGE_FOUND" && !notes) throw new Error("Describe the damage.");
+    const uploaded = [...photos];
+    const urls = [];
+    for (const file of files) {
+      const match = uploaded.find((item) => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
+      if (match) {
+        urls.push(match.url);
+        continue;
+      }
+      const { url } = await uploadFile(file, "ASSET_HANDOVER_PHOTO");
+      uploaded.push({ file, url });
+      urls.push(url);
+      setPhotos([...uploaded]);
+    }
+    await trpc.mutation("assetHire.handover", {
+      id: booking.id, stage, condition, notes, photos: urls,
+      checks: Object.fromEntries(Object.keys(handoverChecks).map((key) => [key, form.has(key)])),
+      meterHours: read(form, "meterHours") ? quantity(form, "meterHours") : undefined,
+    });
+    await done();
+  })}>
+    <h2 className="text-xl font-bold">Record {stage.toLowerCase()} for {booking.assetName}</h2>
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 font-semibold">Handover checklist</legend>
+      {Object.entries(handoverChecks).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name={key} required /> {label}
+      </label>)}
+    </fieldset>
+    <Label name="Condition"><select name="condition" className={field} required>
+      <option value="">Select condition</option><option value="GOOD">Good condition</option><option value="DAMAGE_FOUND">Damage found</option>
+    </select></Label>
+    <Label name="Meter hours (optional)"><input name="meterHours" className={field} type="number" min={0} max={1000000} step="0.1" /></Label>
+    <Label name="Condition notes"><textarea name="notes" className={field} maxLength={2000} /></Label>
+    <Label name="Condition photos (one to six)"><input name="photos" type="file" accept="image/*" multiple required /></Label>
+    <p className="text-sm text-muted-foreground">The asset owner and renter can view this record after you submit it.</p>
+    <Submit pending={submission.pending} error={submission.error}>Save handover</Submit>
+  </form>;
 }
 
 function ActionForm({ booking, action, done }: {
