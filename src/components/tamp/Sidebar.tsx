@@ -55,7 +55,7 @@ type NavItem = {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   FREIGHT_OWNER: [
     { to: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "loads.read" },
-    { to: "/asset-hire", label: "Asset Hire", icon: Forklift, permission: "loads.read" },
+    { to: "/asset-hire", label: "Asset Rental", icon: Forklift, permission: "loads.read" },
     {
       to: "/owner/shipments",
       label: "Shipments",
@@ -103,7 +103,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   TRANSPORTER: [
     { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "trucks.read" },
-    { to: "/asset-hire", label: "Asset Hire", icon: Forklift, permission: "loads.read" },
+    { to: "/asset-hire", label: "Asset Rental", icon: Forklift, permission: "loads.read" },
     {
       to: "/transporter/fleet",
       label: "Fleet Management",

@@ -936,7 +936,7 @@ function Register() {
                   : "Drivers must supply ID, licence and a valid PrDP for a background check."
                 : userType === "CARRIER"
                   ? biz.assetHireOnly
-                    ? "Upload your business verification documents for Asset Hire."
+                    ? "Upload your business verification documents for Asset Rental."
                     : "Transporters must also supply an operating licence, roadworthy certificate and insurance certificate."
                   : "Brokers must also supply mandate and commission documents."}{" "}
               Files are securely stored and are only available to your account and authorised
