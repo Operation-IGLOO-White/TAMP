@@ -14,6 +14,7 @@ import {
   Users,
   Wrench,
   Forklift,
+  BusFront,
   WalletCards,
   Send,
   MessageCircle,
@@ -55,6 +56,7 @@ type NavItem = {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   FREIGHT_OWNER: [
     { to: "/owner", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "loads.read" },
+    { to: "/passenger-charter", label: "Passenger Charter", icon: BusFront, permission: "loads.read" },
     { to: "/asset-hire", label: "Asset Rental", icon: Forklift, permission: "loads.read" },
     {
       to: "/owner/shipments",
@@ -103,6 +105,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   TRANSPORTER: [
     { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "trucks.read" },
+    { to: "/passenger-charter", label: "Passenger Charter", icon: BusFront, permission: "loads.read" },
     { to: "/asset-hire", label: "Asset Rental", icon: Forklift, permission: "loads.read" },
     {
       to: "/transporter/fleet",
@@ -110,6 +113,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
       icon: Truck,
       children: [
         { to: "/transporter/fleet", label: "All Vehicles", icon: Truck, exact: true, permission: "trucks.read" },
+        { to: "/transporter/passenger-fleet", label: "Buses & Minibuses", icon: BusFront, permission: "trucks.read" },
         { to: "/transporter/fleet?status=active", label: "Active Vehicles", icon: Activity, permission: "trucks.read" },
         { to: "/transporter/fleet-ops?tab=availability", label: "Availability Calendar", icon: CalendarDays, permission: "trucks.manage" },
         { to: "/transporter/fleet-ops?tab=compliance", label: "Compliance", icon: ShieldCheck, permission: "trucks.read" },
@@ -156,6 +160,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
         { to: "/admin/verification?queue=trucks", label: "Truck Reviews", icon: Truck, permission: "trucks.read" },
         { to: "/admin/verification?queue=drivers", label: "Driver Reviews", icon: UserRoundCog, permission: "users.verify" },
         { to: "/admin/verification?queue=documents", label: "Compliance Documents", icon: ShieldCheck, permission: "users.verify" },
+        { to: "/admin/passenger-fleet", label: "Passenger Vehicles", icon: BusFront, permission: "platform.admin" },
         { to: "/admin/trucks", label: "All Trucks", icon: Truck, permission: "trucks.read" },
       ],
     },

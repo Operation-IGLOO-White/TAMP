@@ -16,10 +16,12 @@ export function AddressInput({
   value,
   onSelect,
   placeholder,
+  onTextEdit,
 }: {
   value: Place | null;
   onSelect: (place: Place) => void;
   placeholder?: string;
+  onTextEdit?: () => void;
 }) {
   const [query, setQuery] = useState(value?.label ?? "");
   const [results, setResults] = useState<Prediction[]>([]);
@@ -159,7 +161,10 @@ export function AddressInput({
         <MapPin className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onTextEdit?.();
+          }}
           onFocus={() => setOpen(true)}
           onKeyDown={(event) => {
             if (!open || results.length === 0) return;

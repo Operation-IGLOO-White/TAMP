@@ -51,6 +51,7 @@ const Page45 = lazy(() => import("@/pages/admin/matching"));
 const Page46 = lazy(() => import("@/pages/driver/dashboard"));
 const Page47 = lazy(() => import("@/pages/owner/directory"));
 const Page48 = lazy(() => import("@/pages/owner/insights"));
+const PassengerCharter = lazy(() => import("@/pages/passenger-charter"));
 const AssetHire = lazy(() => import("@/pages/asset-hire"));
 const Page49 = lazy(() => import("@/pages/owner/offers"));
 
@@ -71,6 +72,9 @@ export default function App() {
               path="/asset-hire"
               element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER"]} permission="loads.read"><AssetHire /></RequireRole>}
             />
+            <Route path="/passenger-charter" element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER"]} permission="loads.read"><PassengerCharter mode="catalogue" /></RequireRole>} />
+            <Route path="/transporter/passenger-fleet" element={<RequireRole role="TRANSPORTER" permission="trucks.read"><PassengerCharter mode="fleet" /></RequireRole>} />
+            <Route path="/admin/passenger-fleet" element={<RequireRole role="ADMIN" permission="platform.admin"><PassengerCharter mode="review" /></RequireRole>} />
             <Route path="/403" element={<Page0 />} />
             <Route
               path="/admin/oversight"
