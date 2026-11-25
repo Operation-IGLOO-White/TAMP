@@ -433,3 +433,68 @@
 .dark .leaflet-container {
   background: #0f1115;
 }
+
+.login-standalone {
+  color-scheme: light;
+}
+
+.login-standalone header {
+  max-width: 44rem;
+  padding-top: max(1.5rem, env(safe-area-inset-top));
+}
+
+.login-standalone .login-layout {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 44rem;
+  min-height: calc(100svh - 7rem);
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+}
+
+.login-standalone .login-form-panel {
+  justify-content: center;
+}
+
+.login-standalone .login-card,
+.login-standalone .login-card:hover {
+  background: #fff;
+  border-color: #e4e5e8;
+  box-shadow: 0 12px 36px rgb(16 24 40 / 0.08);
+  backdrop-filter: none;
+  transform: none;
+}
+
+.login-standalone .login-input {
+  background: #f7f8f9;
+  border-color: #d8dbe0;
+  color: #16181d;
+}
+
+.login-standalone .login-input:focus {
+  background: #fff;
+  border-color: #b78200;
+}
+
+.login-standalone .login-input::placeholder {
+  color: #626977;
+}
+
+.login-standalone .login-quiet {
+  color: #515966;
+}
+
+.login-standalone .login-link {
+  color: #765400;
+}
+
+.login-standalone .login-link:hover {
+  color: #493400;
+  text-decoration: underline;
+}
+
+.login-standalone .login-notice {
+  color: #493400;
+}
+
+.login-standalone .login-error {
+  color: #a01524;
+}

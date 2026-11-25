@@ -30,6 +30,8 @@ const OAUTH_ERRORS: Record<string, string> = {
 function Landing() {
   const { loads, trucks, matches, login, authParty, authReady } = useTamp();
   const navigate = useNavigate();
+  const standalone = window.matchMedia("(display-mode: standalone)").matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaEmail, setMfaEmail] = useState("");
@@ -109,8 +111,8 @@ function Landing() {
   };
 
   return (
-    <main className="login-page relative min-h-[100svh] overflow-hidden bg-[#071018] text-white">
-      <div className="login-backdrop absolute inset-0" aria-hidden>
+    <main className={`login-page relative min-h-[100svh] overflow-hidden ${standalone ? "login-standalone bg-white text-[#16181d]" : "bg-[#071018] text-white"}`}>
+      {!standalone && <div className="login-backdrop absolute inset-0" aria-hidden>
         <img
           src="/tamp-login-hero.webp"
           alt=""
@@ -120,23 +122,23 @@ function Landing() {
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,9,14,.88)_0%,rgba(3,9,14,.52)_48%,rgba(3,9,14,.72)_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,8,13,.28)_0%,rgba(2,8,13,.08)_45%,rgba(2,8,13,.86)_100%)]" />
         <div className="login-ambient absolute -right-32 top-1/4 size-[34rem] rounded-full bg-signal/10 blur-[120px]" />
-      </div>
+      </div>}
 
       {/* Redirect overlay — a smooth, animated hand-off to the dashboard that
           also covers the first-navigation compile so it never looks stuck. */}
       {redirecting && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#071018]/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <BrandLogo className="h-14 animate-in zoom-in-50 duration-300" priority darkSurface />
-          <div className="flex items-center gap-2 text-sm font-semibold text-white/65">
+        <div className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 backdrop-blur-xl animate-in fade-in duration-300 ${standalone ? "bg-white/95" : "bg-[#071018]/90"}`}>
+          <BrandLogo className="h-14 animate-in zoom-in-50 duration-300" priority darkSurface={!standalone} />
+          <div className="login-quiet flex items-center gap-2 text-sm font-semibold text-white/65">
             <Loader2 className="size-4 animate-spin" /> Signing you in…
           </div>
         </div>
       )}
 
       <header className="login-reveal relative z-20 mx-auto flex w-full max-w-[1480px] items-center justify-between px-6 py-6 sm:px-10 lg:px-14 lg:py-8">
-        <BrandLogo className="h-11 sm:h-13" priority darkSurface />
+        <BrandLogo className="h-11 sm:h-13" priority darkSurface={!standalone} />
         <div className="flex items-center gap-4">
-          <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
+          {!standalone && <div className="hidden items-center gap-5 text-[10px] font-bold uppercase tracking-[0.35em] text-white/60 sm:flex">
             <span>Track</span>
             <i className="h-3 w-px bg-white/25" />
             <span>Manage</span>
@@ -145,13 +147,13 @@ function Landing() {
             <i className="h-3 w-px bg-white/25" />
             <span>Perform</span>
             <i className="ml-1 h-px w-10 bg-signal" />
-          </div>
-          <AppVersion dark />
+          </div>}
+          <AppVersion dark={!standalone} />
         </div>
       </header>
 
-      <div className="relative z-10 mx-auto grid min-h-[calc(100svh-110px)] w-full max-w-[1480px] items-center gap-10 px-6 pb-10 sm:px-10 lg:grid-cols-[1.1fr_.9fr] lg:px-14 lg:pb-16">
-        <section className="login-copy max-w-2xl self-center pb-4 pt-6 lg:pb-24">
+      <div className="login-layout relative z-10 mx-auto grid min-h-[calc(100svh-110px)] w-full max-w-[1480px] items-center gap-10 px-6 pb-10 sm:px-10 lg:grid-cols-[1.1fr_.9fr] lg:px-14 lg:pb-16">
+        {!standalone && <section className="login-copy max-w-2xl self-center pb-4 pt-6 lg:pb-24">
           <div className="login-reveal login-delay-1 mb-6 flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.42em] text-white/70 sm:text-xs">
             Cargo transportation <span className="h-px w-12 bg-white/55" />
           </div>
@@ -184,9 +186,9 @@ function Landing() {
             <Feature icon={Activity} label="Real-time visibility" />
             <Feature icon={ShieldCheck} label="Trusted operations" />
           </div>
-        </section>
+        </section>}
 
-        <section className="login-reveal login-delay-2 flex items-center justify-center lg:justify-end">
+        <section className="login-form-panel login-reveal login-delay-2 flex items-center justify-center lg:justify-end">
           <form
             onSubmit={mfaEmail ? confirmMfa : signIn}
             className="login-card w-full max-w-[510px] rounded-[28px] border border-white/20 p-6 shadow-2xl sm:p-9 lg:p-11"
@@ -195,7 +197,7 @@ function Landing() {
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
                 {mfaEmail ? "Security check" : "Sign in"}
               </h2>
-              <p className="mt-2 text-sm text-white/58">
+              <p className="mt-2 login-quiet text-sm text-white/58">
                 {mfaEmail
                   ? `Enter the six-digit code sent to ${mfaEmail}.`
                   : "Welcome back. Enter your TAMP account details."}
@@ -203,18 +205,18 @@ function Landing() {
             </div>
 
             {notice && (
-              <div className="mb-5 flex items-center gap-2 rounded-xl border border-signal/30 bg-signal/10 px-3 py-2.5 text-xs font-medium text-white">
+              <div className="mb-5 flex items-center gap-2 rounded-xl border border-signal/30 bg-signal/10 px-3 py-2.5 text-xs login-notice font-medium text-white">
                 <Clock className="size-4 shrink-0 text-signal" /> {notice}
               </div>
             )}
 
             <div className="space-y-5">
               {!mfaEmail && <label className="block">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] login-quiet text-white/68">
                   Email
                 </span>
                 <span className="group relative block">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-signal" />
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 login-quiet text-white/40 transition-colors group-focus-within:text-signal" />
                   <input
                     type="email"
                     value={email}
@@ -227,17 +229,17 @@ function Landing() {
                 </span>
               </label>}
               {!mfaEmail && <label className="block">
-                <span className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
+                <span className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] login-quiet text-white/68">
                   Password
                   <Link
                     to="/forgot-password"
-                    className="normal-case tracking-normal text-signal transition-colors hover:text-white"
+                    className="normal-case tracking-normal text-signal login-link transition-colors hover:text-white"
                   >
                     Forgot password?
                   </Link>
                 </span>
                 <span className="group relative block">
-                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-signal" />
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 login-quiet text-white/40 transition-colors group-focus-within:text-signal" />
                   <PasswordInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -251,7 +253,7 @@ function Landing() {
 
               {mfaEmail && (
                 <label className="block">
-                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/68">
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] login-quiet text-white/68">
                     Security code
                   </span>
                   <input
@@ -271,7 +273,7 @@ function Landing() {
               {error && (
                 <p
                   role="alert"
-                  className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-center text-xs font-medium text-red-300"
+                  className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-center text-xs font-medium login-error text-red-300"
                 >
                   {error}
                 </p>
@@ -290,11 +292,11 @@ function Landing() {
               </button>
             </div>
 
-            <p className="mt-6 text-center text-xs text-white/52">
+            <p className="mt-6 text-center text-xs login-quiet text-white/52">
               New to TAMP?{" "}
               <Link
                 to="/register"
-                className="font-semibold text-signal transition-colors hover:text-white"
+                className="font-semibold text-signal login-link transition-colors hover:text-white"
               >
                 Register an account
               </Link>
@@ -309,7 +311,7 @@ function Landing() {
 }
 
 const inputCls =
-  "w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 py-3.5 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/28 hover:border-white/25 focus:border-signal/70 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(235,170,0,.08)]";
+  "login-input w-full rounded-xl border border-white/15 bg-white/[0.045] px-4 py-3.5 text-sm text-white outline-none transition-all duration-300 placeholder:text-white/28 hover:border-white/25 focus:border-signal/70 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(235,170,0,.08)]";
 
 function Feature({ icon: Icon, label }: { icon: typeof Route; label: string }) {
   return (
