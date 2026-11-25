@@ -32,13 +32,12 @@ export function toClientTone(tone: string): Notification["tone"] {
   return "info";
 }
 
-// Where a notification links to. The only per-item detail page is the owner's
-// load view; every other role deep-links to its most relevant section.
+// Notification destinations shared by the bell and the notifications page.
 export type NotifTarget =
   | { kind: "load"; loadId: string }
   | {
       kind: "route";
-      to: "/asset-hire" | "/owner/board" | "/transporter/engagements" | "/driver" | "/admin/oversight";
+      to: `/asset-hire?booking=${string}` | "/owner/board" | "/transporter/engagements" | "/driver" | "/admin/oversight";
     };
 
 function resolveLoadId(
@@ -70,7 +69,9 @@ export function notificationTarget(
   n: Pick<Notification, "subjectType" | "subjectId">,
   data: { matches: Match[]; trips: Trip[]; disputes: Dispute[] },
 ): NotifTarget {
-  if (n.subjectType === "ASSET_HIRE") return { kind: "route", to: "/asset-hire" };
+  if (n.subjectType === "ASSET_HIRE") {
+    return { kind: "route", to: `/asset-hire?booking=${encodeURIComponent(n.subjectId)}` };
+  }
   if (role === "FREIGHT_OWNER") {
     const loadId = resolveLoadId(n.subjectType, n.subjectId, data);
     return loadId ? { kind: "load", loadId } : { kind: "route", to: "/owner/board" };

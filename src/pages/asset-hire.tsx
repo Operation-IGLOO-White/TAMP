@@ -81,9 +81,16 @@ function DateTime({ name, fieldName, value, onChange }: {
 }
 
 export default function AssetHire() {
+  const [params] = useSearchParams();
+  const bookingId = params.get("booking");
+  return <AssetHireWorkspace key={bookingId ?? "catalogue"} bookingId={bookingId} />;
+}
+
+const requestStatuses = ["REQUESTED", "DECLINED", "CANCELLED"];
+
+function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
   const { authParty, role, refreshDomain } = useTamp();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("view") ?? "browse";
   const [editor, setEditor] = useState<Editor>();
   const [type, setType] = useState("");
   const [location, setLocation] = useState("");
@@ -96,8 +103,17 @@ export default function AssetHire() {
   const canBook = hasPermission(authParty, role === "TRANSPORTER" ? "matches.manage" : "loads.manage");
   const canMove = hasPermission(authParty, role === "TRANSPORTER" ? "trucks.manage" : "loads.manage");
   const key = ["asset-hire", authParty?.id, authParty?.activeOrganisationId];
-  const query = useQuery({ queryKey: key, queryFn: () => trpc.query<Workspace>("assetHire.list") });
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => trpc.query<Workspace>("assetHire.list"),
+    refetchInterval: 15_000,
+  });
   const { assets = [], bookings = [], moves = [] } = query.data ?? {};
+  const linkedBooking = bookingId ? bookings.find((booking) => booking.id === bookingId) : undefined;
+  const tab = linkedBooking
+    ? linkedBooking.incoming ? "incoming" : requestStatuses.includes(linkedBooking.status) ? "requests" : "hires"
+    : params.get("view") ?? "browse";
+  const pendingIncoming = bookings.filter((booking) => booking.incoming && booking.status === "REQUESTED").length;
   const tabs: [string, string][] = [
     ["browse", "Browse assets"], ["requests", "My requests"], ["hires", "My hires"],
     ["moves", "Asset moves"], ...(role === "TRANSPORTER" ? ([["assets", "My assets"], ["incoming", "Incoming requests"]] as [string, string][]) : []),
@@ -109,9 +125,10 @@ export default function AssetHire() {
       .join(" ").toLowerCase().includes(specification.trim().toLowerCase())
     && available(asset, start, end));
   const visibleBookings = bookings.filter((booking) => {
+    if (bookingId) return booking.id === bookingId;
     if (tab === "incoming") return booking.incoming;
     if (booking.incoming) return false;
-    return tab === "requests" ? ["REQUESTED", "DECLINED", "CANCELLED"].includes(booking.status)
+    return tab === "requests" ? requestStatuses.includes(booking.status)
       : ["CONFIRMED", "IN_HIRE", "COMPLETED"].includes(booking.status);
   });
 
@@ -131,7 +148,12 @@ export default function AssetHire() {
     <main className="p-4 sm:p-6">
       <nav aria-label="Asset Hire" className="mb-5 flex flex-wrap gap-2">
         {tabs.map(([value, label]) => <button key={value} className={tab === value ? primary : button}
-          onClick={() => changeTab(value)} aria-current={tab === value ? "page" : undefined}>{label}</button>)}
+          onClick={() => changeTab(value)} aria-current={tab === value ? "page" : undefined}>
+          {label}
+          {value === "incoming" && pendingIncoming > 0 && <span className="ml-2 rounded-full bg-signal/20 px-2 py-0.5 text-xs">
+            <span className="sr-only">Pending requests </span>{pendingIncoming}
+          </span>}
+        </button>)}
       </nav>
       {editor ? <div className="app-surface max-w-4xl p-4 sm:p-6">
         <button className={button + " mb-4"} onClick={() => setEditor(undefined)}>Cancel</button>
@@ -139,7 +161,11 @@ export default function AssetHire() {
         {editor.mode === "hire" && <HireForm asset={editor.asset} start={start} end={end} done={() => done("Hire request sent", "requests")} />}
         {editor.mode === "move" && <MoveForm asset={editor.asset} booking={editor.booking} done={async () => { await refreshDomain(); await done("Asset transport posted", "moves"); }} />}
         {editor.mode === "reason" && <ActionForm booking={editor.booking} action={editor.action} done={() => done("Booking updated")} />}
-      </div> : query.isPending ? <p>Loading assets…</p> : query.isError ? <p role="alert">{query.error.message}</p> : <>
+      </div> : query.isPending ? <p>Loading assets…</p> : query.isError ? <p role="alert">{query.error.message}</p> : bookingId && !linkedBooking
+        ? <p role="status" className="text-sm text-muted-foreground">
+            This booking is unavailable in your current organisation. Select the organisation that received the notification.
+          </p>
+        : <>
         {tab === "browse" && <div className="app-surface mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <Label name="Asset type"><select className={field} value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All asset types</option>
@@ -177,6 +203,9 @@ export default function AssetHire() {
           </article>)}
           {!visibleAssets.length && <p className="text-sm text-muted-foreground">No assets found.</p>}
         </div>}
+        {linkedBooking && <button className={button + " mb-4"} onClick={() => changeTab(tab)}>
+          {tab === "incoming" ? "View all incoming requests" : tab === "requests" ? "View my requests" : "View my hires"}
+        </button>}
         {["requests", "hires", "incoming"].includes(tab) && <div className="grid gap-4 xl:grid-cols-2">
           {visibleBookings.map((booking) => <BookingCard key={booking.id} booking={booking}
             canManage={booking.incoming ? canList : canBook} canMove={canMove}
