@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BusFront, CalendarDays, MapPin, Plus, Users } from "lucide-react";
+import { BusFront, CalendarDays, MapPin, Pencil, Plus, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { CharterBookings, CharterRequestForm, type CharterListing } from "@/components/tamp/CharterBookings";
@@ -97,6 +97,27 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
   const [search, setSearch] = useState("");
   const [seats, setSeats] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fleetStatus, setFleetStatus] = useState("all");
+  const fleetVehicles = fleet.data?.vehicles ?? [];
+  const isListed = (vehicle: FleetVehicle) => vehicle.published && !vehicle.publicationIssue;
+  const fleetMetrics = [
+    { value: "all", label: "Total fleet", count: fleetVehicles.length, tone: "text-foreground" },
+    { value: "published", label: "Published", count: fleetVehicles.filter(isListed).length, tone: "text-positive" },
+    { value: "pending", label: "Awaiting review", count: fleetVehicles.filter((v) => v.verification === "PENDING").length, tone: "text-signal" },
+    { value: "attention", label: "Needs attention", count: fleetVehicles.filter((v) => v.verification !== "PENDING" && v.publicationIssue).length, tone: "text-destructive" },
+  ];
+  const filteredFleet = fleetVehicles.filter((vehicle) => {
+    const statusMatches = {
+      all: true, published: isListed(vehicle), hidden: !isListed(vehicle),
+      pending: vehicle.verification === "PENDING", verified: vehicle.verification === "VERIFIED",
+      rejected: vehicle.verification === "REJECTED",
+      attention: vehicle.verification !== "PENDING" && Boolean(vehicle.publicationIssue),
+    }[fleetStatus];
+    const haystack = [vehicle.registration, vehicleName(vehicle), types[vehicle.type], vehicle.subtypeLabel,
+      vehicle.location.label, vehicle.serviceArea, vehicle.verification, isListed(vehicle) ? "published" : "hidden"].join(" ").toLowerCase();
+    return statusMatches && (!type || vehicle.type === type) && vehicle.seats >= Number(seats)
+      && search.trim().toLowerCase().split(/\s+/).every((word) => haystack.includes(word));
+  });
   const query = mode === "fleet" ? fleet : mode === "review" ? reviews : catalogue;
   const title = mode === "fleet" ? "Buses & Minibuses" : mode === "review" ? "Passenger Vehicle Reviews" : "Passenger Charter";
   const visible = (catalogue.data ?? []).filter((vehicle) =>
@@ -116,11 +137,15 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
       setBusy(false);
     }
   };
+  function openEditor(vehicle: FleetVehicle | "new") {
+    setEditor(vehicle);
+    requestAnimationFrame(() => document.getElementById("passenger-vehicle-form")?.scrollIntoView({ block: "start" }));
+  }
   return <AppShell>
     <PageHeader title={title} actions={canEdit && !editor
-      ? <button className={primary} onClick={() => setEditor("new")}><Plus className="mr-1 inline size-4" /> Add passenger vehicle</button>
+      ? <button className={primary} onClick={() => openEditor("new")}><Plus className="mr-1 inline size-4" /> Add passenger vehicle</button>
       : undefined} />
-    <div className="mx-auto grid w-full max-w-7xl gap-5 p-4 md:p-6">
+    <div className={`mx-auto grid w-full gap-5 p-4 md:p-6 ${mode === "fleet" ? "" : "max-w-7xl"}`}>
       {mode === "catalogue" && !requestListing && <nav aria-label="Passenger Charter" className="flex flex-wrap gap-2">
         <Link to="/passenger-charter" className={showBookings ? button : primary}>Browse vehicles</Link>
         <Link to="/passenger-charter?view=bookings" className={showBookings ? primary : button}>Charter requests & bookings</Link>
@@ -160,25 +185,79 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
           </VehicleCard>)}
         </div>
         : <p className={card + " p-6 text-sm text-muted-foreground"}>No published passenger vehicles match these filters.</p>)}
-      {mode === "fleet" && fleet.isSuccess && (fleet.data.vehicles.length
-        ? <div className="grid gap-4 md:grid-cols-2">
-          {fleet.data.vehicles.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} supplier={vehicle.registration}>
-            <p className="text-sm font-semibold">{vehicle.verification === "VERIFIED" ? "Verified" : vehicle.verification === "REJECTED" ? "Review rejected" : "Awaiting platform review"}
-              {" · "}{vehicle.published && !vehicle.publicationIssue ? "Published" : "Hidden from catalogue"}</p>
-            {vehicle.reviewReason && <p className="text-sm text-destructive">{vehicle.reviewReason}</p>}
+      {mode === "fleet" && fleet.isSuccess && <>
+        <section aria-label="Passenger fleet overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {fleetMetrics.map((metric) => <button type="button" key={metric.value}
+            aria-pressed={fleetStatus === metric.value}
+            className={`rounded-xl border bg-card p-4 text-left shadow-sm transition-colors hover:border-signal ${fleetStatus === metric.value ? "border-signal/60" : "border-border"}`}
+            onClick={() => setFleetStatus(metric.value)}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{metric.label}</p>
+            <p className={`mt-2 font-mono text-2xl font-black ${metric.tone}`}>{metric.count}</p>
+          </button>)}
+        </section>
+        <section aria-label="Filter passenger vehicles" className="grid gap-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input type="search" aria-label="Search passenger vehicles" className={field + " pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden"}
+              placeholder="Search by registration, make, model or location…" value={search} onChange={(event) => setSearch(event.target.value)} />
+            {search && <button type="button" aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1"
+              onClick={() => setSearch("")}><X className="size-4" /></button>}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="Vehicle type"><select className={field} value={type} onChange={(event) => setType(event.target.value)}>
+              <option value="">All types</option>
+              {Object.entries(types).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select></Field>
+            <Field label="Status"><select className={field} value={fleetStatus} onChange={(event) => setFleetStatus(event.target.value)}>
+              <option value="all">All statuses</option>
+              <option value="published">Published</option>
+              <option value="hidden">Hidden from catalogue</option>
+              <option value="pending">Awaiting review</option>
+              <option value="verified">Verified</option>
+              <option value="rejected">Review rejected</option>
+              <option value="attention">Needs attention</option>
+            </select></Field>
+            <Field label="Minimum passenger seats"><input className={field} type="number" min={1} max={150}
+              value={seats} onChange={(event) => setSeats(event.target.value)} /></Field>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <p role="status">{filteredFleet.length} of {fleetVehicles.length} vehicles</p>
+            {(search || type || seats || fleetStatus !== "all") && <button type="button" className="font-semibold underline"
+              onClick={() => { setSearch(""); setType(""); setSeats(""); setFleetStatus("all"); }}>Clear filters</button>}
+          </div>
+        </section>
+        {filteredFleet.length ? <div className="grid gap-4 xl:grid-cols-2">
+          {filteredFleet.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} supplier={vehicle.registration}
+            fleetHeader={<div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-border bg-muted"><BusFront className="size-5" /></span>
+                <div className="min-w-0 break-words">
+                  <h2 className="font-mono text-sm font-bold">{vehicle.registration}</h2>
+                  <p className="text-sm font-medium">{vehicleName(vehicle)}</p>
+                  <p className="text-xs text-muted-foreground">{[types[vehicle.type], vehicle.subtypeLabel].filter(Boolean).join(" · ")}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5 text-xs font-semibold">
+                <span className={`rounded-full px-2 py-1 ${vehicle.verification === "VERIFIED" ? "bg-positive/10 text-positive"
+                  : vehicle.verification === "REJECTED" ? "bg-destructive/10 text-destructive" : "bg-signal/15 text-foreground"}`}>
+                  {vehicle.verification === "VERIFIED" ? "Verified" : vehicle.verification === "REJECTED" ? "Review rejected" : "Awaiting review"}
+                </span>
+                <span className="rounded-full bg-muted px-2 py-1">{isListed(vehicle) ? "Published" : "Hidden"}</span>
+              </div>
+            </div>}>
+            {vehicle.reviewReason && <p className="break-words text-sm text-destructive">{vehicle.reviewReason}</p>}
             {vehicle.publicationIssue && <p className="text-sm text-muted-foreground">{vehicle.publicationIssue}</p>}
-            {canEdit && <div className="flex flex-wrap gap-2">
-              <button className={button} onClick={() => {
-                setEditor(vehicle);
-                requestAnimationFrame(() => document.getElementById("passenger-vehicle-form")?.scrollIntoView({ block: "start" }));
-              }}>Edit vehicle</button>
+            {canEdit && <div className="mt-1 flex flex-wrap gap-2 border-t border-border pt-3">
+              <button className={button} onClick={() => openEditor(vehicle)}><Pencil className="mr-1 inline size-4" /> Edit vehicle</button>
               <button className={primary} disabled={busy || (!vehicle.published && Boolean(vehicle.publicationIssue))} onClick={() =>
                 void update("passenger.save", saveData(vehicle, !vehicle.published), vehicle.published ? "Vehicle unpublished" : "Vehicle published")
               }>{vehicle.published ? "Unpublish" : "Publish to Passenger Charter"}</button>
             </div>}
           </VehicleCard>)}
-        </div>
-        : !editor && <p className={card + " p-6 text-sm text-muted-foreground"}>No buses or minibuses have been added to this fleet.</p>)}
+        </div> : <p className={card + " p-6 text-sm text-muted-foreground"}>
+          {fleetVehicles.length ? "No passenger vehicles match these filters." : "No buses or minibuses have been added to this fleet."}
+        </p>}
+      </>}
       {mode === "review" && reviews.isSuccess && (reviews.data.length
         ? <div className="grid gap-4 md:grid-cols-2">
           {reviews.data.map(({ vehicle, supplier }) =>
@@ -202,11 +281,11 @@ function saveData(vehicle: FleetVehicle, published: boolean) {
     permitExpiry, photos, documents, driverId, published };
 }
 
-function VehiclePhoto({ vehicle }: { vehicle: Vehicle }) {
+function VehiclePhoto({ vehicle, fleet }: { vehicle: Vehicle; fleet: boolean }) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [illustrationFailed, setIllustrationFailed] = useState(false);
   const photo = vehicle.photos?.[photoIndex];
-  return <div className="relative grid h-44 place-items-center bg-muted">
+  return <div className={`relative grid h-44 place-items-center ${fleet ? "border-b border-border bg-gradient-to-br from-white via-[#f5f5f3] to-[#e8e8e4]" : "bg-muted"}`}>
     {photo ? (
       <img key={photoIndex} className="h-44 w-full object-contain" src={photo} alt={vehicleName(vehicle)}
         loading="lazy" onError={() => setPhotoIndex(photoIndex + 1)} />
@@ -225,12 +304,15 @@ function VehiclePhoto({ vehicle }: { vehicle: Vehicle }) {
   </div>;
 }
 
-function VehicleCard({ vehicle, supplier, children }: { vehicle: Vehicle; supplier: string; children?: ReactNode }) {
+function VehicleCard({ vehicle, supplier, children, fleetHeader }: {
+  vehicle: Vehicle; supplier: string; children?: ReactNode; fleetHeader?: ReactNode;
+}) {
   return <article className={card}>
-    <VehiclePhoto key={JSON.stringify([vehicle.type, vehicle.photos])} vehicle={vehicle} />
+    {fleetHeader}
+    <VehiclePhoto key={JSON.stringify([vehicle.type, vehicle.photos])} vehicle={vehicle} fleet={Boolean(fleetHeader)} />
     <div className="grid gap-2 p-4 text-sm">
-      <div className="text-xs font-semibold text-muted-foreground">{types[vehicle.type]}{vehicle.subtypeLabel && ` · ${vehicle.subtypeLabel}`} · {supplier}</div>
-      <h2 className="text-lg font-semibold">{vehicleName(vehicle)}</h2>
+      {!fleetHeader && <><div className="text-xs font-semibold text-muted-foreground">{types[vehicle.type]}{vehicle.subtypeLabel && ` · ${vehicle.subtypeLabel}`} · {supplier}</div>
+      <h2 className="text-lg font-semibold">{vehicleName(vehicle)}</h2></>}
       <div className="flex flex-wrap items-center gap-2"><Users className="size-4" /> {vehicle.seats} passenger seats
         {vehicle.wheelchairPositions > 0 && <> · {vehicle.wheelchairPositions} wheelchair positions with {vehicle.seats - vehicle.displacedSeats} seats configured</>}
       </div>

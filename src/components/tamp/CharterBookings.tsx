@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarDays, MapPin, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { charterAssignmentLabel, charterStageLabel, charterVehicleComplete, type CharterVehicleProgress } from "@/lib/charter-assignment";
+import { CharterFleetLive } from "@/components/tamp/CharterFleetLive";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { useTamp } from "@/context/TampContext";
 import { computeRoute } from "@/fns/routes";
@@ -29,6 +31,10 @@ type Leg = {
 type FleetVehicle = { id: string; registration: string; make: string; model: string; seats: number; publicationIssue?: string | null };
 type Booking = {
   id: string; version: string; incoming: boolean; allowSplit: boolean; vehicleId: string; vehicleName: string;
+  vehicleProgress?: CharterVehicleProgress[];
+  driverAssignments?: {
+    vehicleId: string; registration: string; driverName: string; status: keyof typeof charterAssignmentLabel; reason?: string;
+  }[];
   groupId?: string; suggestedVehicles?: CharterMatch["vehicles"];
   customer: string; supplier: string; status: "REQUESTED" | "QUOTED" | "CONFIRMED" | "CANCELLED" | "DECLINED";
   outbound: Leg; returnLeg: Leg | null; contactName: string; contactPhone: string; notes: string;
@@ -294,6 +300,7 @@ export function CharterBookings() {
     queryFn: () => trpc.query<Booking[]>("charter.list"),
     refetchInterval: 20_000,
   });
+  const canTrack = hasPermission(authParty, "tracking.read");
   const canQuote = role === "TRANSPORTER" && hasPermission(authParty, "trucks.manage");
   const fleet = useQuery({
     queryKey: ["passenger-fleet", authParty?.id, authParty?.activeOrganisationId],
@@ -338,13 +345,15 @@ export function CharterBookings() {
     {bookings.isError && <div role="alert" className={panel}>Charter requests could not be loaded. <button className={button} onClick={() => void bookings.refetch()}>Retry</button></div>}
     {bookings.isSuccess && !rows.length && <p className={panel + " text-sm text-muted-foreground"}>{bookingId ? "This charter is unavailable in your organisation." : "No charter requests yet."}</p>}
     {customerGroups.map((id) => <CombinedCharter key={id} id={id} bookings={rows.filter((row) => row.groupId === id)}
-      canManage={canRequest} refresh={() => bookings.refetch()} />)}
+      canManage={canRequest} canTrack={canTrack} refresh={() => bookings.refetch()} />)}
     {rows.map((booking) => {
       const canManage = booking.incoming ? canQuote : canRequest;
       const open = ["REQUESTED", "QUOTED"].includes(booking.status);
       const changed = editor?.id === booking.id && editor.version !== booking.version;
       const active = editor?.id === booking.id && !changed ? editor.action : null;
       const future = Date.parse(booking.outbound.pickupAt) > Date.now();
+      const progress = booking.vehicleProgress ?? [];
+      const complete = progress.length > 0 && progress.every(charterVehicleComplete);
       const quoteValid = Boolean(booking.quote && Date.parse(booking.quote.validUntil) > Date.now());
       const choose = (action: "quote" | CharterAction) => {
         setError("");
@@ -355,7 +364,7 @@ export function CharterBookings() {
           <div><p className="text-xs text-muted-foreground">{booking.groupId ? `Combined charter · ${booking.groupId}` : booking.id}</p><h2 className="text-lg font-semibold">{booking.vehicleName}</h2>
             <p className="text-sm text-muted-foreground">{booking.incoming ? booking.customer : booking.supplier}</p></div>
           <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold">
-            {booking.status === "QUOTED" && !quoteValid ? "Quote expired" : booking.status.toLowerCase().replace(/^./, (ch) => ch.toUpperCase())}
+            {booking.status === "CONFIRMED" && complete ? "Completed" : booking.status === "QUOTED" && !quoteValid ? "Quote expired" : booking.status.toLowerCase().replace(/^./, (ch) => ch.toUpperCase())}
           </span>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -377,6 +386,36 @@ export function CharterBookings() {
           </ul>
           {booking.quote.terms && <p className="mt-2 whitespace-pre-wrap">{booking.quote.terms}</p>}
         </div>}
+        {canTrack && booking.status === "CONFIRMED" && (booking.incoming || !booking.groupId)
+          && <CharterFleetLive bookingId={booking.id} origin={booking.outbound.origin} />}
+        {progress.length > 0 && <section className="grid gap-2 rounded-xl border border-border p-3">
+          <h3 className="text-sm font-semibold">Vehicle progress</h3>
+          {progress.map((vehicle) => <div key={vehicle.vehicleId} className="grid gap-1 text-sm sm:grid-cols-[minmax(0,1fr)_1fr_1fr]">
+            <p className="font-semibold">{vehicle.registration}</p>
+            {vehicle.status !== "ACCEPTED" ? <p className="text-muted-foreground sm:col-span-2">{charterAssignmentLabel[vehicle.status]}</p> : <>
+              <p>Outbound · {charterStageLabel[vehicle.legs.outbound.stage]}
+                {vehicle.legs.outbound.nextStop > 0 && vehicle.legs.outbound.stage === "ON_ROUTE"
+                  && ` (${vehicle.legs.outbound.nextStop} stops complete)`}
+              </p>
+              {vehicle.legs.returnLeg && <p>Return · {charterStageLabel[vehicle.legs.returnLeg.stage]}
+                {vehicle.legs.returnLeg.nextStop > 0 && vehicle.legs.returnLeg.stage === "ON_ROUTE"
+                  && ` (${vehicle.legs.returnLeg.nextStop} stops complete)`}
+              </p>}
+            </>}
+          </div>)}
+        </section>}
+        {booking.driverAssignments && booking.driverAssignments.length > 0 && <section className="grid gap-2 rounded-xl border border-border p-3">
+          <h3 className="text-sm font-semibold">Driver assignments</h3>
+          {booking.driverAssignments.map((assignment) => <div key={assignment.vehicleId} className="grid gap-1 text-sm">
+            <p className="flex flex-wrap justify-between gap-x-3">
+              <span>{assignment.registration} · {assignment.driverName}</span>
+              <span className={assignment.status === "DECLINED" ? "font-semibold text-destructive" : "font-semibold"}>
+                {charterAssignmentLabel[assignment.status]}
+              </span>
+            </p>
+            {assignment.reason && <p className="break-words text-muted-foreground">{assignment.reason}</p>}
+          </div>)}
+        </section>}
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">Booking history</summary>
           <ul className="mt-2 space-y-1">{booking.history.map((entry, index) =>
@@ -411,8 +450,8 @@ export function CharterBookings() {
   </div>;
 }
 
-function CombinedCharter({ id, bookings, canManage, refresh }: {
-  id: string; bookings: Booking[]; canManage: boolean; refresh: () => Promise<unknown>;
+function CombinedCharter({ id, bookings, canManage, canTrack, refresh }: {
+  id: string; bookings: Booking[]; canManage: boolean; canTrack: boolean; refresh: () => Promise<unknown>;
 }) {
   const [action, setAction] = useState<"CONFIRM" | "CANCEL" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -462,6 +501,10 @@ function CombinedCharter({ id, bookings, canManage, refresh }: {
     && Date.parse(booking.quote.validUntil) > Date.now());
   const active = bookings.some((booking) => booking.status !== "CANCELLED")
     && bookings.every((booking) => Date.parse(booking.outbound.pickupAt) > Date.now());
+  const vehicles = bookings.flatMap((booking) => booking.vehicleProgress ?? []);
+  const completed = vehicles.filter(charterVehicleComplete).length;
+  const allComplete = bookings.every((booking) => booking.status === "CONFIRMED" && Boolean(booking.vehicleProgress?.length))
+    && vehicles.length > 0 && completed === vehicles.length;
   const totals = new Map<string, number>();
   for (const booking of bookings) {
     if (booking.quote && ["QUOTED", "CONFIRMED"].includes(booking.status)) {
@@ -471,6 +514,11 @@ function CombinedCharter({ id, bookings, canManage, refresh }: {
   }
   return <section className={panel + " grid gap-3"}>
     <h2 className="text-lg font-semibold">Combined charter · {bookings.length} Transporters</h2>
+    {vehicles.length > 0 && <p className="text-sm font-medium">
+      {allComplete ? "Completed · " : ""}{completed} of {vehicles.length} vehicles finished all assigned legs
+    </p>}
+    {canTrack && bookings.some((booking) => booking.status === "CONFIRMED") && bookings[0]
+      && <CharterFleetLive bookingId={bookings[0].id} origin={bookings[0].outbound.origin} />}
     <ul className="grid gap-1 text-sm">
       {bookings.map((booking) => <li key={booking.id}>
         {booking.supplier} · {booking.status.toLowerCase()}

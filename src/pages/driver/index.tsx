@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { CharterDriverJobs } from "@/components/tamp/CharterDriverJobs";
 import { AppShell } from "@/components/tamp/AppShell";
 import { Avatar } from "@/components/tamp/Avatar";
 import { IncidentDialog } from "@/components/tamp/IncidentDialog";
@@ -299,6 +300,20 @@ function DriverJobs() {
   // Selected job drives the map + tracking panel; default to the first visible.
   const selected = (selectedId && jobs.find((j) => j.trip.id === selectedId)) || visible[0] || null;
 
+  if (me.role === "DRIVER" && searchParams.get("charter") === "1") {
+    return <AppShell>
+      <div className="mx-auto grid w-full max-w-6xl gap-4 p-4 sm:p-6">
+        <h1 className="text-xl font-extrabold tracking-tight">My jobs</h1>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+            onClick={() => setSearchParams({})}>Freight jobs</button>
+          <span aria-current="page" className="rounded-lg bg-signal px-3 py-2 text-sm font-semibold text-signal-foreground">Charter jobs</span>
+        </div>
+        <CharterDriverJobs />
+      </div>
+    </AppShell>;
+  }
+
   return (
     <AppShell>
       <div className="flex h-full flex-col lg:flex-row">
@@ -333,6 +348,11 @@ function DriverJobs() {
               )}
               </div>
             </div>
+            {me.role === "DRIVER" && <div className="mb-3 flex flex-wrap gap-2">
+              <span aria-current="page" className="rounded-lg bg-signal px-3 py-2 text-sm font-semibold text-signal-foreground">Freight jobs</span>
+              <button type="button" className="rounded-lg border border-border px-3 py-2 text-sm font-semibold"
+                onClick={() => setSearchParams({ charter: "1" })}>Charter jobs</button>
+            </div>}
             {activeTripIds.length > 0 && locationSharing.error && (
               <div className="mb-3 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-xs text-danger">
                 <p>{locationSharing.error}</p>

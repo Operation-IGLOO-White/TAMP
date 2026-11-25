@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { CharterLocationProvider } from "@/components/tamp/CharterLocationProvider";
 import { AppToaster } from "@/components/tamp/AppToaster";
 import { TopNav } from "@/components/tamp/TopNav";
 import { PwaManager } from "@/components/tamp/PwaManager";
@@ -23,11 +24,13 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <TampProvider>
-        {showNav && <TopNav />}
-        <RouteChangeIndicator />
-        {children}
-        <PwaManager />
-        <AppToaster />
+        <CharterLocationProvider>
+          {showNav && <TopNav />}
+          <RouteChangeIndicator />
+          {children}
+          <PwaManager />
+          <AppToaster />
+        </CharterLocationProvider>
       </TampProvider>
     </QueryClientProvider>
   );
