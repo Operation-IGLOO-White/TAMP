@@ -10,6 +10,11 @@ export const BODY_TYPE_LABEL: Record<BodyType, string> = {
   SIDE_TIPPER: "Side Tipper",
   LOWBED: "Lowbed",
   DROPSIDE: "Dropside",
+  CONTAINER_SKELETAL: "Container Skeletal",
+  BOX_TRUCK: "Box Truck",
+  CRANE_TRUCK: "Crane Truck",
+  CAR_CARRIER: "Car Carrier",
+  LIVESTOCK_CARRIER: "Livestock Carrier",
 };
 
 // Shared axle/wheels drawn under every body so the silhouettes read as trucks.
@@ -75,6 +80,11 @@ const BODY_PATHS: Record<BodyType, React.ReactNode> = {
   ),
   // Open box with low fold-down sides (open top).
   DROPSIDE: <path d="M3 8v6.5h18V8" />,
+  CONTAINER_SKELETAL: <path d="M2 14h20M3 14v-3h3v3m12 0v-3h3v3M7 14l3 2h5l3-2" />,
+  BOX_TRUCK: <rect x="2.5" y="6" width="19" height="9" rx="1.2" />,
+  CRANE_TRUCK: <path d="M2 14h20M5 14V6l5-2 5 4v3h-2M5 6l5 4V7" />,
+  CAR_CARRIER: <path d="M2 14h20M3 14V7h18v7M3 10h18l-4-3" />,
+  LIVESTOCK_CARRIER: <path d="M3 14V6h18v8ZM5 8.5h14M5 11h14" />,
 };
 
 export function BodyTypeIcon({

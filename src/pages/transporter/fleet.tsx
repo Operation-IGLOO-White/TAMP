@@ -6,7 +6,7 @@ import { truckRegistrationError } from "@/lib/api-errors";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
-import { StatusChip } from "@/components/tamp/StatusChip";
+import { TruckStatusChip } from "@/components/tamp/StatusChip";
 import { formatMoney } from "@/lib/tamp-data";
 import { uploadFile } from "@/fns/upload";
 import { useTamp } from "@/context/TampContext";
@@ -23,6 +23,11 @@ const bodyTypes: BodyType[] = [
   "SIDE_TIPPER",
   "LOWBED",
   "DROPSIDE",
+  "CONTAINER_SKELETAL",
+  "BOX_TRUCK",
+  "CRANE_TRUCK",
+  "CAR_CARRIER",
+  "LIVESTOCK_CARRIER",
 ];
 
 // Uber/Bolt-style vehicle onboarding: photos of the actual truck from each
@@ -363,7 +368,7 @@ function TruckCard({
             )}
           </div>
         </div>
-        <StatusChip status={truck.status === "AVAILABLE" ? "POSTED" : "IN_TRANSIT"} />
+        <TruckStatusChip status={truck.status} />
       </div>
 
       <Link
@@ -548,7 +553,7 @@ function TruckCard({
       <div className="border-t border-border p-4">
         {truck.status !== "AVAILABLE" ? (
           <p className="text-center text-[11px] text-muted-foreground">
-            On a job — not open for matching.
+            {truck.status === "RESERVED" ? "Reserved for a scheduled trip." : "Not open for matching."}
           </p>
         ) : best ? (
           <div className="rounded-lg border border-signal/40 bg-signal/5 p-3">

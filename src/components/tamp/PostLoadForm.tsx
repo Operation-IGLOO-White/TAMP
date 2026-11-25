@@ -42,7 +42,8 @@ const cargoTypes: { value: CargoType; label: string }[] = [
   { value: "GENERAL_PALLETISED", label: "General palletised" }, { value: "BULK_DRY", label: "Bulk dry" },
   { value: "BULK_LIQUID", label: "Bulk liquid" }, { value: "REFRIGERATED", label: "Refrigerated" },
   { value: "ABNORMAL", label: "Abnormal" }, { value: "CONTAINERISED", label: "Containerised" },
-  { value: "LIVESTOCK", label: "Livestock" }, { value: "HAZARDOUS", label: "Hazardous" },
+  { value: "LIVESTOCK", label: "Livestock" }, { value: "VEHICLES", label: "Vehicles" },
+  { value: "HAZARDOUS", label: "Hazardous" },
 ];
 const steps = [{ label: "Route", icon: MapPin }, { label: "Cargo", icon: Package }, { label: "Schedule", icon: CalendarDays }, { label: "Review", icon: Check }] as const;
 const day = (offset: number) => new Date(Date.now() + offset * 864e5).toISOString().slice(0, 10);

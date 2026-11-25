@@ -10,7 +10,7 @@ import { Avatar } from "@/components/tamp/Avatar";
 import { BODY_TYPE_LABEL, BodyTypeIcon } from "@/components/tamp/BodyTypeIcon";
 import { LaneRail } from "@/components/tamp/LaneRail";
 import { Panel } from "@/components/tamp/StatCard";
-import { StatusChip } from "@/components/tamp/StatusChip";
+import { StatusChip, TruckStatusChip } from "@/components/tamp/StatusChip";
 import { IncidentDialog } from "@/components/tamp/IncidentDialog";
 import { daysSince, estimateEta, isActiveTrip } from "@/lib/tamp-dashboard";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
@@ -116,15 +116,7 @@ function TruckDetail() {
         </button>
         <BodyTypeIcon type={truck.bodyType} className="size-5 text-muted-foreground" />
         <h1 className="font-mono text-sm font-bold tracking-tight">{truck.registration}</h1>
-        <span
-          className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-            truck.status === "AVAILABLE"
-              ? "bg-positive/15 text-positive"
-              : "bg-steel text-foreground"
-          }`}
-        >
-          {truck.status.replaceAll("_", " ")}
-        </span>
+        <TruckStatusChip status={truck.status} />
       </div>
 
       <section className="relative overflow-hidden border-b border-border bg-gradient-to-br from-[#f7f7f4] via-white to-[#ecece7] px-5 py-6 text-black sm:px-8">

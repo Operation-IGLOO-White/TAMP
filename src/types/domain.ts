@@ -53,6 +53,7 @@ export type CargoType =
   | "ABNORMAL"
   | "CONTAINERISED"
   | "LIVESTOCK"
+  | "VEHICLES"
   | "HAZARDOUS";
 
 export type BodyType =
@@ -63,7 +64,12 @@ export type BodyType =
   | "REFRIGERATED"
   | "SIDE_TIPPER"
   | "LOWBED"
-  | "DROPSIDE";
+  | "DROPSIDE"
+  | "CONTAINER_SKELETAL"
+  | "BOX_TRUCK"
+  | "CRANE_TRUCK"
+  | "CAR_CARRIER"
+  | "LIVESTOCK_CARRIER";
 
 export interface Place {
   label: string;

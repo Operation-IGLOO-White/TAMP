@@ -47,6 +47,11 @@ const BODY_TYPES: BodyType[] = [
   "SIDE_TIPPER",
   "LOWBED",
   "DROPSIDE",
+  "CONTAINER_SKELETAL",
+  "BOX_TRUCK",
+  "CRANE_TRUCK",
+  "CAR_CARRIER",
+  "LIVESTOCK_CARRIER",
 ];
 
 // Password strength — scored 0–4 on length + character variety.
@@ -257,6 +262,7 @@ function Register() {
   const [documentUploadWarning, setDocumentUploadWarning] = useState("");
 
   const isBusiness = userType === "CARRIER" || userType === "BROKER";
+  const isFreightOwner = userType === "CARGO_OWNER";
   const isDriver = userType === "DRIVER";
   const needsReview = isBusiness || isDriver;
   const lastDataStep: Step = needsReview ? "verification" : "you";
@@ -283,7 +289,16 @@ function Register() {
                 contactDetails: biz.contactDetails.trim(),
                 vat: biz.vat.trim(),
               }
-            : undefined,
+            : isFreightOwner
+              ? {
+                  companyName: biz.companyName.trim(),
+                  registrationNumber: "",
+                  businessType: "",
+                  address: "",
+                  contactDetails: "",
+                  vat: "",
+                }
+              : undefined,
           driver: isDriver
             ? {
                 vehicleClasses: drv.vehicleClasses,
@@ -574,6 +589,20 @@ function Register() {
                 />
               </Field>
             </div>
+            {isFreightOwner && (
+              <Field label="Company name *">
+                <input
+                  value={biz.companyName}
+                  onChange={(e) => setBiz({ ...biz, companyName: e.target.value })}
+                  className={inputCls}
+                  autoComplete="organization"
+                  maxLength={200}
+                  pattern={".*\\S.*"}
+                  title="Enter your company or trading name."
+                  required
+                />
+              </Field>
+            )}
             <Field label="Email">
               <input
                 type="email"

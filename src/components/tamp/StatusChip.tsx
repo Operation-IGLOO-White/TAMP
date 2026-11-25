@@ -1,4 +1,22 @@
 import type { DisplayStatus } from "@/lib/tamp-selectors";
+import type { TruckStatus } from "@/types/domain";
+
+const truckStatusLabels: Record<TruckStatus, string> = {
+  AVAILABLE: "AVAILABLE",
+  RESERVED: "RESERVED",
+  ON_TRIP: "IN TRANSIT",
+  OFFLINE: "OFFLINE",
+  EXPIRED: "EXPIRED",
+};
+
+export function TruckStatusChip({ status }: { status: TruckStatus }) {
+  const tone = status === "AVAILABLE" ? "bg-positive/15 text-positive" : "bg-steel text-foreground";
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${tone}`}>
+      {truckStatusLabels[status]}
+    </span>
+  );
+}
 
 const styles: Record<DisplayStatus, string> = {
   DRAFT: "bg-steel text-foreground",

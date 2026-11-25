@@ -15,7 +15,7 @@ import {
 import type { CargoType, Place } from "@/types/domain";
 
 type Tab = "customers" | "locations" | "templates";
-const CARGO: CargoType[] = ["GENERAL_PALLETISED", "BULK_DRY", "BULK_LIQUID", "REFRIGERATED", "ABNORMAL", "CONTAINERISED", "LIVESTOCK", "HAZARDOUS"];
+const CARGO: CargoType[] = ["GENERAL_PALLETISED", "BULK_DRY", "BULK_LIQUID", "REFRIGERATED", "ABNORMAL", "CONTAINERISED", "LIVESTOCK", "VEHICLES", "HAZARDOUS"];
 
 export default function FreightDirectory() {
   const client = useQueryClient();

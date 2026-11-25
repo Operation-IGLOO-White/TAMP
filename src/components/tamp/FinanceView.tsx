@@ -25,6 +25,26 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
     [invoices],
   );
   const selected = ordered.find((item) => item.id === selectedId) ?? ordered[0];
+  const invoiceGroups = useMemo(() => {
+    const partiesById = new Map(parties.map((party) => [party.id, party]));
+    const groups = new Map<string, Invoice[]>();
+    for (const invoice of ordered) {
+      const organisationKey = (partyId: string) => {
+        const organisations = partiesById.get(partyId)?.organisations;
+        const organisationId = organisations?.length === 1 ? organisations[0]?.id : undefined;
+        return organisationId ? `org:${organisationId}` : `party:${partyId}`;
+      };
+      const key = JSON.stringify([
+        invoice.loadId,
+        organisationKey(invoice.ownerId),
+        organisationKey(invoice.carrierId),
+      ]);
+      const group = groups.get(key);
+      if (group) group.push(invoice);
+      else groups.set(key, [invoice]);
+    }
+    return Array.from(groups, ([key, items]) => ({ key, items }));
+  }, [ordered, parties]);
   const receivable = ordered
     .filter((item) => item.status === "ISSUED")
     .reduce((sum, item) => sum + item.total, 0);
@@ -80,16 +100,39 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
             <div className="border-b border-border p-4">
               <h2 className="font-black">Invoices</h2>
               <p className="text-xs text-muted-foreground">
-                Created from completed trips and agreed rates.
+                Grouped by shipment contract and organisation.
               </p>
             </div>
             <div className="divide-y divide-border">
-              {ordered.map((invoice) => {
-                const load = loads.find((item) => item.id === invoice.loadId);
+              {invoiceGroups.map(({ key, items }) => {
+                const first = items[0];
+                if (!first) return null;
+                const load = loads.find((item) => item.id === first.loadId);
+                const counterparty = parties.find((party) => party.id === (mode === "carrier" ? first.ownerId : first.carrierId));
+                const total = items.reduce((sum, invoice) => invoice.status === "VOID"
+                  ? sum
+                  : sum + (mode === "carrier" ? invoice.carrierPayout : invoice.total), 0);
                 return (
+                  <details key={key} open={items.some((invoice) => invoice.id === selected?.id) || undefined}>
+                    <summary className="cursor-pointer p-4 hover:bg-steel/20">
+                      <strong className="text-sm">{counterparty?.companyName || counterparty?.contactName || (mode === "carrier" ? "Freight owner" : "Transporter")}</strong>
+                      <span className="ml-2 text-xs text-muted-foreground">{items.length} {items.length === 1 ? "invoice" : "invoices"}</span>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {load ? `${load.origin.label} → ${load.destination.label}` : first.loadId}
+                      </p>
+                      <div className="mt-1 flex flex-wrap justify-between gap-1 text-xs">
+                        <span className="break-all text-muted-foreground">{first.loadId}</span>
+                        <strong>{money(total)}</strong>
+                      </div>
+                    </summary>
+                    <div className="divide-y divide-border border-t border-border">
+                    {items.map((invoice) => (
                   <button
                     key={invoice.id}
-                    onClick={() => setSelectedId(invoice.id)}
+                    onClick={() => {
+                      if (invoice.id !== selected?.id) setReference("");
+                      setSelectedId(invoice.id);
+                    }}
                     className={`w-full p-4 text-left hover:bg-steel/20 ${selected?.id === invoice.id ? "border-l-4 border-signal bg-signal/5" : ""}`}
                   >
                     <div className="flex justify-between gap-2">
@@ -100,9 +143,6 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
                         {invoice.status}
                       </span>
                     </div>
-                    <p className="mt-2 truncate text-sm font-semibold">
-                      {load ? `${load.origin.label} → ${load.destination.label}` : invoice.loadId}
-                    </p>
                     <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                       <span>Due {new Date(invoice.dueAt).toLocaleDateString("en-ZA")}</span>
                       <strong className="text-foreground">
@@ -110,6 +150,9 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
                       </strong>
                     </div>
                   </button>
+                    ))}
+                    </div>
+                  </details>
                 );
               })}
               {!ordered.length && (
