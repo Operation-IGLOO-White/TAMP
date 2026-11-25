@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Building2,
+  BusFront,
   Check,
   CalendarClock,
   ChevronRight,
@@ -26,8 +27,12 @@ import { fleetVehicleAsset } from "@/lib/fleet-assets";
 import { Link } from "@/lib/nav";
 import { listReviewDocuments, reviewDocument, type DocumentSubjectType } from "@/fns/documents";
 
-type Queue = "all" | "organisations" | "trucks" | "drivers" | "documents";
-type ReviewStatus = "PENDING" | "UNVERIFIED" | "REJECTED" | "ACTION_REQUIRED" | "DUE_SOON";
+import { hasPermission } from "@/lib/access";
+import { trpc } from "@/lib/trpc";
+import { PassengerReviewForm, type PassengerReview } from "@/components/tamp/PassengerReviewForm";
+
+type Queue = "passenger" | "all" | "organisations" | "trucks" | "drivers" | "documents";
+type ReviewStatus = "VERIFIED" | "PENDING" | "UNVERIFIED" | "REJECTED" | "ACTION_REQUIRED" | "DUE_SOON";
 type ReviewItem = {
   id: string;
   kind: Exclude<Queue, "all">;
@@ -42,6 +47,7 @@ type ReviewItem = {
   subjectType?: DocumentSubjectType;
   subjectId?: string;
   documentId?: string;
+  passenger?: PassengerReview;
   reviewStatus?: "PENDING" | "APPROVED" | "REJECTED";
 };
 
@@ -50,6 +56,7 @@ const QUEUES: { id: Queue; label: string; icon: typeof ListChecks }[] = [
   { id: "organisations", label: "Organisations", icon: Building2 },
   { id: "trucks", label: "Trucks", icon: Truck },
   { id: "drivers", label: "Drivers", icon: UserRoundCog },
+  { id: "passenger", label: "Passenger Vehicles", icon: BusFront },
   { id: "documents", label: "Documents", icon: FileWarning },
 ];
 
@@ -61,7 +68,24 @@ function ageLabel(value: string) {
 
 export default function VerificationInbox() {
   const queryClient = useQueryClient();
-  const { parties, trucks, vehicles, maintenance } = useTamp();
+  const { authParty, parties, trucks, vehicles, maintenance } = useTamp();
+  const canReviewPassengers = hasPermission(authParty, "platform.admin");
+  const passengerKey = ["passenger-reviews", authParty?.id];
+  const passengerReviews = useQuery({
+    queryKey: passengerKey,
+    queryFn: () => trpc.query<PassengerReview[]>("passenger.reviews"),
+    enabled: canReviewPassengers,
+  });
+  const passengerReview = useMutation({
+    mutationFn: (input: { id: string; version: string; status: "VERIFIED" | "REJECTED"; reason: string }) =>
+      trpc.mutation("passenger.review", input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: passengerKey });
+      toast.success("Vehicle review saved");
+    },
+    onError: (error) => toast.error("Vehicle review could not be saved", { description: error.message }),
+  });
+  const [openPassengerId, setOpenPassengerId] = useState<string | null>(null);
   const { data: organisations = [] } = useQuery({ queryKey: ["organisations"], queryFn: listOrganisations });
   const { data: reviewDocuments = [] } = useQuery({ queryKey: ["review-documents"], queryFn: listReviewDocuments });
   const review = useMutation({
@@ -74,10 +98,11 @@ export default function VerificationInbox() {
   });
   const [params, setParams] = useSearchParams();
   const requested = params.get("queue") as Queue | null;
-  const queue: Queue = requested && QUEUES.some((item) => item.id === requested) ? requested : "all";
+  const queue: Queue = requested && (requested !== "passenger" || canReviewPassengers) && QUEUES.some((item) => item.id === requested) ? requested : "all";
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("ALL");
-  const [status, setStatus] = useState<ReviewStatus | "ALL">("ALL");
+  const [selectedStatus, setStatus] = useState<ReviewStatus | "ALL">("ALL");
+  const status = selectedStatus === "VERIFIED" && queue !== "passenger" ? "ALL" : selectedStatus;
   const [order, setOrder] = useState<"oldest" | "newest">("oldest");
   const pendingApplicants = useMemo(
     () => parties.filter((party) => party.verification !== "VERIFIED"),
@@ -200,49 +225,110 @@ export default function VerificationInbox() {
       documentId: document.documentId,
       reviewStatus: document.reviewStatus,
     }));
-    return [...organisationItems, ...truckItems, ...driverItems, ...registrationDocumentItems, ...documentItems, ...driverDocumentItems];
-  }, [organisations, parties, trucks, vehicles, maintenance, registrationApplications, reviewDocuments]);
+    const passengerItems: ReviewItem[] = (canReviewPassengers ? passengerReviews.data ?? [] : []).map((review) => {
+      const { vehicle, supplier } = review;
+      return {
+        id: vehicle.id,
+        kind: "passenger",
+        title: vehicle.registration,
+        subtitle: [vehicle.make, vehicle.model, vehicle.type, vehicle.subtypeLabel].filter(Boolean).join(" "),
+        company: supplier,
+        status: vehicle.verification,
+        submittedAt: vehicle.createdAt ?? new Date(0).toISOString(),
+        href: "/admin/verification?queue=passenger",
+        detail: vehicle.location.label,
+        passenger: review,
+      };
+    });
+    return [...passengerItems, ...organisationItems, ...truckItems, ...driverItems, ...registrationDocumentItems, ...documentItems, ...driverDocumentItems];
+  }, [organisations, parties, trucks, vehicles, maintenance, registrationApplications, reviewDocuments, canReviewPassengers, passengerReviews.data]);
 
   const companies = useMemo(() => [...new Set(items.map((item) => item.company))].sort(), [items]);
   const filtered = items
-    .filter((item) => queue === "all" || item.kind === queue)
+    .filter((item) => queue === "all" ? item.status !== "VERIFIED" : item.kind === queue)
     .filter((item) => company === "ALL" || item.company === company)
     .filter((item) => status === "ALL" || item.status === status)
     .filter((item) => `${item.title} ${item.subtitle} ${item.company} ${item.detail}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => order === "oldest" ? new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime() : new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
 
-  const count = (kind: ReviewItem["kind"]) => items.filter((item) => item.kind === kind).length;
+  const passengerRows = filtered.flatMap((item) => item.passenger ? [item.passenger] : []);
+  const showPassengerStatus = canReviewPassengers && (queue === "all" || queue === "passenger");
+  const count = (kind: ReviewItem["kind"]) => items.filter((item) => item.kind === kind && item.status !== "VERIFIED").length;
 
   return (
     <AppShell>
       <PageHeader title="Verification Inbox" />
       <div className="space-y-5 p-4 sm:p-6">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <StatCard label="All pending" value={String(items.length)} icon={ListChecks} accent />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          <StatCard label="All pending" value={String(items.filter((item) => item.status !== "VERIFIED").length)} icon={ListChecks} accent />
           <StatCard label="Organisations" value={String(count("organisations"))} icon={Building2} />
           <StatCard label="Truck reviews" value={String(count("trucks"))} icon={Truck} />
           <StatCard label="Driver reviews" value={String(count("drivers"))} icon={UserRoundCog} />
+          {canReviewPassengers && <StatCard label="Passenger vehicles" value={String(count("passenger"))} icon={BusFront} />}
           <StatCard label="Documents" value={String(count("documents"))} icon={FileWarning} />
         </div>
 
         <section className="app-surface overflow-hidden">
           <div className="flex gap-1 overflow-x-auto border-b border-border p-2">
-            {QUEUES.map(({ id, label, icon: Icon }) => (
-              <button key={id} type="button" onClick={() => setParams(id === "all" ? {} : { queue: id })} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-bold ${queue === id ? "bg-signal text-signal-foreground" : "text-muted-foreground hover:bg-steel/50 hover:text-foreground"}`}>
+            {QUEUES.filter(({ id }) => id !== "passenger" || canReviewPassengers).map(({ id, label, icon: Icon }) => (
+              <button key={id} type="button" aria-pressed={queue === id} onClick={() => { setStatus("ALL"); setParams(id === "all" ? {} : { queue: id }); }} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-bold ${queue === id ? "bg-signal text-signal-foreground" : "text-muted-foreground hover:bg-steel/50 hover:text-foreground"}`}>
                 <Icon className="size-4" /> {label}
               </button>
             ))}
           </div>
           <div className="grid gap-2 border-b border-border p-3 md:grid-cols-[minmax(240px,1fr)_200px_170px_150px]">
-            <label className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search submissions" className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:border-signal" /></label>
+            <label className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input aria-label="Search submissions" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search submissions" className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:border-signal" /></label>
             <select value={company} onChange={(event) => setCompany(event.target.value)} aria-label="Filter by company" className="h-10 rounded-md border border-border bg-background px-3 text-xs outline-none"><option value="ALL">All companies</option>{companies.map((name) => <option key={name} value={name}>{name}</option>)}</select>
-            <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} aria-label="Filter by review status" className="h-10 rounded-md border border-border bg-background px-3 text-xs outline-none"><option value="ALL">All statuses</option><option value="PENDING">Pending</option><option value="UNVERIFIED">Unverified</option><option value="REJECTED">Rejected</option><option value="ACTION_REQUIRED">Action required</option><option value="DUE_SOON">Due soon</option></select>
+            <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} aria-label="Filter by review status" className="h-10 rounded-md border border-border bg-background px-3 text-xs outline-none"><option value="ALL">All statuses</option><option value="PENDING">Pending</option><option value="UNVERIFIED">Unverified</option><option value="REJECTED">Rejected</option>{queue === "passenger" && <option value="VERIFIED">Verified</option>}<option value="ACTION_REQUIRED">Action required</option><option value="DUE_SOON">Due soon</option></select>
             <select value={order} onChange={(event) => setOrder(event.target.value as typeof order)} aria-label="Sort submissions" className="h-10 rounded-md border border-border bg-background px-3 text-xs outline-none"><option value="oldest">Oldest first</option><option value="newest">Newest first</option></select>
           </div>
 
+          {showPassengerStatus && passengerReviews.isError && <p role="alert" className="p-4 text-sm text-destructive">
+            Passenger vehicles could not be loaded. <button type="button" className="underline" onClick={() => void passengerReviews.refetch()}>Retry</button>
+          </p>}
+          {showPassengerStatus && passengerReviews.isPending && <p role="status" className="p-4 text-sm text-muted-foreground">Loading passenger vehicles…</p>}
+          {passengerRows.length > 0 && <div className="overflow-x-auto border-b border-border" role="region" aria-label="Passenger vehicle reviews" tabIndex={0}>
+            <table className="w-full min-w-[46rem] text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">
+                <tr>{["Vehicle", "Company", "Capacity", "Status", "Action"].map((label) =>
+                  <th key={label} scope="col" className="px-4 py-3">{label}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {passengerRows.map(({ vehicle, supplier }) => {
+                  const expanded = openPassengerId === vehicle.id;
+                  return <Fragment key={vehicle.id}>
+                    <tr className="hover:bg-steel/25">
+                      <th scope="row" className="px-4 py-3 font-medium">
+                        <div className="flex items-center gap-3">
+                          <img src={`${import.meta.env.BASE_URL}fleet/tamp-passenger-${vehicle.type.toLowerCase()}.webp`} alt="" className="h-10 w-16 object-contain" loading="lazy" />
+                          <div><p className="font-mono font-bold">{vehicle.registration}</p>
+                            <p>{vehicle.make} {vehicle.model}</p>
+                            <p className="text-xs capitalize text-muted-foreground">{vehicle.type.toLowerCase()}{vehicle.subtypeLabel && ` · ${vehicle.subtypeLabel}`}</p></div>
+                        </div>
+                      </th>
+                      <td className="px-4 py-3">{supplier}</td>
+                      <td className="px-4 py-3">{vehicle.seats} seats</td>
+                      <td className="px-4 py-3"><ReviewBadge status={vehicle.verification} /></td>
+                      <td className="px-4 py-3">
+                        <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Hide review for" : "Review"} ${vehicle.registration}`}
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-xs font-bold"
+                          onClick={() => setOpenPassengerId(expanded ? null : vehicle.id)}>
+                          {expanded ? "Hide details" : "Review"} <ChevronRight className={`size-4 ${expanded ? "rotate-90" : ""}`} />
+                        </button>
+                      </td>
+                    </tr>
+                    {expanded && <tr><td colSpan={5} className="bg-muted/30 px-4 pb-4">
+                      <PassengerReviewForm key={vehicle.version} vehicle={vehicle} busy={passengerReview.isPending}
+                        onReview={(status, reason) => passengerReview.mutate({ id: vehicle.id, version: vehicle.version, status, reason })} />
+                    </td></tr>}
+                  </Fragment>;
+                })}
+              </tbody>
+            </table>
+          </div>}
           <div className="divide-y divide-border">
-            {filtered.length === 0 && <div className="px-5 py-16 text-center"><ShieldCheck className="mx-auto mb-3 size-8 text-positive" /><p className="text-sm font-bold">This review queue is clear.</p><p className="mt-1 text-xs text-muted-foreground">There are no submissions matching the selected filters.</p></div>}
-            {filtered.map((item) => (
+            {filtered.length === 0 && !(showPassengerStatus && (passengerReviews.isPending || passengerReviews.isError)) && <div className="px-5 py-16 text-center"><ShieldCheck className="mx-auto mb-3 size-8 text-positive" /><p className="text-sm font-bold">This review queue is clear.</p><p className="mt-1 text-xs text-muted-foreground">There are no submissions matching the selected filters.</p></div>}
+            {filtered.filter((item) => !item.passenger).map((item) => (
               <Link key={`${item.kind}-${item.id}`} to={item.href} className="grid gap-3 px-4 py-4 transition-colors hover:bg-steel/25 md:grid-cols-[72px_minmax(0,1fr)_minmax(150px,.45fr)_auto] md:items-center">
                 <div className="flex size-[60px] items-center justify-center overflow-hidden rounded-xl border border-border bg-white p-1.5">
                   {item.image ? <img src={item.image} alt="" className="h-full w-full object-contain" /> : item.kind === "organisations" ? <Building2 className="size-6 text-black/60" /> : <UserRoundCog className="size-6 text-black/60" />}
@@ -265,6 +351,6 @@ export default function VerificationInbox() {
 }
 
 function ReviewBadge({ status }: { status: ReviewStatus }) {
-  const style = status === "REJECTED" || status === "ACTION_REQUIRED" ? "bg-danger/15 text-danger" : status === "DUE_SOON" ? "bg-signal/15 text-signal" : "bg-steel text-muted-foreground";
+  const style = status === "VERIFIED" ? "bg-positive/10 text-positive" : status === "REJECTED" || status === "ACTION_REQUIRED" ? "bg-danger/15 text-danger" : status === "DUE_SOON" ? "bg-signal/15 text-signal" : "bg-steel text-muted-foreground";
   return <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${style}`}>{status.replaceAll("_", " ")}</span>;
 }

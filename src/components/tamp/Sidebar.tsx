@@ -160,7 +160,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
         { to: "/admin/verification?queue=trucks", label: "Truck Reviews", icon: Truck, permission: "trucks.read" },
         { to: "/admin/verification?queue=drivers", label: "Driver Reviews", icon: UserRoundCog, permission: "users.verify" },
         { to: "/admin/verification?queue=documents", label: "Compliance Documents", icon: ShieldCheck, permission: "users.verify" },
-        { to: "/admin/passenger-fleet", label: "Passenger Vehicles", icon: BusFront, permission: "platform.admin" },
+        { to: "/admin/verification?queue=passenger", label: "Passenger Vehicles", icon: BusFront, permission: "platform.admin" },
         { to: "/admin/trucks", label: "All Trucks", icon: Truck, permission: "trucks.read" },
       ],
     },

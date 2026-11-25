@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { Providers } from "@/context/Providers";
 import { RequireRole } from "@/components/tamp/RequireRole";
 import { Link } from "@/lib/nav";
@@ -46,6 +46,14 @@ const Page40 = lazy(() => import("@/pages/transporter/drivers/$driverId"));
 const Page41 = lazy(() => import("@/pages/owner/shipments"));
 const Page42 = lazy(() => import("@/pages/owner/control-tower"));
 const Page43 = lazy(() => import("@/pages/admin/verification"));
+
+function VerificationRoute() {
+  const [params] = useSearchParams();
+  return <RequireRole role="ADMIN" permission={params.get("queue") === "passenger" ? "platform.admin" : "trucks.read"}>
+    <Page43 />
+  </RequireRole>;
+}
+
 const Page44 = lazy(() => import("@/pages/admin/access-control"));
 const Page45 = lazy(() => import("@/pages/admin/matching"));
 const Page46 = lazy(() => import("@/pages/driver/dashboard"));
@@ -74,7 +82,7 @@ export default function App() {
             />
             <Route path="/passenger-charter" element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER"]} permission="loads.read"><PassengerCharter mode="catalogue" /></RequireRole>} />
             <Route path="/transporter/passenger-fleet" element={<RequireRole role="TRANSPORTER" permission="trucks.read"><PassengerCharter mode="fleet" /></RequireRole>} />
-            <Route path="/admin/passenger-fleet" element={<RequireRole role="ADMIN" permission="platform.admin"><PassengerCharter mode="review" /></RequireRole>} />
+            <Route path="/admin/passenger-fleet" element={<RequireRole role="ADMIN" permission="platform.admin"><Navigate to="/admin/verification?queue=passenger" replace /></RequireRole>} />
             <Route path="/403" element={<Page0 />} />
             <Route
               path="/admin/oversight"
@@ -416,11 +424,7 @@ export default function App() {
             />
             <Route
               path="/admin/verification"
-              element={
-                <RequireRole role={"ADMIN"} permission="trucks.read">
-                  <Page43 />
-                </RequireRole>
-              }
+              element={<VerificationRoute />}
             />
             <Route
               path="/admin/organisations"

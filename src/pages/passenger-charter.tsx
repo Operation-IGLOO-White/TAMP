@@ -43,11 +43,10 @@ type FleetVehicle = Vehicle & {
   reviewReason?: string; publicationIssue?: string;
 };
 type Driver = { id: string; name: string };
-type Mode = "catalogue" | "fleet" | "review";
+type Mode = "catalogue" | "fleet";
 type Workspace = {
   vehicles: FleetVehicle[]; drivers: Driver[]; subtypes: Subtypes;
 };
-type Review = { vehicle: FleetVehicle; supplier: string };
 const documentKeys = Object.keys(documents) as DocumentType[];
 const field = "min-h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm";
 const button = "min-h-10 rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50";
@@ -81,11 +80,6 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
     queryKey: ["passenger-fleet", authParty?.id, authParty?.activeOrganisationId],
     queryFn: () => trpc.query<Workspace>("passenger.fleet"),
     enabled: mode === "fleet",
-  });
-  const reviews = useQuery({
-    queryKey: ["passenger-reviews", authParty?.id],
-    queryFn: () => trpc.query<Review[]>("passenger.reviews"),
-    enabled: mode === "review",
   });
   const catalogue = useQuery({
     queryKey: ["passenger-catalogue", authParty?.id, authParty?.activeOrganisationId],
@@ -138,8 +132,8 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
       }>{vehicle.published ? "Unpublish" : "Publish to Passenger Charter"}</button>
     </div>}
   </>;
-  const query = mode === "fleet" ? fleet : mode === "review" ? reviews : catalogue;
-  const title = mode === "fleet" ? "Buses & Minibuses" : mode === "review" ? "Passenger Vehicle Reviews" : "Passenger Charter";
+  const query = mode === "fleet" ? fleet : catalogue;
+  const title = mode === "fleet" ? "Buses & Minibuses" : "Passenger Charter";
   const visible = (catalogue.data ?? []).filter((vehicle) =>
     (!type || vehicle.type === type) && vehicle.seats >= Number(seats)
     && [vehicle.make, vehicle.model, vehicle.subtypeLabel ?? "", vehicle.supplier, vehicle.serviceArea, vehicle.location.label]
@@ -309,16 +303,6 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
           {fleetVehicles.length ? "No passenger vehicles match these filters." : "No buses or minibuses have been added to this fleet."}
         </p>}
       </>}
-      {mode === "review" && reviews.isSuccess && (reviews.data.length
-        ? <div className="grid gap-4 md:grid-cols-2">
-          {reviews.data.map(({ vehicle, supplier }) =>
-            <VehicleCard key={vehicle.id} vehicle={vehicle} supplier={supplier}>
-              <ReviewForm key={vehicle.version} vehicle={vehicle} busy={busy} onReview={(status, reason) =>
-                update("passenger.review", { id: vehicle.id, version: vehicle.version, status, reason }, "Vehicle review saved")
-              } />
-            </VehicleCard>)}
-        </div>
-        : <p className={card + " p-6 text-sm text-muted-foreground"}>No passenger vehicles have been submitted.</p>)}
     </div>
   </AppShell>;
 }
@@ -377,26 +361,6 @@ function VehicleCard({ vehicle, supplier, children, fleetHeader }: {
       {children}
     </div>
   </article>;
-}
-
-function ReviewForm({ vehicle, busy, onReview }: {
-  vehicle: FleetVehicle; busy: boolean; onReview: (status: "VERIFIED" | "REJECTED", reason: string) => Promise<void>;
-}) {
-  const [reason, setReason] = useState("");
-  return <div className="grid gap-3 border-t border-border pt-3">
-    <p className="font-semibold">{vehicle.registration} · {vehicle.verification.toLowerCase()}</p>
-    <p>Vehicle licence expires {vehicle.licenceExpiry} · Operating licence expires {vehicle.permitExpiry}</p>
-    <div className="flex flex-wrap gap-2">
-      {documentKeys.map((key) => <a key={key} className={button} href={vehicle.documents[key]} target="_blank" rel="noreferrer">{documents[key]}</a>)}
-      {vehicle.photos.map((url, index) => <a key={url} className={button} href={url} target="_blank" rel="noreferrer">Photo {index + 1}</a>)}
-    </div>
-    {vehicle.reviewReason && <p className="text-sm text-destructive">{vehicle.reviewReason}</p>}
-    <Field label="Review notes"><input className={field} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} /></Field>
-    <div className="flex flex-wrap gap-2">
-      <button className={primary} disabled={busy || vehicle.verification === "VERIFIED"} onClick={() => void onReview("VERIFIED", reason)}>Verify vehicle</button>
-      <button className={button} disabled={busy || !reason.trim()} onClick={() => void onReview("REJECTED", reason)}>Reject vehicle</button>
-    </div>
-  </div>;
 }
 
 const vehicleSteps = ["Vehicle", "Capacity", "Availability", "Documents"];
