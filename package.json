@@ -10,6 +10,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:platform:lifecycles": "bash scripts/test-platform-lifecycles.sh all",
+    "test:trucks:lifecycle": "bash scripts/test-platform-lifecycles.sh trucks",
+    "test:assets:lifecycle": "bash scripts/test-platform-lifecycles.sh assets",
+    "test:charter:lifecycle": "bash scripts/test-passenger-charter.sh",
     "typecheck": "tsc -b",
     "test:e2e": "playwright test",
     "test:e2e:browser": "PLAYWRIGHT_DEMO=1 playwright test tests/marketplace-journey.spec.ts --project=chromium --headed --workers=1"

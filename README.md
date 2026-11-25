@@ -101,3 +101,41 @@ npm run test:e2e:fullstack:browser
 accounts, starts the backend on port 5001, builds the frontend, runs the browser test, and stops the
 backend on exit. Set `TAMP_BACKEND_DIR` if the backend is not at `../../tamp_backend` relative to
 this project.
+
+
+### Passenger Charter lifecycle verification
+
+Run the integrated Passenger Charter workflow against a dedicated PostgreSQL test database.
+
+```bash
+export TEST_DATABASE_URL='postgresql+asyncpg://tamp:your-password@localhost:5432/tamp_test'
+npm run test:charter:lifecycle
+```
+
+This command checks frontend types and runs the backend's Passenger Charter lifecycle suite through its real HTTP API and database. The suite covers vehicle registration and uploads, private document access, platform approval, publication, one-way and return requests, capacity filtering, quotations, confirmation, driver acceptance, leg progression, GPS and ETA handling, combined fleet allocation, and driver reassignment.
+
+The backend test fixtures reset the dedicated test database. Use a database reserved for tests. Set `TAMP_BACKEND_DIR` if the backend is outside the sibling `tamp_backend` directory. The command runs API integration tests. Browser layout and user interaction checks require the separate Playwright full-stack setup.
+
+
+### Truck, asset rental and bus testing
+
+With the dedicated `TEST_DATABASE_URL` configured as above, choose the workflow to check.
+
+| Command | Workflow |
+| --- | --- |
+| `npm run test:platform:lifecycles` | All three workflows plus RBAC and organisation isolation |
+| `npm run test:trucks:lifecycle` | Fleet registration, matching, acceptance, dispatch, delivery and compliance |
+| `npm run test:assets:lifecycle` | Fixed-rate asset rental and linked transport |
+| `npm run test:charter:lifecycle` | Passenger vehicle approval, charter bookings and driver operations |
+
+These commands use real backend HTTP requests and PostgreSQL. Backend fixtures reset the dedicated test database. They require the sibling backend checkout and its installed test dependencies. They do not start the browser.
+
+For manual testing, use separate sessions for Super Admin, Freight Owner, Transporter and Driver.
+
+| Module | Manual test sequence |
+| --- | --- |
+| Trucks | Transporter adds a compliant available truck → Super Admin verifies it → Freight Owner posts a compatible load → both parties accept terms → Transporter dispatches → Driver accepts and completes pickup and delivery. For multiple trucks, complete one first and confirm the others stay active. |
+| Asset Rental | Owner lists an asset with a fixed rate and available dates → renter requests those dates → owner confirms → both record delivery → owner starts the rental during the agreed period → both record return → complete the rental and check availability. |
+| Passenger Charter | Transporter adds a bus and documents → Super Admin reviews the files and verifies it → Transporter publishes → organiser requests an outbound and return charter → Transporter quotes vehicles and drivers → organiser confirms → Driver accepts and completes each leg. Also check reassignment before departure. |
+
+Record any failed step with the account role, record reference, expected result and displayed error. Use future dates and distinct available drivers for overlapping vehicle allocations.
