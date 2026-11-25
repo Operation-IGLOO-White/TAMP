@@ -233,6 +233,7 @@ function Register() {
     address: "",
     contactDetails: "",
     vat: "",
+    assetHireOnly: false,
   });
   const [drv, setDrv] = useState({
     vehicleClasses: [] as string[],
@@ -266,7 +267,7 @@ function Register() {
   const isDriver = userType === "DRIVER";
   const needsReview = isBusiness || isDriver;
   const lastDataStep: Step = needsReview ? "verification" : "you";
-  const docList = userType ? registrationDocumentLabels(userType, drv.workType) : [];
+  const docList = userType ? registrationDocumentLabels(userType, drv.workType, biz.assetHireOnly) : [];
 
   const register = useMutation({
     mutationFn: async () => {
@@ -288,6 +289,7 @@ function Register() {
                 address: biz.address.trim(),
                 contactDetails: biz.contactDetails.trim(),
                 vat: biz.vat.trim(),
+                assetHireOnly: userType === "CARRIER" && biz.assetHireOnly,
               }
             : isFreightOwner
               ? {
@@ -679,6 +681,11 @@ function Register() {
             className="mx-auto w-full max-w-sm sm:max-w-md lg:max-w-lg space-y-4"
           >
             <Header title="Your business" onBack={() => setStep("you")} backLabel="Back" />
+            {userType === "CARRIER" && <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={biz.assetHireOnly}
+                onChange={(e) => setBiz({ ...biz, assetHireOnly: e.target.checked })} />
+              My business hires out assets only
+            </label>}
             <Field label="Company / trading name">
               <input
                 value={biz.companyName}
@@ -928,7 +935,9 @@ function Register() {
                   ? "Drivers must supply ID, licence, PrDP and their vehicle documents (licence disc, roadworthy and insurance) for a background check."
                   : "Drivers must supply ID, licence and a valid PrDP for a background check."
                 : userType === "CARRIER"
-                  ? "Transporters must also supply an operating licence, roadworthy certificate and insurance certificate."
+                  ? biz.assetHireOnly
+                    ? "Upload your business verification documents for Asset Hire."
+                    : "Transporters must also supply an operating licence, roadworthy certificate and insurance certificate."
                   : "Brokers must also supply mandate and commission documents."}{" "}
               Files are securely stored and are only available to your account and authorised
               TAMP verification administrators.

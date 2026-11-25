@@ -159,6 +159,7 @@ interface NewPartyInput {
 }
 
 interface NewTruckInput {
+  transportDimensions?: Exclude<TruckPosting["transportDimensions"], undefined>;
   transporterId: string;
   driverId?: string | undefined;
   registration: string;
@@ -186,6 +187,7 @@ interface Store extends State {
   authReady: boolean; // false until the session check resolves
   login: (email: string, password: string) => ReturnType<typeof authLogin>;
   logout: () => Promise<void>;
+  refreshDomain: () => Promise<void>;
   refreshAuth: () => Promise<Party | null>;
   setRole: (r: Role) => void;
   updateProfile: (patch: Partial<Party>) => Promise<void>;
@@ -684,6 +686,7 @@ export function TampProvider({ children }: { children: ReactNode }) {
 
       // Re-read the current session (e.g. after a Google sign-in that set the
       // cookie server-side, or after finishing onboarding) and hydrate.
+      refreshDomain: () => hydrateDomain(),
       refreshAuth: async () => {
         const party = await fetchMe();
         authRef.current = party;

@@ -79,6 +79,8 @@ export interface Place {
 }
 
 export interface Load {
+  assetMoveId?: string;
+  transportDimensions?: { lengthM: number; widthM: number; heightM: number };
   id: UUID; // display ref: LD-0142
   ownerId: UUID;
   customerId?: UUID;
@@ -163,6 +165,7 @@ export interface TruckPosting {
   bodyType: BodyType;
   payloadCapacityKg: number;
   volumeCapacityM3?: number;
+  transportDimensions?: { lengthM: number; widthM: number; heightM: number } | null;
   currentLocation: Place;
   availableFrom: ISODate;
   availableTo: ISODate;
@@ -362,7 +365,7 @@ export interface AuditEvent {
   eventType: string;
   actorId: UUID;
   actorRole: Role | "SYSTEM";
-  subjectType: "LOAD" | "TRUCK" | "MATCH" | "TRIP" | "USER" | "DISPUTE" | "INVOICE";
+  subjectType: "ASSET_HIRE" | "LOAD" | "TRUCK" | "MATCH" | "TRIP" | "USER" | "DISPUTE" | "INVOICE";
   subjectId: UUID;
   summary: string;
   before?: Record<string, unknown>;
@@ -509,6 +512,7 @@ export interface OnboardingData {
         address: string;
         contactDetails: string;
         vat: string;
+        assetHireOnly?: boolean;
       }
     | undefined;
   driver?:

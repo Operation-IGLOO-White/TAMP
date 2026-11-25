@@ -38,7 +38,7 @@ export type NotifTarget =
   | { kind: "load"; loadId: string }
   | {
       kind: "route";
-      to: "/owner/board" | "/transporter/engagements" | "/driver" | "/admin/oversight";
+      to: "/asset-hire" | "/owner/board" | "/transporter/engagements" | "/driver" | "/admin/oversight";
     };
 
 function resolveLoadId(
@@ -70,6 +70,7 @@ export function notificationTarget(
   n: Pick<Notification, "subjectType" | "subjectId">,
   data: { matches: Match[]; trips: Trip[]; disputes: Dispute[] },
 ): NotifTarget {
+  if (n.subjectType === "ASSET_HIRE") return { kind: "route", to: "/asset-hire" };
   if (role === "FREIGHT_OWNER") {
     const loadId = resolveLoadId(n.subjectType, n.subjectId, data);
     return loadId ? { kind: "load", loadId } : { kind: "route", to: "/owner/board" };

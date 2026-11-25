@@ -251,6 +251,9 @@ function TruckCard({
     availableTo: dateInputValue(truck.availableTo),
     alwaysAvailable: truck.alwaysAvailable ?? false,
     capacityKg: truck.payloadCapacityKg,
+    lengthM: truck.transportDimensions?.lengthM ?? 0,
+    widthM: truck.transportDimensions?.widthM ?? 0,
+    heightM: truck.transportDimensions?.heightM ?? 0,
     volumeCapacityM3: truck.volumeCapacityM3 ?? vehicle?.volumeCapacityM3 ?? 0,
     vin: truck.vin ?? vehicle?.vin ?? "",
     make: truck.make ?? vehicle?.make ?? "",
@@ -273,6 +276,9 @@ function TruckCard({
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    const dimensions = [form.lengthM, form.widthM, form.heightM];
+    if (dimensions.some(Boolean) && !dimensions.every((value) => value > 0))
+      return setEditError("Enter length, width and height together.");
     if (!form.registration.trim()) return setEditError("Registration is required.");
     if (!form.licenceNumber.trim()) return setEditError("Vehicle licence number is required.");
     if (!form.licenceExpiry) return setEditError("Vehicle licence expiry date is required.");
@@ -306,6 +312,9 @@ function TruckCard({
       bodyType: form.bodyType,
       currentLocation: form.location,
       payloadCapacityKg: form.capacityKg,
+      transportDimensions: form.lengthM && form.widthM && form.heightM
+        ? { lengthM: form.lengthM, widthM: form.widthM, heightM: form.heightM }
+        : null,
       ...(form.volumeCapacityM3 > 0 ? { volumeCapacityM3: form.volumeCapacityM3 } : {}),
       availableFrom: form.alwaysAvailable
         ? new Date().toISOString()
@@ -446,6 +455,12 @@ function TruckCard({
           <Field label="Volume capacity (m³)">
             <input type="number" min={0} value={form.volumeCapacityM3} onChange={(e) => setForm({ ...form, volumeCapacityM3: Number(e.target.value) })} className={inputCls} />
           </Field>
+          {(["lengthM", "widthM", "heightM"] as const).map((axis) => (
+            <Field key={axis} label={`Max loaded cargo ${axis.slice(0, -1)} (m)`}>
+              <input type="number" min={0} step="0.01" className={inputCls}
+                value={form[axis] || ""} onChange={(e) => setForm({ ...form, [axis]: Number(e.target.value) })} />
+            </Field>
+          ))}
           <Field label="Current location" required>
             <AddressInput
               value={form.location}
@@ -605,6 +620,9 @@ function AddTruckForm({
     bodyType: "TAUTLINER" as BodyType,
     capacityKg: 30000,
     volumeCapacityM3: 60,
+    lengthM: 0,
+    widthM: 0,
+    heightM: 0,
     location: null as Place | null,
     preferredDestination: null as Place | null,
     availableFrom: today,
@@ -624,6 +642,9 @@ function AddTruckForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const dimensions = [form.lengthM, form.widthM, form.heightM];
+    if (dimensions.some(Boolean) && !dimensions.every((value) => value > 0))
+      return setErr("Enter length, width and height together.");
     const registration = form.registration.trim().toUpperCase();
     if (!registration) return setErr("Enter the truck's registration.");
     if (registration.length > 40) return setErr("Registration must be 40 characters or fewer.");
@@ -694,6 +715,9 @@ function AddTruckForm({
         registration,
         bodyType: form.bodyType,
         payloadCapacityKg: form.capacityKg,
+        transportDimensions: form.lengthM && form.widthM && form.heightM
+          ? { lengthM: form.lengthM, widthM: form.widthM, heightM: form.heightM }
+          : null,
         ...(form.volumeCapacityM3 > 0 ? { volumeCapacityM3: form.volumeCapacityM3 } : {}),
         currentLocation: form.location,
         availableFrom: form.alwaysAvailable
@@ -841,6 +865,12 @@ function AddTruckForm({
             className={inputCls}
           />
         </Field>
+        {(["lengthM", "widthM", "heightM"] as const).map((axis) => (
+          <Field key={axis} label={`Max loaded cargo ${axis.slice(0, -1)} (m)`}>
+            <input type="number" min={0} step="0.01" className={inputCls}
+              value={form[axis] || ""} onChange={(e) => setForm({ ...form, [axis]: Number(e.target.value) })} />
+          </Field>
+        ))}
         <Field label="Current location" required>
           <AddressInput
             value={form.location}

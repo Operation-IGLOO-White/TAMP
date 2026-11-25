@@ -51,6 +51,7 @@ const Page45 = lazy(() => import("@/pages/admin/matching"));
 const Page46 = lazy(() => import("@/pages/driver/dashboard"));
 const Page47 = lazy(() => import("@/pages/owner/directory"));
 const Page48 = lazy(() => import("@/pages/owner/insights"));
+const AssetHire = lazy(() => import("@/pages/asset-hire"));
 const Page49 = lazy(() => import("@/pages/owner/offers"));
 
 export default function App() {
@@ -66,6 +67,10 @@ export default function App() {
           }
         >
           <Routes>
+            <Route
+              path="/asset-hire"
+              element={<RequireRole role={["FREIGHT_OWNER", "TRANSPORTER"]} permission="loads.read"><AssetHire /></RequireRole>}
+            />
             <Route path="/403" element={<Page0 />} />
             <Route
               path="/admin/oversight"
@@ -234,7 +239,7 @@ export default function App() {
             <Route
               path="/owner/loads/:loadId"
               element={
-                <RequireRole role={"FREIGHT_OWNER"} permission="loads.read">
+                <RequireRole role={["FREIGHT_OWNER", "TRANSPORTER"]} permission="loads.read">
                   <Page18 />
                 </RequireRole>
               }

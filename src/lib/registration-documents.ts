@@ -36,6 +36,7 @@ export const OWNER_DRIVER_VEHICLE_DOCUMENTS = [
 export function registrationDocumentLabels(
   userType: OnboardingUserType,
   driverWorkType?: "OWNER" | "FLEET",
+  assetHireOnly = false,
 ): string[] {
   if (userType === "DRIVER") {
     return driverWorkType === "OWNER"
@@ -45,7 +46,7 @@ export function registrationDocumentLabels(
   if (userType === "CARRIER") {
     return [
       ...BASE_REGISTRATION_DOCUMENTS.filter((label) => label !== "Transport / insurance"),
-      ...CARRIER_REGISTRATION_DOCUMENTS,
+      ...(assetHireOnly ? [] : CARRIER_REGISTRATION_DOCUMENTS),
     ];
   }
   if (userType === "BROKER") {
@@ -55,7 +56,7 @@ export function registrationDocumentLabels(
 }
 
 export function onboardingDocumentLabels(onboarding: OnboardingData): string[] {
-  const required = registrationDocumentLabels(onboarding.userType, onboarding.driver?.workType);
+  const required = registrationDocumentLabels(onboarding.userType, onboarding.driver?.workType, onboarding.business?.assetHireOnly);
   if (required.length) return required;
   return (onboarding.documents ?? []).map((document) =>
     typeof document === "string" ? document : document.label,

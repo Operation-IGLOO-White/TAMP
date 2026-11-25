@@ -1,3 +1,5 @@
+import { trpc } from "@/lib/trpc";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -101,6 +103,7 @@ function LoadDetail() {
   const navigate = useNavigate();
   const {
     loads,
+    role,
     trucks,
     parties,
     matches,
@@ -128,12 +131,22 @@ function LoadDetail() {
   const [selectedAllocationMatchId, setSelectedAllocationMatchId] = useState<string | null>(null);
 
   const load = loads.find((l) => l.id === loadId);
+  const assetMove = !!load?.assetMoveId;
+  const assetWorkspace = useQuery({
+    queryKey: ["asset-hire", authParty?.id, authParty?.activeOrganisationId],
+    queryFn: () => trpc.query<{ moves: { id: string }[] }>("assetHire.list"),
+    enabled: role === "TRANSPORTER" && assetMove,
+  });
+  const canOpen = role === "FREIGHT_OWNER" || (
+    assetMove && assetWorkspace.data?.moves.some((move) => move.id === loadId)
+  );
+  const backTo = assetMove ? "/asset-hire?view=moves" : "/owner/board";
   const owner = load ? parties.find((p) => p.id === load.ownerId) : undefined;
 
   const [scored, setScored] = useState<ScoredMatch[]>([]);
   useEffect(() => {
     let cancelled = false;
-    if (!load || !owner) {
+    if (!load || !owner || !canOpen || role === "TRANSPORTER") {
       setScored([]);
       return;
     }
@@ -143,7 +156,7 @@ function LoadDetail() {
     return () => {
       cancelled = true;
     };
-  }, [load, owner, trucks, parties]);
+  }, [load, owner, trucks, parties, canOpen, role]);
 
   const actionableMatches = useMemo(
     () =>
@@ -192,7 +205,7 @@ function LoadDetail() {
 
   const unqualified = scored.filter((m) => !m.passed);
 
-  if (!load) {
+  if (!load || !canOpen) {
     return (
       <AppShell>
         <main className="flex min-h-full items-center justify-center">
@@ -272,7 +285,7 @@ function LoadDetail() {
         <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-md sm:p-4">
           <div className="relative flex min-w-0 items-center gap-2 md:hidden">
             <Link
-              to="/owner/board"
+              to={backTo}
               aria-label="Back to freight board"
               className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-foreground"
             >
@@ -339,7 +352,7 @@ function LoadDetail() {
 
           <div className="hidden items-center justify-between gap-4 md:flex">
             <div className="flex min-w-0 items-center gap-3">
-              <Link to="/owner/board" className="text-[10px] font-bold uppercase tracking-widest text-signal">← Back to board</Link>
+              <Link to={backTo} className="text-[10px] font-bold uppercase tracking-widest text-signal">← {assetMove ? "Asset moves" : "Back to board"}</Link>
               <h1 className="font-mono text-sm font-bold tracking-tight">{load.id}</h1>
               <StatusChip status={status} />
             </div>
@@ -675,7 +688,7 @@ function LoadDetail() {
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-2.5 backdrop-blur-md sm:p-4">
         <div className="flex min-w-0 items-center gap-2 md:hidden">
           <Link
-            to="/owner/board"
+            to={backTo}
             aria-label="Back to freight board"
             className="grid size-9 shrink-0 place-items-center rounded-lg border border-border text-foreground"
           >
@@ -691,7 +704,7 @@ function LoadDetail() {
         </div>
 
         <div className="hidden space-y-3 md:block">
-          <Link to="/owner/board" className="text-[10px] font-bold uppercase tracking-widest text-signal">← Back to board</Link>
+          <Link to={backTo} className="text-[10px] font-bold uppercase tracking-widest text-signal">← {assetMove ? "Asset moves" : "Back to board"}</Link>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <h1 className="font-mono text-sm font-bold tracking-tight">{load.id}</h1>
