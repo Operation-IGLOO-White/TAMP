@@ -365,7 +365,7 @@ export interface AuditEvent {
   eventType: string;
   actorId: UUID;
   actorRole: Role | "SYSTEM";
-  subjectType: "ASSET_HIRE" | "LOAD" | "TRUCK" | "MATCH" | "TRIP" | "USER" | "DISPUTE" | "INVOICE";
+  subjectType: "CHARTER_BOOKING" | "ASSET_HIRE" | "LOAD" | "TRUCK" | "MATCH" | "TRIP" | "USER" | "DISPUTE" | "INVOICE";
   subjectId: UUID;
   summary: string;
   before?: Record<string, unknown>;

@@ -37,7 +37,7 @@ export type NotifTarget =
   | { kind: "load"; loadId: string }
   | {
       kind: "route";
-      to: `/asset-hire?booking=${string}` | "/owner/board" | "/transporter/engagements" | "/driver" | "/admin/oversight";
+      to: `/passenger-charter?booking=${string}` | `/asset-hire?booking=${string}` | "/owner/board" | "/transporter/engagements" | "/driver" | "/admin/oversight";
     };
 
 function resolveLoadId(
@@ -69,6 +69,9 @@ export function notificationTarget(
   n: Pick<Notification, "subjectType" | "subjectId">,
   data: { matches: Match[]; trips: Trip[]; disputes: Dispute[] },
 ): NotifTarget {
+  if (n.subjectType === "CHARTER_BOOKING") {
+    return { kind: "route", to: `/passenger-charter?booking=${encodeURIComponent(n.subjectId)}` };
+  }
   if (n.subjectType === "ASSET_HIRE") {
     return { kind: "route", to: `/asset-hire?booking=${encodeURIComponent(n.subjectId)}` };
   }

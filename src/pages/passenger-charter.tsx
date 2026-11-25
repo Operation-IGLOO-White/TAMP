@@ -1,8 +1,10 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { BusFront, CalendarDays, MapPin, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
+import { CharterBookings, CharterRequestForm, type CharterListing } from "@/components/tamp/CharterBookings";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { useTamp } from "@/context/TampContext";
 import { uploadFile } from "@/fns/upload";
@@ -27,9 +29,10 @@ const documents = {
   insurance: "Insurance certificate",
 };
 type VehicleType = keyof typeof types;
+type Subtypes = Record<VehicleType, Record<string, string>>;
 type DocumentType = keyof typeof documents;
 type Vehicle = {
-  id: string; type: VehicleType; make: string; model: string; seats: number;
+  id: string; type: VehicleType; subtype?: string | null; subtypeLabel?: string | null; make: string; model: string; seats: number;
   wheelchairPositions: number; displacedSeats: number; luggageKg: number; luggageM3: number;
   luggageDimensions: { lengthM: number; widthM: number; heightM: number } | null;
   location: Place; serviceArea: string; photos: string[]; availability: { start: string; end: string };
@@ -42,7 +45,7 @@ type FleetVehicle = Vehicle & {
 type Driver = { id: string; name: string };
 type Mode = "catalogue" | "fleet" | "review";
 type Workspace = {
-  vehicles: FleetVehicle[]; drivers: Driver[];
+  vehicles: FleetVehicle[]; drivers: Driver[]; subtypes: Subtypes;
 };
 type Review = { vehicle: FleetVehicle; supplier: string };
 const documentKeys = Object.keys(documents) as DocumentType[];
@@ -67,7 +70,12 @@ export default function PassengerCharter({ mode }: { mode: Mode }) {
 }
 
 function PassengerWorkspace({ mode }: { mode: Mode }) {
-  const { authParty } = useTamp();
+  const { authParty, role } = useTamp();
+  const [params, setParams] = useSearchParams();
+  const showBookings = mode === "catalogue" && (params.has("booking") || params.get("view") === "bookings");
+  const [requestListing, setRequestListing] = useState<CharterListing | "compare" | null>(null);
+  const canRequest = hasPermission(authParty, role === "TRANSPORTER" ? "matches.manage" : "loads.manage");
+  const showCatalogue = mode === "catalogue" && !showBookings && !requestListing;
   const canEdit = mode === "fleet" && hasPermission(authParty, "trucks.manage");
   const fleet = useQuery({
     queryKey: ["passenger-fleet", authParty?.id, authParty?.activeOrganisationId],
@@ -81,8 +89,8 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
   });
   const catalogue = useQuery({
     queryKey: ["passenger-catalogue", authParty?.id, authParty?.activeOrganisationId],
-    queryFn: () => trpc.query<(Vehicle & { supplier: string })[]>("passenger.catalogue"),
-    enabled: mode === "catalogue",
+    queryFn: () => trpc.query<(Vehicle & { supplier: string; mine?: boolean })[]>("passenger.catalogue"),
+    enabled: showCatalogue,
   });
   const [editor, setEditor] = useState<FleetVehicle | "new" | null>(null);
   const [type, setType] = useState("");
@@ -93,7 +101,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
   const title = mode === "fleet" ? "Buses & Minibuses" : mode === "review" ? "Passenger Vehicle Reviews" : "Passenger Charter";
   const visible = (catalogue.data ?? []).filter((vehicle) =>
     (!type || vehicle.type === type) && vehicle.seats >= Number(seats)
-    && [vehicle.make, vehicle.model, vehicle.supplier, vehicle.serviceArea, vehicle.location.label]
+    && [vehicle.make, vehicle.model, vehicle.subtypeLabel ?? "", vehicle.supplier, vehicle.serviceArea, vehicle.location.label]
       .some((value) => value.toLowerCase().includes(search.trim().toLowerCase()))
   );
   const update = async (name: string, data: unknown, success: string) => {
@@ -113,8 +121,21 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
       ? <button className={primary} onClick={() => setEditor("new")}><Plus className="mr-1 inline size-4" /> Add passenger vehicle</button>
       : undefined} />
     <div className="mx-auto grid w-full max-w-7xl gap-5 p-4 md:p-6">
-      {mode === "catalogue" && <div className={card + " grid gap-3 p-4 sm:grid-cols-3"}>
-        <Field label="Service area or operator"><input className={field} value={search} onChange={(event) => setSearch(event.target.value)} /></Field>
+      {mode === "catalogue" && !requestListing && <nav aria-label="Passenger Charter" className="flex flex-wrap gap-2">
+        <Link to="/passenger-charter" className={showBookings ? button : primary}>Browse vehicles</Link>
+        <Link to="/passenger-charter?view=bookings" className={showBookings ? primary : button}>Charter requests & bookings</Link>
+        {!showBookings && canRequest && <button className={primary} onClick={() => setRequestListing("compare")}>
+          Find a transporter
+        </button>}
+      </nav>}
+      {showBookings && <CharterBookings key={params.get("booking") ?? "all"} />}
+      {mode === "catalogue" && !showBookings && requestListing && <CharterRequestForm listing={requestListing === "compare" ? null : requestListing}
+        close={() => setRequestListing(null)} onSent={(id) => {
+          setRequestListing(null);
+          setParams({ booking: id });
+        }} />}
+      {showCatalogue && <div className={card + " grid gap-3 p-4 sm:grid-cols-3"}>
+        <Field label="Search by subtype, area or operator"><input className={field} value={search} onChange={(event) => setSearch(event.target.value)} /></Field>
         <Field label="Vehicle type"><select className={field} value={type} onChange={(event) => setType(event.target.value)}>
           <option value="">All passenger vehicles</option>
           {Object.entries(types).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
@@ -122,16 +143,21 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
         <Field label="Minimum passenger seats"><input className={field} type="number" min={1} max={150} value={seats} onChange={(event) => setSeats(event.target.value)} /></Field>
       </div>}
       {editor && <VehicleForm key={editor === "new" ? "new" : editor.id} vehicle={editor === "new" ? undefined : editor}
-        drivers={fleet.data?.drivers ?? []} close={() => setEditor(null)}
+        drivers={fleet.data?.drivers ?? []} subtypes={fleet.data?.subtypes} close={() => setEditor(null)}
         onSaved={async () => { setEditor(null); await fleet.refetch(); }} />}
-      {query.isPending && <p role="status" className="text-sm text-muted-foreground">Loading passenger vehicles…</p>}
-      {query.isError && <div role="alert" className={card + " p-4"}>
+      {(mode !== "catalogue" || showCatalogue) && query.isPending && <p role="status" className="text-sm text-muted-foreground">Loading passenger vehicles…</p>}
+      {(mode !== "catalogue" || showCatalogue) && query.isError && <div role="alert" className={card + " p-4"}>
         <p>The passenger vehicle list could not be loaded.</p>
         <button className={button + " mt-2"} onClick={() => void query.refetch()}>Retry</button>
       </div>}
-      {mode === "catalogue" && catalogue.isSuccess && (visible.length
+      {showCatalogue && catalogue.isSuccess && (visible.length
         ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} supplier={vehicle.supplier} />)}
+          {visible.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} supplier={vehicle.supplier}>
+            {canRequest && !vehicle.mine && <button className={primary} onClick={() => {
+              setRequestListing(vehicle);
+              window.scrollTo({ top: 0 });
+            }}>Request quote</button>}
+          </VehicleCard>)}
         </div>
         : <p className={card + " p-6 text-sm text-muted-foreground"}>No published passenger vehicles match these filters.</p>)}
       {mode === "fleet" && fleet.isSuccess && (fleet.data.vehicles.length
@@ -168,23 +194,42 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
 }
 
 function saveData(vehicle: FleetVehicle, published: boolean) {
-  const { id, version, type, registration, make, model, seats, wheelchairPositions, displacedSeats,
+  const { id, version, type, subtype, registration, make, model, seats, wheelchairPositions, displacedSeats,
     luggageKg, luggageM3, luggageDimensions, location, serviceArea, availability, licenceExpiry,
     permitExpiry, photos, documents, driverId } = vehicle;
-  return { id, version, type, registration, make, model, seats, wheelchairPositions, displacedSeats,
+  return { id, version, type, subtype, registration, make, model, seats, wheelchairPositions, displacedSeats,
     luggageKg, luggageM3, luggageDimensions, location, serviceArea, availability, licenceExpiry,
     permitExpiry, photos, documents, driverId, published };
 }
 
+function VehiclePhoto({ vehicle }: { vehicle: Vehicle }) {
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [illustrationFailed, setIllustrationFailed] = useState(false);
+  const photo = vehicle.photos?.[photoIndex];
+  return <div className="relative grid h-44 place-items-center bg-muted">
+    {photo ? (
+      <img key={photoIndex} className="h-44 w-full object-contain" src={photo} alt={vehicleName(vehicle)}
+        loading="lazy" onError={() => setPhotoIndex(photoIndex + 1)} />
+    ) : (
+      <>
+        {illustrationFailed ? <BusFront aria-hidden="true" className="size-12 text-muted-foreground" /> :
+          <img className="h-44 w-full object-contain px-6 pb-7 pt-4"
+            src={`${import.meta.env.BASE_URL}fleet/tamp-passenger-${vehicle.type.toLowerCase()}.webp`}
+            alt={`Generic ${types[vehicle.type].toLowerCase()}`} loading="lazy"
+            onError={() => setIllustrationFailed(true)} />}
+        <span className="absolute bottom-2 right-2 rounded-full bg-card px-2 py-1 text-xs text-muted-foreground">
+          Illustrative image
+        </span>
+      </>
+    )}
+  </div>;
+}
+
 function VehicleCard({ vehicle, supplier, children }: { vehicle: Vehicle; supplier: string; children?: ReactNode }) {
   return <article className={card}>
-    <div className="grid h-44 place-items-center bg-muted">
-      {vehicle.photos[0]
-        ? <img className="h-44 w-full object-contain" src={vehicle.photos[0]} alt={vehicleName(vehicle)} loading="lazy" />
-        : <BusFront className="size-12 text-muted-foreground" />}
-    </div>
+    <VehiclePhoto key={JSON.stringify([vehicle.type, vehicle.photos])} vehicle={vehicle} />
     <div className="grid gap-2 p-4 text-sm">
-      <div className="text-xs font-semibold text-muted-foreground">{types[vehicle.type]} · {supplier}</div>
+      <div className="text-xs font-semibold text-muted-foreground">{types[vehicle.type]}{vehicle.subtypeLabel && ` · ${vehicle.subtypeLabel}`} · {supplier}</div>
       <h2 className="text-lg font-semibold">{vehicleName(vehicle)}</h2>
       <div className="flex flex-wrap items-center gap-2"><Users className="size-4" /> {vehicle.seats} passenger seats
         {vehicle.wheelchairPositions > 0 && <> · {vehicle.wheelchairPositions} wheelchair positions with {vehicle.seats - vehicle.displacedSeats} seats configured</>}
@@ -224,14 +269,16 @@ function ReviewForm({ vehicle, busy, onReview }: {
 const vehicleSteps = ["Vehicle", "Capacity", "Availability", "Documents"];
 const stepFields = "min-w-0 grid gap-4 sm:grid-cols-2";
 
-function VehicleForm({ vehicle, drivers, close, onSaved }: {
-  vehicle: FleetVehicle | undefined; drivers: Driver[]; close: () => void; onSaved: () => Promise<void>;
+function VehicleForm({ vehicle, drivers, subtypes, close, onSaved }: {
+  vehicle: FleetVehicle | undefined; drivers: Driver[]; subtypes: Subtypes | undefined; close: () => void; onSaved: () => Promise<void>;
 }) {
   const [location, setLocation] = useState<Place | null>(vehicle?.location ?? null);
   const [addressEdited, setAddressEdited] = useState(false);
   const [make, setMake] = useState(vehicle?.make ?? "");
   const [model, setModel] = useState(vehicle?.model ?? "");
   const [type, setType] = useState<VehicleType>(vehicle?.type ?? "MINIBUS");
+  const [subtype, setSubtype] = useState(vehicle?.subtype ?? "");
+  const subtypeOptions = Object.entries(subtypes?.[type] ?? {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [step, setStep] = useState(0);
@@ -292,7 +339,7 @@ function VehicleForm({ vehicle, drivers, close, onSaved }: {
       const photoUrls: string[] = [];
       for (const file of photos) photoUrls.push((await uploadFile(file, "PASSENGER_PHOTO")).url);
       const result = await trpc.mutation<{ verification: string }>("passenger.save", {
-        id: vehicle?.id, version: vehicle?.version, type, registration: read("registration"),
+        id: vehicle?.id, version: vehicle?.version, type, subtype: subtypes ? subtype || null : undefined, registration: read("registration"),
         make: read("make"), model: read("model"), seats: amount("seats"),
         wheelchairPositions: amount("wheelchairPositions"), displacedSeats: amount("displacedSeats"),
         luggageKg: amount("luggageKg"), luggageM3: amount("luggageM3"),
@@ -323,9 +370,17 @@ function VehicleForm({ vehicle, drivers, close, onSaved }: {
     <h3 ref={heading} tabIndex={-1} className="mb-4 font-semibold outline-none">Step {step + 1} of {vehicleSteps.length} · {vehicleSteps[step]}</h3>
     <div hidden={step !== 0} data-active-step={step === 0 ? "" : undefined}>
       <fieldset disabled={busy} className={stepFields}>
-        <Field label="Vehicle type *"><select className={field} value={type} onChange={(event) => setType(event.target.value as VehicleType)}>
+        <Field label="Vehicle type *"><select className={field} value={type} onChange={(event) => {
+            setType(event.target.value as VehicleType);
+            setSubtype("");
+          }}>
           {Object.entries(types).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
         </select></Field>
+        {subtypeOptions.length > 0 && <Field label="Vehicle subtype"><select className={field} value={subtype}
+          onChange={(event) => setSubtype(event.target.value)}>
+          <option value="">Select a subtype</option>
+          {subtypeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select></Field>}
         {type === "MINIBUS" && <div className="flex flex-wrap gap-2 sm:col-span-2">
           {minibusOptions.map((option) => <button type="button" className={button} key={option.model} onClick={() => {
             setMake(option.make);
