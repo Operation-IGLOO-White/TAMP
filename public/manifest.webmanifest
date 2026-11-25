@@ -9,18 +9,46 @@
   "orientation": "any",
   "background_color": "#0d0e12",
   "theme_color": "#0d0e12",
-  "categories": ["business", "navigation", "productivity"],
+  "categories": [
+    "business",
+    "navigation",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "/tamp-pwa.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
-    { "name": "My jobs", "short_name": "Jobs", "url": "/driver" },
-    { "name": "Freight board", "short_name": "Freight", "url": "/owner/board" },
-    { "name": "Messages", "short_name": "Messages", "url": "/messages" }
+    {
+      "name": "My jobs",
+      "short_name": "Jobs",
+      "url": "/driver"
+    },
+    {
+      "name": "Freight board",
+      "short_name": "Freight",
+      "url": "/owner/board"
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "url": "/messages"
+    }
   ]
 }

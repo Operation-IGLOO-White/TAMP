@@ -58,6 +58,17 @@ server {
         add_header Cache-Control "no-cache";
     }
 
+    location = /sw.js {
+        try_files $uri =404;
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /manifest.webmanifest {
+        types { application/manifest+json webmanifest; }
+        try_files $uri =404;
+        add_header Cache-Control "no-cache";
+    }
+
     # BrowserRouter deep links must load the SPA entry document.
     location / {
         try_files $uri $uri/ /index.html;

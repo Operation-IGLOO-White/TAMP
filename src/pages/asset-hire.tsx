@@ -51,6 +51,7 @@ type Booking = Period & {
   id: string; assetId: string; assetName: string; supplierName: string; renterName: string;
   site: Place; assetLocation?: Place; status: string; total: string; units: number; terms: Terms; incoming: boolean;
   invoice?: RentalInvoice;
+  transitionBlocker?: string | null;
   notes: string; history: { status: string; at: string; reason?: string }[];
   handovers?: Partial<Record<HandoverStage, Partial<Record<HandoverSide, HandoverReport>>>>;
   moves?: Partial<Record<"DELIVERY" | "COLLECTION", string>>;
@@ -681,10 +682,12 @@ function BookingCard({ booking, canManage, canMove, onEdit, done }: {
     {(canManage && (["REQUESTED", "CONFIRMED"].includes(booking.status) || (booking.incoming && action))
       || canMove && ["CONFIRMED", "IN_HIRE", "COMPLETED"].includes(booking.status)) &&
     <div className="flex flex-wrap items-center gap-2 border-t-2 border-dashed border-paper-foreground/20 bg-paper-foreground/5 px-4 py-4 sm:px-6">
+      {canManage && booking.incoming && booking.transitionBlocker &&
+        <p role="status" className="basis-full rounded-md bg-signal/15 p-2 text-sm">{booking.transitionBlocker}</p>}
       {canManage && booking.incoming && action && <form onSubmit={(event) => void submission.submit(event, async () => {
         await trpc.mutation("assetHire.transition", { id: booking.id, action });
         await done();
-      })}><Submit pending={submission.pending} error={submission.error}>{action === "CONFIRM" ? "Confirm rental" : action === "START" ? "Start rental" : "Complete rental"}</Submit></form>}
+      })}><Submit pending={submission.pending} error={submission.error} disabled={!!booking.transitionBlocker}>{action === "CONFIRM" ? "Confirm rental" : action === "START" ? "Start rental" : "Complete rental"}</Submit></form>}
       {canManage && booking.incoming && booking.status === "REQUESTED" &&
         <button className={button} onClick={() => onEdit({ mode: "reason", action: "DECLINE", booking })}>Decline</button>}
       {canManage && ["REQUESTED", "CONFIRMED"].includes(booking.status) &&
