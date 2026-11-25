@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BusFront, CalendarDays, MapPin, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -221,6 +221,9 @@ function ReviewForm({ vehicle, busy, onReview }: {
   </div>;
 }
 
+const vehicleSteps = ["Vehicle", "Capacity", "Availability", "Documents"];
+const stepFields = "min-w-0 grid gap-4 sm:grid-cols-2";
+
 function VehicleForm({ vehicle, drivers, close, onSaved }: {
   vehicle: FleetVehicle | undefined; drivers: Driver[]; close: () => void; onSaved: () => Promise<void>;
 }) {
@@ -231,20 +234,51 @@ function VehicleForm({ vehicle, drivers, close, onSaved }: {
   const [type, setType] = useState<VehicleType>(vehicle?.type ?? "MINIBUS");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [step, setStep] = useState(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const lastStep = step === vehicleSteps.length - 1;
+
+  function changeStep(next: number) {
+    setError("");
+    setStep(next);
+    requestAnimationFrame(() => {
+      heading.current?.focus({ preventScroll: true });
+      heading.current?.closest("form")?.scrollIntoView({ block: "start" });
+    });
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const activeFields = formElement.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+      "[data-active-step] input, [data-active-step] select",
+    );
+    for (const field of activeFields) {
+      if (!field.reportValidity()) return;
+    }
+    const form = new FormData(formElement);
     const read = (name: string) => String(form.get(name) ?? "").trim();
     const amount = (name: string) => Number(read(name));
     const fail = (message: string) => { setError(message); };
-    if (!location || addressEdited) return fail("Select the vehicle’s base address from the search results.");
-    if (read("start") >= read("end")) return fail("Availability must end after it starts.");
-    if (amount("displacedSeats") > amount("seats") || (!amount("wheelchairPositions") && amount("displacedSeats"))) {
+    if (step === 0) {
+      if (!read("make") || !read("model")) return fail("Enter the vehicle make and model.");
+      if (!/^[A-Za-z0-9 -]{2,24}$/.test(read("registration")) || !/[A-Za-z0-9]/.test(read("registration"))) {
+        return fail("Enter a registration with 2 to 24 letters, digits, spaces or hyphens.");
+      }
+    }
+    if (step === 2) {
+      if (!location || addressEdited) return fail("Select the vehicle’s base address from the search results.");
+      if (!read("serviceArea")) return fail("Enter the vehicle’s service area.");
+      if (read("start") >= read("end")) return fail("Availability must end after it starts.");
+    }
+    if (step === 1 && (amount("displacedSeats") > amount("seats") || (!amount("wheelchairPositions") && amount("displacedSeats")))) {
       return fail("Check the number of seats removed for wheelchair access.");
     }
     const dimensions = ["lengthM", "widthM", "heightM"];
     const measured = dimensions.some((name) => read(name));
-    if (measured && dimensions.some((name) => !amount(name))) return fail("Enter all three luggage compartment dimensions.");
+    if (step === 1 && measured && dimensions.some((name) => !amount(name))) return fail("Enter all three luggage compartment dimensions.");
+    if (!lastStep) return changeStep(step + 1);
+    if (!location) return changeStep(2);
     const photos = form.getAll("photos").filter((entry): entry is File => entry instanceof File && entry.size > 0);
     if (photos.length > 6 || (!vehicle && !photos.length)) return fail("Choose one to six vehicle photos.");
     setBusy(true);
@@ -277,55 +311,78 @@ function VehicleForm({ vehicle, drivers, close, onSaved }: {
       setBusy(false);
     }
   }
-  return <form id="passenger-vehicle-form" className={card + " scroll-mt-24 p-4 sm:p-6"} onSubmit={submit}>
+  return <form id="passenger-vehicle-form" className={card + " mx-auto w-full max-w-3xl scroll-mt-24 p-4 sm:p-6"} onSubmit={submit} noValidate aria-busy={busy}>
     <h2 className="mb-4 text-lg font-semibold">{vehicle ? "Edit passenger vehicle" : "Add passenger vehicle"}</h2>
-    <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <Field label="Vehicle type *"><select className={field} value={type} onChange={(event) => setType(event.target.value as VehicleType)}>
-        {Object.entries(types).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
-      </select></Field>
-      {type === "MINIBUS" && <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
-        {minibusOptions.map((option) => <button type="button" className={button} key={option.model} onClick={() => {
-          setMake(option.make);
-          setModel(option.model);
-        }}>{option.make} {option.model}</button>)}
-      </div>}
-      <Field label="Make *"><input className={field} name="make" maxLength={80} required value={make} onChange={(event) => setMake(event.target.value)} /></Field>
-      <Field label="Model *"><input className={field} name="model" maxLength={80} required value={model} onChange={(event) => setModel(event.target.value)} /></Field>
-      <Field label="Registration *"><input className={field} name="registration" minLength={2} maxLength={24} required defaultValue={vehicle?.registration} /></Field>
-      <Field label="Passenger seats, excluding driver *"><input className={field} name="seats" type="number" min={1} max={150} required defaultValue={vehicle?.seats} /></Field>
-      <Field label="Wheelchair positions"><input className={field} name="wheelchairPositions" type="number" min={0} max={30} defaultValue={vehicle?.wheelchairPositions} /></Field>
-      <Field label="Seats removed for wheelchair access"><input className={field} name="displacedSeats" type="number" min={0} max={150} defaultValue={vehicle?.displacedSeats} /></Field>
-      <Field label="Luggage capacity (kg)"><input className={field} name="luggageKg" type="number" min={0} max={20000} step="any" defaultValue={vehicle?.luggageKg} /></Field>
-      <Field label="Luggage volume (m³)"><input className={field} name="luggageM3" type="number" min={0} max={150} step="any" defaultValue={vehicle?.luggageM3} /></Field>
-      {(["lengthM", "widthM", "heightM"] as const).map((name) => <Field key={name} label={`Luggage compartment ${name.slice(0, -1)} (m)`}>
-        <input className={field} name={name} type="number" min={0.01} max={name === "lengthM" ? 100 : 30} step="any" defaultValue={vehicle?.luggageDimensions?.[name]} />
-      </Field>)}
-      <div className="min-w-0"><p className="mb-1.5 text-sm font-medium">Base location *</p>
-        <AddressInput value={location} onTextEdit={() => setAddressEdited(true)} onSelect={(place) => {
-          setLocation(place);
-          setAddressEdited(false);
-        }} placeholder="Search for an address" />
-      </div>
-      <Field label="Service area *"><input className={field} name="serviceArea" maxLength={200} required defaultValue={vehicle?.serviceArea} /></Field>
-      <Field label="Assigned driver"><select className={field} name="driver" defaultValue={vehicle?.driverId ?? ""}>
-        <option value="">Choose later</option>
-        {drivers.map((driver) => <option value={driver.id} key={driver.id}>{driver.name}</option>)}
-      </select></Field>
-      <Field label="Available from (SAST) *"><input className={field} name="start" type="datetime-local" required defaultValue={localDate(vehicle?.availability.start)} /></Field>
-      <Field label="Available until (SAST) *"><input className={field} name="end" type="datetime-local" required defaultValue={localDate(vehicle?.availability.end)} /></Field>
-      <Field label="Vehicle licence expiry *"><input className={field} name="licenceExpiry" type="date" required defaultValue={vehicle?.licenceExpiry} /></Field>
-      <Field label="Operating licence expiry *"><input className={field} name="permitExpiry" type="date" required defaultValue={vehicle?.permitExpiry} /></Field>
-      <Field label={vehicle ? "Replace vehicle photos (up to 6)" : "Vehicle photos (1–6) *"}>
-        <input className={field} name="photos" type="file" multiple accept="image/*" required={!vehicle} />
-      </Field>
-      {documentKeys.map((key) => <Field key={key} label={documents[key] + (vehicle ? " (replace)" : " *")}>
-        <input className={field} name={key} type="file" accept="image/*,application/pdf" required={!vehicle?.documents[key]} />
-      </Field>)}
-    </fieldset>
+    <ol aria-label="Registration progress" className="mb-5 grid grid-cols-4 gap-1 border-b border-border pb-4 sm:gap-3">
+      {vehicleSteps.map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined}
+        className={`grid justify-items-center gap-1 text-center text-[11px] font-medium sm:text-sm ${index === step ? "text-foreground" : "text-muted-foreground"}`}>
+        <span className={`grid size-7 place-items-center rounded-full ${index <= step ? "bg-signal text-signal-foreground" : "bg-muted"}`}>{index + 1}</span>
+        {label}
+      </li>)}
+    </ol>
+    <h3 ref={heading} tabIndex={-1} className="mb-4 font-semibold outline-none">Step {step + 1} of {vehicleSteps.length} · {vehicleSteps[step]}</h3>
+    <div hidden={step !== 0} data-active-step={step === 0 ? "" : undefined}>
+      <fieldset disabled={busy} className={stepFields}>
+        <Field label="Vehicle type *"><select className={field} value={type} onChange={(event) => setType(event.target.value as VehicleType)}>
+          {Object.entries(types).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
+        </select></Field>
+        {type === "MINIBUS" && <div className="flex flex-wrap gap-2 sm:col-span-2">
+          {minibusOptions.map((option) => <button type="button" className={button} key={option.model} onClick={() => {
+            setMake(option.make);
+            setModel(option.model);
+          }}>{option.make} {option.model}</button>)}
+        </div>}
+        <Field label="Make *"><input className={field} name="make" maxLength={80} required value={make} onChange={(event) => setMake(event.target.value)} /></Field>
+        <Field label="Model *"><input className={field} name="model" maxLength={80} required value={model} onChange={(event) => setModel(event.target.value)} /></Field>
+        <Field label="Registration *"><input className={field} name="registration" minLength={2} maxLength={24} required defaultValue={vehicle?.registration} /></Field>
+      </fieldset>
+    </div>
+    <div hidden={step !== 1} data-active-step={step === 1 ? "" : undefined}>
+      <fieldset disabled={busy} className={stepFields}>
+        <Field label="Passenger seats, excluding driver *"><input className={field} name="seats" type="number" min={1} max={150} required defaultValue={vehicle?.seats} /></Field>
+        <Field label="Wheelchair positions"><input className={field} name="wheelchairPositions" type="number" min={0} max={30} defaultValue={vehicle?.wheelchairPositions} /></Field>
+        <Field label="Seats removed for wheelchair access"><input className={field} name="displacedSeats" type="number" min={0} max={150} defaultValue={vehicle?.displacedSeats} /></Field>
+        <Field label="Luggage capacity (kg)"><input className={field} name="luggageKg" type="number" min={0} max={20000} step="any" defaultValue={vehicle?.luggageKg} /></Field>
+        <Field label="Luggage volume (m³)"><input className={field} name="luggageM3" type="number" min={0} max={150} step="any" defaultValue={vehicle?.luggageM3} /></Field>
+        {(["lengthM", "widthM", "heightM"] as const).map((name) => <Field key={name} label={`Luggage compartment ${name.slice(0, -1)} (m)`}>
+          <input className={field} name={name} type="number" min={0.01} max={name === "lengthM" ? 100 : 30} step="any" defaultValue={vehicle?.luggageDimensions?.[name]} />
+        </Field>)}
+      </fieldset>
+    </div>
+    <div hidden={step !== 2} data-active-step={step === 2 ? "" : undefined}>
+      <fieldset disabled={busy} className={stepFields}>
+        <div className="min-w-0"><p className="mb-1.5 text-sm font-medium">Base location *</p>
+          <AddressInput value={location} onTextEdit={() => setAddressEdited(true)} onSelect={(place) => {
+            setLocation(place);
+            setAddressEdited(false);
+          }} placeholder="Search for an address" />
+        </div>
+        <Field label="Service area *"><input className={field} name="serviceArea" maxLength={200} required defaultValue={vehicle?.serviceArea} /></Field>
+        <Field label="Assigned driver"><select className={field} name="driver" defaultValue={vehicle?.driverId ?? ""}>
+          <option value="">Choose later</option>
+          {drivers.map((driver) => <option value={driver.id} key={driver.id}>{driver.name}</option>)}
+        </select></Field>
+        <Field label="Available from (SAST) *"><input className={field} name="start" type="datetime-local" required defaultValue={localDate(vehicle?.availability.start)} /></Field>
+        <Field label="Available until (SAST) *"><input className={field} name="end" type="datetime-local" required defaultValue={localDate(vehicle?.availability.end)} /></Field>
+      </fieldset>
+    </div>
+    <div hidden={step !== 3} data-active-step={step === 3 ? "" : undefined}>
+      <fieldset disabled={busy} className={stepFields}>
+        <Field label="Vehicle licence expiry *"><input className={field} name="licenceExpiry" type="date" required defaultValue={vehicle?.licenceExpiry} /></Field>
+        <Field label="Operating licence expiry *"><input className={field} name="permitExpiry" type="date" required defaultValue={vehicle?.permitExpiry} /></Field>
+        <Field label={vehicle ? "Replace vehicle photos (up to 6)" : "Vehicle photos (1–6) *"}>
+          <input className={field} name="photos" type="file" multiple accept="image/*" required={!vehicle} />
+        </Field>
+        {documentKeys.map((key) => <Field key={key} label={documents[key] + (vehicle ? " (replace)" : " *")}>
+          <input className={field} name={key} type="file" accept="image/*,application/pdf" required={!vehicle?.documents[key]} />
+        </Field>)}
+      </fieldset>
+    </div>
     {error && <p role="alert" className="mt-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     <div className="mt-4 flex flex-wrap justify-end gap-2">
       <button className={button} disabled={busy} type="button" onClick={close}>Cancel</button>
-      <button className={primary} disabled={busy}>{busy ? "Saving…" : vehicle ? "Save changes" : "Submit for review"}</button>
+      {step > 0 && <button className={button} disabled={busy} type="button" onClick={() => changeStep(step - 1)}>Back</button>}
+      <button className={primary} disabled={busy}>{busy ? "Saving…" : !lastStep ? "Continue" : vehicle ? "Save changes" : "Submit for review"}</button>
     </div>
   </form>;
 }
