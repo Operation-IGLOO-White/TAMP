@@ -11,7 +11,7 @@ import { uploadFile } from "@/fns/upload";
 import { hasPermission } from "@/lib/access";
 import { trpc } from "@/lib/trpc";
 import type { Place } from "@/types/domain";
-scm-history-item:/home/hlaks/Documents/TAMP/tamp_frontend/TAMP?%7B%22repositoryId%22%3A%22scm0%22%2C%22historyItemId%22%3A%229230119504b3bab74233e76ffa2a646a98fbe676%22%2C%22historyItemParentId%22%3A%226723125aa242ed935b69e9b88d33a1fe2290b951%22%2C%22historyItemDisplayId%22%3A%229230119%22%7D
+
 const types = {
   MINIBUS: "Minibus",
   MIDIBUS: "Midibus",
@@ -159,7 +159,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
     <PageHeader title={title} actions={canEdit && !editor
       ? <button className={primary} onClick={() => openEditor("new")}><Plus className="mr-1 inline size-4" /> Add passenger vehicle</button>
       : undefined} />
-    <div className="grid w-full min-w-0 gap-5 p-4 md:p-6">
+    <div className={`mx-auto grid w-full gap-5 p-4 md:p-6 ${mode === "fleet" ? "" : "max-w-7xl"}`}>
       {mode === "catalogue" && !requestListing && <nav aria-label="Passenger Charter" className="flex flex-wrap gap-2">
         <Link to="/passenger-charter" className={showBookings ? button : primary}>Browse vehicles</Link>
         <Link to="/passenger-charter?view=bookings" className={showBookings ? primary : button}>Charter requests & bookings</Link>
