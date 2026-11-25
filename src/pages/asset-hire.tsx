@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Forklift, MapPin, Plus } from "lucide-react";
+import { ChevronDown, Forklift, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -206,7 +206,7 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
         {linkedBooking && <button className={button + " mb-4"} onClick={() => changeTab(tab)}>
           {tab === "incoming" ? "View all incoming requests" : tab === "requests" ? "View my requests" : "View my hires"}
         </button>}
-        {["requests", "hires", "incoming"].includes(tab) && <div className="grid gap-4 xl:grid-cols-2">
+        {["requests", "hires", "incoming"].includes(tab) && <div className="grid items-start gap-6 xl:grid-cols-2">
           {visibleBookings.map((booking) => <BookingCard key={booking.id} booking={booking}
             canManage={booking.incoming ? canList : canBook} canMove={canMove}
             onEdit={setEditor} done={() => done("Booking updated")} />)}
@@ -381,23 +381,71 @@ function BookingCard({ booking, canManage, canMove, onEdit, done }: {
 }) {
   const submission = useSubmission();
   const action = { REQUESTED: "CONFIRM", CONFIRMED: "START", IN_HIRE: "COMPLETE" }[booking.status];
-  return <article className="app-surface space-y-3 p-4">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 className="font-bold">{booking.assetName}</h2>
-      <span className="rounded-full bg-signal/15 px-2 py-1 text-xs font-semibold capitalize">{statusText(booking.status)}</span>
+  const unit = booking.terms.unit.toLowerCase();
+  const finalStatus = ["DECLINED", "CANCELLED"].includes(booking.status);
+  const documentLabel = booking.status === "REQUESTED" ? "Hire request" : "Hire booking";
+  const label = "block text-[10px] font-black uppercase tracking-widest opacity-75";
+
+  return <article className="min-w-0 max-w-3xl overflow-hidden rounded-lg border border-paper-foreground/10 bg-paper text-paper-foreground shadow-lg">
+    <header className="border-b-2 border-dashed border-paper-foreground/20 px-4 py-5 sm:px-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-extrabold uppercase italic tracking-tighter">{documentLabel}</h2>
+          <p className="mt-1 break-all font-mono text-[11px] opacity-75">{booking.id}</p>
+        </div>
+        <span className={`rounded border px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${
+          finalStatus ? "border-paper-foreground/20 bg-paper-foreground/5" : "border-signal/60 bg-signal/20"
+        }`}>{statusText(booking.status)}</span>
+      </div>
+      <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
+        <div className="min-w-0"><dt className={label}>Asset owner</dt><dd className="mt-1 break-words font-bold">{booking.supplierName}</dd></div>
+        <div className="min-w-0"><dt className={label}>Renter</dt><dd className="mt-1 break-words font-bold">{booking.renterName}</dd></div>
+      </dl>
+    </header>
+
+    <div className="space-y-4 px-4 py-5 sm:px-6">
+      <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <div className="sm:col-span-2"><dt className={label}>Worksite</dt><dd className="mt-1 break-words">{booking.site.label}</dd></div>
+        <div><dt className={label}>Hire starts (SAST)</dt><dd className="mt-1 font-mono text-xs">{date.format(new Date(booking.start))}</dd></div>
+        <div><dt className={label}>Hire ends (SAST)</dt><dd className="mt-1 font-mono text-xs">{date.format(new Date(booking.end))}</dd></div>
+      </dl>
+
+      <div className="overflow-hidden rounded border border-paper-foreground/15">
+        <div className="flex items-start justify-between gap-3 px-3 py-3 text-sm">
+          <div className="min-w-0">
+            <span className={label}>Asset hire</span>
+            <p className="mt-1 break-words font-bold">{booking.assetName}</p>
+            <p className="mt-1 font-mono text-xs">{booking.units} {unit}{booking.units === 1 ? "" : "s"} × {money.format(Number(booking.terms.rate))}</p>
+          </div>
+          <Forklift className="size-5 shrink-0 opacity-60" aria-hidden />
+        </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-dashed border-paper-foreground/20 bg-signal/15 px-3 py-3">
+          <span className={label}>Hire total</span>
+          <span className="font-mono text-lg font-extrabold tabular-nums">
+            {money.format(Number(booking.total))} <span className="whitespace-nowrap text-xs font-semibold">{booking.terms.vat}. VAT</span>
+          </span>
+        </div>
+      </div>
+
+      <p className="text-xs opacity-80">{booking.terms.operatorIncluded ? "Operator included" : "Operator excluded"} · {booking.terms.fuelIncluded ? "Fuel included" : "Fuel excluded"}</p>
+      {booking.notes && <div><p className={label}>Site instructions</p><p className="mt-1 whitespace-pre-wrap break-words text-sm">{booking.notes}</p></div>}
+      <details className="group border-t border-paper-foreground/15 pt-3 text-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between font-semibold">
+          Booking history <ChevronDown className="size-4 group-open:rotate-180" aria-hidden />
+        </summary>
+        <ul className="mt-3 space-y-2 border-l border-paper-foreground/20 pl-3 text-xs">
+          {booking.history.map((item, index) => <li key={`${item.at}-${index}`}>
+            <time dateTime={item.at} className="font-mono opacity-75">{date.format(new Date(item.at))}</time>
+            <span className="ml-2 font-semibold capitalize">{statusText(item.status)}</span>
+            {item.reason && <p className="mt-1 break-words">{item.reason}</p>}
+          </li>)}
+        </ul>
+      </details>
     </div>
-    <p className="text-sm">{booking.incoming ? booking.renterName : booking.supplierName}</p>
-    <p className="text-sm"><MapPin className="mr-1 inline size-4" />{booking.site.label}</p>
-    <p className="text-sm"><CalendarDays className="mr-1 inline size-4" />{date.format(new Date(booking.start))} to {date.format(new Date(booking.end))}</p>
-    <p className="text-sm font-semibold">{booking.units} × {money.format(Number(booking.terms.rate))} / {booking.terms.unit.toLowerCase()} · {money.format(Number(booking.total))} {booking.terms.vat} VAT</p>
-    <p className="text-sm">{booking.terms.operatorIncluded ? "Operator included" : "Operator excluded"} · {booking.terms.fuelIncluded ? "Fuel included" : "Fuel excluded"}</p>
-    {booking.notes && <p className="whitespace-pre-wrap text-sm">{booking.notes}</p>}
-    <details className="text-sm"><summary className="cursor-pointer">Booking history</summary>
-      <ul className="mt-2 space-y-1">{booking.history.map((item) => <li key={item.at}>
-        {date.format(new Date(item.at))} · {statusText(item.status)}{item.reason && " · " + item.reason}
-      </li>)}</ul>
-    </details>
-    <div className="flex flex-wrap items-center gap-2">
+
+    {(canManage && (["REQUESTED", "CONFIRMED"].includes(booking.status) || (booking.incoming && action))
+      || canMove && ["CONFIRMED", "IN_HIRE", "COMPLETED"].includes(booking.status)) &&
+    <div className="flex flex-wrap items-center gap-2 border-t-2 border-dashed border-paper-foreground/20 bg-paper-foreground/5 px-4 py-4 sm:px-6">
       {canManage && booking.incoming && action && <form onSubmit={(event) => void submission.submit(event, async () => {
         await trpc.mutation("assetHire.transition", { id: booking.id, action });
         await done();
@@ -408,7 +456,7 @@ function BookingCard({ booking, canManage, canMove, onEdit, done }: {
         <button className={button} onClick={() => onEdit({ mode: "reason", action: "CANCEL", booking })}>Cancel hire</button>}
       {canMove && ["CONFIRMED", "IN_HIRE", "COMPLETED"].includes(booking.status) &&
         <button className={button} onClick={() => onEdit({ mode: "move", booking })}>Arrange transport</button>}
-    </div>
+    </div>}
   </article>;
 }
 
