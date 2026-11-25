@@ -15,6 +15,7 @@ type TrackedVehicle = CharterVehicleProgress & {
   supplier: string;
   activeLeg: CharterLegKey | null;
   position: CharterPosition | null;
+  eta?: { checkpoint: string; label: string; arrivalAt: string; deadline: string | null; atRisk: boolean; positionAt: string } | null;
 };
 
 const button = "min-h-10 rounded-lg border border-border px-3 py-2 text-sm font-semibold";
@@ -60,8 +61,9 @@ function LiveMap({ bookingId, origin }: { bookingId: string; origin: Place }) {
     {live.data && <FleetMap origin={origin} vehicles={vehicles} clock={clock} />}
     <ul className="grid gap-2 sm:grid-cols-2">
       {vehicles.map((vehicle) => {
-        const { activeLeg, position } = vehicle;
+        const { activeLeg, position, eta } = vehicle;
         const fresh = position && !isStale(position, clock);
+        const currentEta = fresh && eta && clock - Date.parse(eta.positionAt) < 90_000 ? eta : null;
         return <li key={vehicle.bookingId + ":" + vehicle.vehicleId} className="min-w-0 rounded-lg border border-border p-2 text-sm">
           <p className="flex items-start gap-2 font-semibold"><BusFront className="mt-0.5 size-4 shrink-0" /> {vehicle.registration} · {vehicle.supplier}</p>
           <p className="text-muted-foreground">{activeLeg
@@ -70,6 +72,14 @@ function LiveMap({ bookingId, origin }: { bookingId: string; origin: Place }) {
           {position ? <p className={fresh ? "text-positive" : "text-muted-foreground"}>
             {fresh ? "Live" : "Stale location"} · Last GPS {timeFormat.format(new Date(position.recordedAt))} SAST
           </p> : <p className="text-muted-foreground">{activeLeg ? "Waiting for the first GPS update" : "GPS sharing off"}</p>}
+          {activeLeg && (currentEta ? <div className="mt-2 border-t border-border pt-2">
+            <p className="break-words font-medium">{currentEta.checkpoint} · {currentEta.label}</p>
+            <p>ETA {timeFormat.format(new Date(currentEta.arrivalAt))} SAST</p>
+            {currentEta.deadline && <p className="text-muted-foreground">
+              Scheduled by {timeFormat.format(new Date(currentEta.deadline))} SAST
+            </p>}
+            {currentEta.atRisk && <p className="font-semibold text-destructive">Delay expected</p>}
+          </div> : <p className="mt-1 text-muted-foreground">ETA unavailable</p>)}
         </li>;
       })}
     </ul>

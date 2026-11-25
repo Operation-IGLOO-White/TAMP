@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BusFront, CalendarDays, MapPin, Pencil, Plus, Search, Users, X } from "lucide-react";
+import { BusFront, CalendarDays, LayoutGrid, List, MapPin, Pencil, Plus, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
 import { CharterBookings, CharterRequestForm, type CharterListing } from "@/components/tamp/CharterBookings";
@@ -97,6 +97,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
   const [search, setSearch] = useState("");
   const [seats, setSeats] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tableView, setTableView] = useState(false);
   const [fleetStatus, setFleetStatus] = useState("all");
   const fleetVehicles = fleet.data?.vehicles ?? [];
   const isListed = (vehicle: FleetVehicle) => vehicle.published && !vehicle.publicationIssue;
@@ -118,6 +119,25 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
     return statusMatches && (!type || vehicle.type === type) && vehicle.seats >= Number(seats)
       && search.trim().toLowerCase().split(/\s+/).every((word) => haystack.includes(word));
   });
+  const fleetBadges = (vehicle: FleetVehicle) => (
+    <div className="flex flex-wrap gap-1.5 text-xs font-semibold">
+      <span className={`rounded-full px-2 py-1 ${vehicle.verification === "VERIFIED" ? "bg-positive/10 text-positive"
+        : vehicle.verification === "REJECTED" ? "bg-destructive/10 text-destructive" : "bg-signal/15 text-foreground"}`}>
+        {vehicle.verification === "VERIFIED" ? "Verified" : vehicle.verification === "REJECTED" ? "Review rejected" : "Awaiting review"}
+      </span>
+      <span className="rounded-full bg-muted px-2 py-1">{isListed(vehicle) ? "Published" : "Hidden"}</span>
+    </div>
+  );
+  const fleetActions = (vehicle: FleetVehicle) => <>
+    {vehicle.reviewReason && <p className="break-words text-sm text-destructive">{vehicle.reviewReason}</p>}
+    {vehicle.publicationIssue && <p className="text-sm text-muted-foreground">{vehicle.publicationIssue}</p>}
+    {canEdit && <div className="mt-1 flex flex-wrap gap-2 border-t border-border pt-3">
+      <button className={button} onClick={() => openEditor(vehicle)}><Pencil className="mr-1 inline size-4" /> Edit vehicle</button>
+      <button className={primary} disabled={busy || (!vehicle.published && Boolean(vehicle.publicationIssue))} onClick={() =>
+        void update("passenger.save", saveData(vehicle, !vehicle.published), vehicle.published ? "Vehicle unpublished" : "Vehicle published")
+      }>{vehicle.published ? "Unpublish" : "Publish to Passenger Charter"}</button>
+    </div>}
+  </>;
   const query = mode === "fleet" ? fleet : mode === "review" ? reviews : catalogue;
   const title = mode === "fleet" ? "Buses & Minibuses" : mode === "review" ? "Passenger Vehicle Reviews" : "Passenger Charter";
   const visible = (catalogue.data ?? []).filter((vehicle) =>
@@ -226,7 +246,51 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
               onClick={() => { setSearch(""); setType(""); setSeats(""); setFleetStatus("all"); }}>Clear filters</button>}
           </div>
         </section>
-        {filteredFleet.length ? <div className="grid gap-4 xl:grid-cols-2">
+        {fleetVehicles.length > 0 && <div role="group" aria-label="Passenger fleet layout"
+          className="inline-flex w-fit gap-1 rounded-xl border border-border bg-card p-1">
+          {([[false, "Cards", LayoutGrid], [true, "Table", List]] as const).map(([table, label, Icon]) =>
+            <button key={label} type="button" aria-pressed={tableView === table}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-semibold ${tableView === table
+                ? "bg-signal text-signal-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              onClick={() => setTableView(table)}><Icon className="size-4" aria-hidden="true" />{label}</button>)}
+        </div>}
+        {filteredFleet.length > 0 && tableView && (
+          <div className="min-w-0 overflow-x-auto rounded-2xl border border-border bg-card shadow-sm"
+            role="region" aria-label="Passenger fleet table" tabIndex={0}>
+            <table className="w-full min-w-[60rem] text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>{["Vehicle", "Type", "Capacity", "Location & availability", "Status", "Actions"].map((label) =>
+                  <th key={label} scope="col" className="px-4 py-3">{label}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredFleet.map((vehicle) => <tr key={vehicle.id} className="align-top hover:bg-muted/20">
+                  <th scope="row" className="px-4 py-3 font-medium">
+                    <span className="whitespace-nowrap font-mono font-bold">{vehicle.registration}</span>
+                    <span className="block">{vehicleName(vehicle)}</span>
+                  </th>
+                  <td className="px-4 py-3">
+                    {types[vehicle.type]}
+                    {vehicle.subtypeLabel && <p className="text-muted-foreground">{vehicle.subtypeLabel}</p>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {vehicle.seats} seats
+                    {vehicle.wheelchairPositions > 0 && <p>{vehicle.wheelchairPositions} wheelchair positions</p>}
+                    <p className="text-muted-foreground">{vehicle.luggageKg} kg / {vehicle.luggageM3} m³ luggage</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {vehicle.location.label} · {vehicle.serviceArea}
+                    <p className="text-muted-foreground">
+                      {displayDate.format(new Date(vehicle.availability.start))} – {displayDate.format(new Date(vehicle.availability.end))} SAST
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">{fleetBadges(vehicle)}</td>
+                  <td className="space-y-2 px-4 py-3">{fleetActions(vehicle)}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {filteredFleet.length ? !tableView && <div className="grid gap-4 xl:grid-cols-2">
           {filteredFleet.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} supplier={vehicle.registration}
             fleetHeader={<div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-start gap-3">
@@ -237,22 +301,9 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
                   <p className="text-xs text-muted-foreground">{[types[vehicle.type], vehicle.subtypeLabel].filter(Boolean).join(" · ")}</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 text-xs font-semibold">
-                <span className={`rounded-full px-2 py-1 ${vehicle.verification === "VERIFIED" ? "bg-positive/10 text-positive"
-                  : vehicle.verification === "REJECTED" ? "bg-destructive/10 text-destructive" : "bg-signal/15 text-foreground"}`}>
-                  {vehicle.verification === "VERIFIED" ? "Verified" : vehicle.verification === "REJECTED" ? "Review rejected" : "Awaiting review"}
-                </span>
-                <span className="rounded-full bg-muted px-2 py-1">{isListed(vehicle) ? "Published" : "Hidden"}</span>
-              </div>
+              {fleetBadges(vehicle)}
             </div>}>
-            {vehicle.reviewReason && <p className="break-words text-sm text-destructive">{vehicle.reviewReason}</p>}
-            {vehicle.publicationIssue && <p className="text-sm text-muted-foreground">{vehicle.publicationIssue}</p>}
-            {canEdit && <div className="mt-1 flex flex-wrap gap-2 border-t border-border pt-3">
-              <button className={button} onClick={() => openEditor(vehicle)}><Pencil className="mr-1 inline size-4" /> Edit vehicle</button>
-              <button className={primary} disabled={busy || (!vehicle.published && Boolean(vehicle.publicationIssue))} onClick={() =>
-                void update("passenger.save", saveData(vehicle, !vehicle.published), vehicle.published ? "Vehicle unpublished" : "Vehicle published")
-              }>{vehicle.published ? "Unpublish" : "Publish to Passenger Charter"}</button>
-            </div>}
+            {fleetActions(vehicle)}
           </VehicleCard>)}
         </div> : <p className={card + " p-6 text-sm text-muted-foreground"}>
           {fleetVehicles.length ? "No passenger vehicles match these filters." : "No buses or minibuses have been added to this fleet."}

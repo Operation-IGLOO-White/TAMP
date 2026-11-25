@@ -17,6 +17,7 @@ export type CharterDriverLeg = {
 export type CharterDriverJob = {
   bookingId: string;
   reservationStartsAt: string;
+  responseDeadline?: string;
   supplier: string;
   customer: string;
   vehicle: { id: string; registration: string; make: string; model: string };

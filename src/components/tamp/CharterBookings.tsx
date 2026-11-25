@@ -33,12 +33,12 @@ type Booking = {
   id: string; version: string; incoming: boolean; allowSplit: boolean; vehicleId: string; vehicleName: string;
   vehicleProgress?: CharterVehicleProgress[];
   driverAssignments?: {
-    vehicleId: string; registration: string; driverName: string; status: keyof typeof charterAssignmentLabel; reason?: string;
+    vehicleId: string; registration: string; driverName: string; canReassign?: boolean; status: keyof typeof charterAssignmentLabel; reason?: string;
   }[];
   groupId?: string; suggestedVehicles?: CharterMatch["vehicles"];
   customer: string; supplier: string; status: "REQUESTED" | "QUOTED" | "CONFIRMED" | "CANCELLED" | "DECLINED";
   outbound: Leg; returnLeg: Leg | null; contactName: string; contactPhone: string; notes: string;
-  quote: { total: string; vat: "INCL" | "EXCL"; terms: string; start: string; end: string; validUntil: string; vehicles: FleetVehicle[] } | null;
+  quote: { total: string; vat: "INCL" | "EXCL"; terms: string; start: string; end: string; validUntil: string; outboundArrivalBy?: string | null; returnArrivalBy?: string | null; vehicles: FleetVehicle[] } | null;
   history: { status: string; at: string; reason?: string }[];
 };
 type CharterAction = "CONFIRM" | "DECLINE" | "CANCEL";
@@ -300,6 +300,7 @@ export function CharterBookings() {
     queryFn: () => trpc.query<Booking[]>("charter.list"),
     refetchInterval: 20_000,
   });
+  const canDispatch = hasPermission(authParty, "dispatch.manage");
   const canTrack = hasPermission(authParty, "tracking.read");
   const canQuote = role === "TRANSPORTER" && hasPermission(authParty, "trucks.manage");
   const fleet = useQuery({
@@ -381,6 +382,8 @@ export function CharterBookings() {
           <p className="font-semibold">{money.format(Number(booking.quote.total))} {booking.quote.vat === "INCL" ? "incl." : "excl."} VAT</p>
           <p>Reservation window · {displayTime(booking.quote.start)} – {displayTime(booking.quote.end)}</p>
           {booking.status === "QUOTED" && <p>Quote expires {displayTime(booking.quote.validUntil)}</p>}
+          {booking.quote.outboundArrivalBy && <p>Agreed outbound drop-off by {displayTime(booking.quote.outboundArrivalBy)}</p>}
+          {booking.quote.returnArrivalBy && <p>Agreed return drop-off by {displayTime(booking.quote.returnArrivalBy)}</p>}
           <ul className="mt-2 list-inside list-disc">
             {booking.quote.vehicles.map((vehicle) => <li key={vehicle.id}>{vehicle.registration} · {vehicle.make} {vehicle.model} · {vehicle.seats} seats</li>)}
           </ul>
@@ -414,6 +417,9 @@ export function CharterBookings() {
               </span>
             </p>
             {assignment.reason && <p className="break-words text-muted-foreground">{assignment.reason}</p>}
+            {canDispatch && assignment.canReassign && <ReassignCharterDriver
+              bookingId={booking.id} vehicleId={assignment.vehicleId} registration={assignment.registration}
+              onSaved={async () => { await bookings.refetch(); }} />}
           </div>)}
         </section>}
         <details className="text-sm">
@@ -448,6 +454,68 @@ export function CharterBookings() {
       </article>;
     })}
   </div>;
+}
+
+function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved }: {
+  bookingId: string; vehicleId: string; registration: string; onSaved: () => Promise<void>;
+}) {
+  const { authParty } = useTamp();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const options = useQuery({
+    queryKey: ["charter-driver-options", authParty?.id, authParty?.activeOrganisationId, bookingId, vehicleId],
+    queryFn: () => trpc.query<{ expectedDriverId: string; drivers: { id: string; name: string }[] }>(
+      "charter.driverOptions", { bookingId, vehicleId }),
+    enabled: open, retry: false, gcTime: 0,
+  });
+  if (!open) return <button type="button" className={button + " justify-self-start"}
+    onClick={() => { setError(""); setOpen(true); }}>Reassign driver</button>;
+
+  return <form className="mt-2 grid gap-3 rounded-lg border border-border p-3" onSubmit={async (event) => {
+    event.preventDefault();
+    if (!options.data || saving) return;
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    setError("");
+    try {
+      await trpc.mutation("charter.reassignDriver", {
+        bookingId, vehicleId, expectedDriverId: options.data.expectedDriverId,
+        driverId: read(form, "replacementDriver"), reason: read(form, "replacementReason"),
+      });
+      setOpen(false);
+      await onSaved();
+      toast.success("Replacement driver invited");
+    } catch (failure) {
+      setError(errorText(failure));
+    } finally {
+      setSaving(false);
+    }
+  }}>
+    <h4 className="font-semibold">Reassign driver for {registration}</h4>
+    {options.isPending && <p role="status">Checking driver availability…</p>}
+    {options.isError && <p role="alert">{errorText(options.error)}</p>}
+    {options.data && !options.data.drivers.length && <p className="text-muted-foreground">No eligible replacement drivers are available for this reservation.</p>}
+    {options.data && options.data.drivers.length > 0 && <>
+      <Field label="Replacement driver *">
+        <select className={field} name="replacementDriver" required defaultValue="" disabled={saving}>
+          <option value="" disabled>Select a driver</option>
+          {options.data.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Reason for reassignment *">
+        <textarea className={field} name="replacementReason" required maxLength={500} rows={2} disabled={saving} />
+      </Field>
+    </>}
+    {error && <p role="alert" className="text-destructive">{error}</p>}
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className={button} onClick={() => setOpen(false)} disabled={saving}>Close</button>
+      {options.isError && <button type="button" className={button} onClick={() => void options.refetch()}>Retry</button>}
+      {options.data && options.data.drivers.length > 0 && <button className={primary} disabled={saving || options.isFetching}>
+        {saving ? "Sending offer…" : "Send new assignment"}
+      </button>}
+    </div>
+  </form>;
 }
 
 function CombinedCharter({ id, bookings, canManage, canTrack, refresh }: {
@@ -620,6 +688,8 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
       id: booking.id, version: booking.version, vehicleIds: selected, total: read(form, "total"),
       vat: read(form, "vat"), terms: read(form, "terms"), start: sasTime(read(form, "start")),
       end: sasTime(read(form, "end")), validUntil: sasTime(read(form, "validUntil")),
+      outboundArrivalBy: read(form, "outboundArrivalBy") ? sasTime(read(form, "outboundArrivalBy")) : null,
+      returnArrivalBy: read(form, "returnArrivalBy") ? sasTime(read(form, "returnArrivalBy")) : null,
     });
   }}>
     <fieldset disabled={busy} className="grid gap-3">
@@ -653,6 +723,14 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
         <Field label="Total price (ZAR) *"><input className={field} type="number" min="0.01" max="99999999.99" step="0.01" name="total" required defaultValue={booking.quote?.total} /></Field>
         <Field label="VAT treatment"><select className={field} name="vat" defaultValue={booking.quote?.vat ?? "EXCL"}><option value="EXCL">Excluding VAT</option><option value="INCL">Including VAT</option></select></Field>
         <Field label="Quote expires (SAST) *"><input className={field} type="datetime-local" name="validUntil" required defaultValue={booking.quote ? localTime(booking.quote.validUntil) : undefined} /></Field>
+        <Field label="Agreed outbound drop-off (SAST, optional)">
+          <input className={field} type="datetime-local" name="outboundArrivalBy"
+            defaultValue={booking.quote?.outboundArrivalBy ? localTime(booking.quote.outboundArrivalBy) : undefined} />
+        </Field>
+        {booking.returnLeg && <Field label="Agreed return drop-off (SAST, optional)">
+          <input className={field} type="datetime-local" name="returnArrivalBy"
+            defaultValue={booking.quote?.returnArrivalBy ? localTime(booking.quote.returnArrivalBy) : undefined} />
+        </Field>}
       </div>
       <Field label="Quote terms"><textarea className={field} maxLength={1500} name="terms" rows={2} defaultValue={booking.quote?.terms} /></Field>
     </fieldset>

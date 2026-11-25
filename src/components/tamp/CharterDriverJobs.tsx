@@ -87,7 +87,7 @@ export function CharterDriverJobs() {
     {jobs.data.map((job) => {
       const key = jobKey(job);
       const isDeclining = declining === key;
-      const awaiting = job.status === "OFFERED" && Date.parse(job.itinerary.outbound.pickupAt) > Date.now();
+      const awaiting = job.status === "OFFERED" && Date.parse(job.responseDeadline ?? job.itinerary.outbound.pickupAt) > Date.now();
       return <article key={key} className="grid min-w-0 gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
         <header className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
