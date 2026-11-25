@@ -1,8 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, ChevronLeft, ChevronRight, Forklift, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Trash2, Truck } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Forklift, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Trash2, Truck, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { AddressInput } from "@/components/tamp/AddressInput";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -810,25 +810,23 @@ function HandoverSummary({ booking, canManage, onEdit }: {
 
 function HandoverForm({ booking, stage, done }: { booking: Booking; stage: HandoverStage; done: () => Promise<void> }) {
   const submission = useSubmission();
-  const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState("");
+  const uploaded = useRef(new Map<File, string>());
   return <form className="grid gap-4" onSubmit={(event) => void submission.submit(event, async (form) => {
-    const files = form.getAll("photos").filter((value): value is File => value instanceof File && value.size > 0);
     if (!files.length || files.length > 6) throw new Error("Choose between one and six condition photos.");
     const notes = read(form, "notes");
     const condition = read(form, "condition");
     if (condition === "DAMAGE_FOUND" && !notes) throw new Error("Describe the damage.");
-    const uploaded = [...photos];
-    const urls = [];
+    const urls: string[] = [];
     for (const file of files) {
-      const match = uploaded.find((item) => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
-      if (match) {
-        urls.push(match.url);
-        continue;
+      let url = uploaded.current.get(file);
+      if (url === undefined) {
+        ({ url } = await uploadFile(file, "ASSET_HANDOVER_PHOTO"));
+        uploaded.current.set(file, url);
       }
-      const { url } = await uploadFile(file, "ASSET_HANDOVER_PHOTO");
-      uploaded.push({ file, url });
       urls.push(url);
-      setPhotos([...uploaded]);
     }
     await trpc.mutation("assetHire.handover", {
       id: booking.id, stage, condition, notes, photos: urls,
@@ -849,9 +847,46 @@ function HandoverForm({ booking, stage, done }: { booking: Booking; stage: Hando
     </select></Label>
     <Label name="Meter hours (optional)"><input name="meterHours" className={field} type="number" min={0} max={1000000} step="0.1" /></Label>
     <Label name="Condition notes"><textarea name="notes" className={field} maxLength={2000} /></Label>
-    <Label name="Condition photos (one to six)"><input name="photos" type="file" accept="image/*" multiple required /></Label>
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 text-sm font-semibold">Condition photos</legend>
+      <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(event) => {
+        const selected = Array.from(event.currentTarget.files ?? []).filter((file) => file.size > 0);
+        event.currentTarget.value = "";
+        const next = [...files];
+        for (const file of selected) {
+          if (!next.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) {
+            next.push(file);
+          }
+        }
+        if (next.length > 6) {
+          setPhotoError("You can add up to six condition photos. Choose fewer files or remove a photo first.");
+          return;
+        }
+        setFiles(next);
+        setPhotoError("");
+      }} />
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+        <button type="button" className={primary + " inline-flex items-center gap-2"} disabled={submission.pending || files.length === 6}
+          onClick={() => photoInput.current?.click()}>
+          <Upload className="size-4" aria-hidden /> Add photos
+        </button>
+        <span className="text-xs text-muted-foreground" aria-live="polite">{files.length} of 6 selected · At least one required</span>
+      </div>
+      {photoError && <p role="alert" className="text-xs text-danger">{photoError}</p>}
+      {files.length > 0 && <ul className="divide-y divide-border rounded-lg border border-border">
+        {files.map((file) => <li key={JSON.stringify([file.name, file.size, file.lastModified])} className="flex min-w-0 items-center justify-between gap-2 px-3 py-1.5">
+          <span className="truncate text-sm" title={file.name}>{file.name}</span>
+          <button type="button" className={button + " grid min-w-10 shrink-0 place-items-center p-0"} aria-label={`Remove ${file.name}`}
+            disabled={submission.pending} onClick={() => {
+              uploaded.current.delete(file);
+              setFiles(files.filter((item) => item !== file));
+              setPhotoError("");
+            }}><X className="size-4" aria-hidden /></button>
+        </li>)}
+      </ul>}
+    </fieldset>
     <p className="text-sm text-muted-foreground">The asset owner and renter can view this record after you submit it.</p>
-    <Submit pending={submission.pending} error={submission.error}>Save handover</Submit>
+    <Submit pending={submission.pending} error={submission.error} disabled={!files.length}>Save handover</Submit>
   </form>;
 }
 
