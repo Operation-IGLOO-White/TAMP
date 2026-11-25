@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarDays, MapPin, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Check, MapPin, Plus, Route, Trash2, Undo2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { charterAssignmentLabel, charterStageLabel, charterVehicleComplete, type CharterVehicleProgress } from "@/lib/charter-assignment";
 import { CharterFleetLive } from "@/components/tamp/CharterFleetLive";
@@ -198,16 +198,27 @@ export function CharterRequestForm({ listing, close, onSent }: {
       setBusy(false);
     }
   }
-  return <form className={panel + " mx-auto w-full max-w-4xl scroll-mt-24"} onSubmit={submit} noValidate aria-busy={busy}>
+  return <form className={panel + " w-full min-w-0 scroll-mt-24"} onSubmit={submit} noValidate aria-busy={busy}>
     <h2 className="mb-2 text-lg font-semibold">{listing ? "Request a charter quote" : "Find a charter transporter"}</h2>
     {listing && <p className="mb-4 text-sm text-muted-foreground">{listing.make} {listing.model} · {listing.supplier}</p>}
-    <ol className={`mb-4 grid ${listing ? "grid-cols-3" : "grid-cols-4"} gap-2 border-b border-border pb-3 text-center text-xs font-semibold sm:text-sm`}
-      aria-label="Charter request progress">
-      {["Outbound", "Return (optional)", "Contact details", ...(listing ? [] : ["Compare"])].map((label, index) =>
-        <li key={label} className={index === step ? "text-foreground" : "text-muted-foreground"}
-          aria-current={index === step ? "step" : undefined}>{index + 1}. {label}</li>
-      )}
-    </ol>
+    <nav aria-label="Charter request progress" className={`mb-6 grid ${listing ? "grid-cols-3" : "grid-cols-4"} gap-1 sm:gap-2`}>
+      {[{ label: "Outbound", icon: MapPin }, { label: "Return (optional)", icon: Undo2 },
+        { label: "Contact details", icon: UserRound }, ...(listing ? [] : [{ label: "Compare", icon: Route }])]
+        .map(({ label, icon: Icon }, index) => {
+          const active = index === step;
+          const complete = index < step;
+          return <button key={label} type="button" aria-current={active ? "step" : undefined}
+            disabled={busy || index > step} onClick={() => { setError(""); setStep(index); }}
+            className={`flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[9px] font-bold uppercase tracking-wide transition sm:flex-row sm:justify-center sm:gap-2 sm:px-3 sm:text-xs ${active
+              ? "border-signal bg-signal/10 text-foreground" : complete
+                ? "border-success/40 bg-success/5 text-foreground" : "border-border text-muted-foreground"}`}>
+            <span className={`grid size-6 shrink-0 place-items-center rounded-full ${active ? "bg-signal text-signal-foreground" : complete ? "bg-success text-white" : "bg-steel"}`}>
+              {complete ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}
+            </span>
+            <span>{label}</span>
+          </button>;
+        })}
+    </nav>
     <fieldset className="grid gap-4" disabled={busy}>
       <div hidden={step !== 0} data-current={step === 0 ? "" : undefined}>
         <LegFields title="Outbound trip" prefix="out-" addresses={outbound} setAddresses={setOutbound} />
@@ -276,7 +287,7 @@ export function CharterRequestForm({ listing, close, onSent }: {
       </section>}
     </fieldset>
     {error && <p className="mt-3 text-sm text-destructive" role="alert">{error}</p>}
-    <div className="mt-4 flex justify-end gap-2">
+    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
       <button className={button} type="button" onClick={() => {
         if (step === 0) close();
         else {
