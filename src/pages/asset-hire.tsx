@@ -68,7 +68,7 @@ type Editor =
   | { mode: "reason"; action: "CANCEL" | "DECLINE"; booking: Booking };
 
 const money = new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" });
-const date = new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Johannesburg" });
+const date = new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeStyle: "short", hour12: true, timeZone: "Africa/Johannesburg" });
 const dateInput = (value?: string) => value
   ? new Date(new Date(value).getTime() + 7_200_000).toISOString().slice(0, 16)
   : "";
@@ -815,8 +815,15 @@ function HandoverSummary({ booking, canManage, onEdit }: {
   booking: Booking; canManage: boolean; onEdit: (editor: Editor) => void;
 }) {
   const ownSide = booking.incoming ? "OWNER" : "RENTER";
-  return <section className="border-t border-paper-foreground/15 pt-3">
-    <h3 className="mb-2 text-sm font-bold">Delivery and return</h3>
+  return <details className="group border-t border-paper-foreground/15 pt-3">
+    <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold">
+      Delivery and return
+      <span className="flex items-center gap-2 text-xs font-medium">
+        <span className="group-open:hidden">Show details</span>
+        <span className="hidden group-open:inline">Hide details</span>
+        <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+      </span>
+    </summary>
     {(["DELIVERY", "RETURN"] as const).map((stage) => {
       const reports = booking.handovers?.[stage];
       const canRecord = canManage && !reports?.[ownSide] && (stage === "DELIVERY" || booking.status !== "CONFIRMED");
@@ -840,7 +847,7 @@ function HandoverSummary({ booking, canManage, onEdit }: {
         })}
       </div>;
     })}
-  </section>;
+  </details>;
 }
 
 function HandoverForm({ booking, stage, done }: { booking: Booking; stage: HandoverStage; done: () => Promise<void> }) {
