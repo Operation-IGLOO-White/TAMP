@@ -124,6 +124,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
     </div>
   );
   const fleetActions = (vehicle: FleetVehicle) => <>
+    {!vehicle.driverId && <p className="text-sm text-muted-foreground">Driver not yet assigned — assign a verified driver before booking confirmation.</p>}
     {vehicle.reviewReason && <p className="break-words text-sm text-destructive">{vehicle.reviewReason}</p>}
     {vehicle.publicationIssue && <p className="text-sm text-muted-foreground">{vehicle.publicationIssue}</p>}
     {canEdit && <div className="mt-1 flex flex-wrap gap-2 border-t border-border pt-3">

@@ -146,11 +146,11 @@ export default function DispatchPage() {
       </button>} />
     <main className="space-y-5 bg-background p-4 sm:p-6">
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Metric label="Operational jobs" value={jobs.length} icon={Route} />
-        <Metric label="Needs driver" value={counts("NEEDS_DRIVER")} icon={UserPlus} alert />
-        <Metric label="Awaiting response" value={counts("OFFERED")} icon={Clock3} />
-        <Metric label="Ready" value={counts("ACCEPTED")} icon={CheckCircle2} />
-        <Metric label="Conflicts" value={new Set([...driverConflicts, ...truckConflicts]).size} icon={AlertTriangle} alert />
+        <Metric label="Operational jobs" hint="Confirmed jobs in this workspace" value={jobs.length} icon={Route} />
+        <Metric label="Needs driver" hint="Assign a driver before pickup" value={counts("NEEDS_DRIVER")} icon={UserPlus} alert />
+        <Metric label="Awaiting response" hint="Waiting for the driver to accept" value={counts("OFFERED")} icon={Clock3} />
+        <Metric label="Ready" hint="Driver has accepted the assignment" value={counts("ACCEPTED")} icon={CheckCircle2} />
+        <Metric label="Conflicts" hint="Overlapping driver or truck schedules" value={new Set([...driverConflicts, ...truckConflicts]).size} icon={AlertTriangle} alert />
       </section>
 
       <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -245,7 +245,7 @@ function FleetReadinessPlanner({
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <p className="font-mono text-[10px] text-muted-foreground">{load.reference || load.id}</p>
-                  <h3 className="mt-1 line-clamp-2 text-xs font-black uppercase">{shortPlace(load.origin.label)} → {shortPlace(load.destination.label)}</h3>
+                  <h3 className="mt-1 line-clamp-2 text-xs font-black uppercase">{shortPlace(load.origin.label)} <span className="mx-1 inline-block align-middle text-2xl leading-none" aria-label="to">→</span> {shortPlace(load.destination.label)}</h3>
                   <p className="mt-1 text-[10px] text-muted-foreground">Pickup {formatDate(load.pickupWindow.from)} · {group.length}/{required} truck allocations confirmed</p>
                 </div>
                 <div className="grid min-w-72 grid-cols-3 gap-2">
@@ -418,7 +418,22 @@ function conflicts(jobs:Job[],resource:"driver"|"truck"){const out=new Set<strin
 function findDriver(id:string|undefined,members:OrganisationMember[],parties:Party[]){return members.find(m=>m.id===id)??parties.find(p=>p.id===id)}
 function formatDate(value:string){return new Date(value).toLocaleString("en-ZA",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
 function shortPlace(v:string){return v.split(",").slice(0,2).join(",")}
-function Metric({label,value,icon:Icon,alert=false}:{label:string;value:number;icon:typeof Route;alert?:boolean}){return <article className={`rounded-2xl border bg-card p-4 shadow-sm ${alert&&value?"border-danger/40":"border-border"}`}><div className="flex justify-between"><span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span><Icon className={`size-4 ${alert&&value?"text-danger":"text-signal"}`}/></div><div className="mt-2 font-mono text-2xl font-black">{value}</div></article>}
+function Metric({ label, hint, value, icon: Icon, alert = false }: {
+  label: string;
+  hint: string;
+  value: number;
+  icon: typeof Route;
+  alert?: boolean;
+}) {
+  return <article className={`rounded-2xl border bg-card p-4 shadow-sm ${alert && value ? "border-danger/40" : "border-border"}`}>
+    <div className="flex items-start justify-between gap-2">
+      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
+      <Icon className={`size-4 shrink-0 ${alert && value ? "text-danger" : "text-signal"}`} />
+    </div>
+    <div className="mt-2 font-mono text-2xl font-black">{value}</div>
+    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">({hint})</p>
+  </article>;
+}
 function Badge({queue}:{queue:Queue}){const s=queue==="ACCEPTED"?"bg-positive/15 text-positive":queue==="OFFERED"?"bg-signal/20":queue==="EXCEPTION"?"bg-warning/20 text-warning":"bg-danger/10 text-danger";return <span className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black uppercase ${s}`}>{queue==="ACCEPTED"?"Ready":queue.replaceAll("_"," ")}</span>}
 function RouteRow({label,end=false}:{label:string;end?:boolean}){return <div className="flex min-w-0 items-center gap-2"><MapPin className={`size-3 shrink-0 ${end?"text-foreground":"text-signal"}`}/><span className="truncate text-[11px] text-muted-foreground">{label}</span></div>}
 function Small({label,value,danger=false}:{label:string;value:string;danger?:boolean}){return <div><div className="uppercase text-muted-foreground">{label}</div><div className={`mt-0.5 truncate font-bold ${danger?"text-danger":""}`}>{value}</div></div>}

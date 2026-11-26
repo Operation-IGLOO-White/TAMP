@@ -48,6 +48,7 @@ function EngagementsPage() {
   } = useTamp();
   const canManageMatches = authParty?.permissions?.includes("matches.manage") ?? false;
   const [review, setReview] = useState<{ opportunity: Opportunity; kind: "confirm" | "request" } | null>(null);
+  const [confirmedLoad, setConfirmedLoad] = useState<string | null>(null);
   const [batchReview, setBatchReview] = useState<ConfirmationGroup | null>(null);
 
   const availableTruckIds = useMemo(
@@ -232,6 +233,11 @@ function EngagementsPage() {
           )}
         </section>
       </div>
+      {confirmedLoad && <div role="status" className="mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-signal/40 bg-signal/10 p-4 md:mx-6">
+        <div><p className="font-semibold">Engagement confirmed — continue in Dispatch</p>
+          <p className="mt-1 text-sm text-muted-foreground">Assign or review drivers for the confirmed trucks. {confirmedLoad}</p></div>
+        <Link to="/transporter/dispatch" className="rounded-lg bg-signal px-5 py-3 text-sm font-bold text-signal-foreground">Open Dispatch</Link>
+      </div>}
       {review && (
         <MatchReviewDialog
           load={review.opportunity.load}
@@ -240,7 +246,7 @@ function EngagementsPage() {
           onClose={() => setReview(null)}
           onConfirm={(proof) =>
             review.kind === "confirm"
-              ? confirmMatch(review.opportunity.load.id, review.opportunity.truck.id, proof)
+              ? confirmMatch(review.opportunity.load.id, review.opportunity.truck.id, proof).then(() => setConfirmedLoad(review.opportunity.load.id))
               : requestJob(
                   review.opportunity.load,
                   review.opportunity.truck.id,
@@ -256,7 +262,7 @@ function EngagementsPage() {
           load={batchReview.load}
           candidates={batchReview.opportunities.map(toBatchCandidate)}
           onClose={() => setBatchReview(null)}
-          onConfirm={(candidate, proof) => confirmMatch(batchReview.load.id, candidate.truck.id, proof)}
+          onConfirm={(candidate, proof) => confirmMatch(batchReview.load.id, candidate.truck.id, proof).then(() => setConfirmedLoad(batchReview.load.id))}
         />
       )}
     </AppShell>
