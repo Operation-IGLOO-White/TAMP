@@ -1,3 +1,4 @@
+import { useCharterEngagements } from "@/lib/use-charter-engagements";
 import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { Link, useNavigate } from "@/lib/nav";
 import {
@@ -387,6 +388,7 @@ function navItemActive(item: NavItem, pathname: string, search: string) {
 
 function useSidebarCounts(playSound = true): Record<string, number> {
   const { role, me, matches, trips, dispatches, parties, trucks, vehicles, disputes, loads } = useTamp();
+  const passengerCount = useCharterEngagements().data ?? 0;
   const counts = useMemo(() => {
     const latestDispatch = new Map<string, (typeof dispatches)[number]>();
     for (const assignment of dispatches) {
@@ -413,7 +415,7 @@ function useSidebarCounts(playSound = true): Record<string, number> {
         return latestDispatch.get(trip.id)?.status !== "ACCEPTED";
       }).length;
       return {
-        "/transporter/engagements": engagementCount,
+        "/transporter/engagements": engagementCount + passengerCount,
         "/transporter/dispatch": dispatchCount,
         "/driver": activeTrips.length,
       };
@@ -453,7 +455,7 @@ function useSidebarCounts(playSound = true): Record<string, number> {
       };
     }
     return {};
-  }, [dispatches, matches, me.id, role, trips, parties, trucks, vehicles, disputes, loads]);
+  }, [dispatches, matches, me.id, role, trips, parties, trucks, vehicles, disputes, loads, passengerCount]);
   const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
   const previous = useRef<number | null>(null);
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { useCharterEngagements } from "@/lib/use-charter-engagements";
 import { useSearchParams } from "react-router-dom";
 import { CharterBookings } from "@/components/tamp/CharterBookings";
 
@@ -37,6 +38,7 @@ type ConfirmationGroup = { load: Load; opportunities: Opportunity[] };
 function EngagementsPage() {
   const [params, setParams] = useSearchParams();
   const service = params.get("service") ?? "all";
+  const passengerCount = useCharterEngagements().data ?? 0;
   const {
     authParty,
     loads,
@@ -143,12 +145,8 @@ function EngagementsPage() {
             className={`rounded-lg px-4 py-2 text-sm font-bold capitalize ${service === item ? "bg-signal text-signal-foreground" : "text-muted-foreground hover:bg-muted"}`}
             onClick={() => { const next = new URLSearchParams(params); next.set("service", item); next.delete("booking"); setParams(next); }}>{item}</button>)}
         </nav>
-        {service !== "freight" && <section className="grid gap-3">
-          <h2 className="text-sm font-bold">Passenger requests & quotes</h2>
-          <CharterBookings workspace="engagements" />
-        </section>}
       </div>
-      <div className={`space-y-10 p-4 sm:p-6 ${service === "passenger" ? "hidden" : ""}`}>
+      <div className="space-y-10 p-4 sm:p-6">
         {!canManageMatches && (
           <div className="rounded-xl border border-signal/40 bg-signal/10 p-4 text-sm">
             <div className="font-bold">Engagements are currently read-only</div>
@@ -161,11 +159,17 @@ function EngagementsPage() {
         )}
         {/* Snapshot strip */}
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          <StatTile label="To confirm" value={confirmable.length} tone="signal" />
+          <StatTile label="To confirm" value={(service === "passenger" ? 0 : confirmable.length) + (service === "freight" ? 0 : passengerCount)} tone="signal" />
           <StatTile label="Requested" value={requested.length} tone="muted" />
           <StatTile label="Opportunities" value={opportunities.length} tone="muted" />
         </div>
 
+        {service !== "freight" && <section className="grid gap-3">
+          <h2 className="text-sm font-bold">Passenger requests & quotes</h2>
+          <CharterBookings workspace="engagements" />
+        </section>}
+
+        <div className={`space-y-10 ${service === "passenger" ? "hidden" : ""}`}>
         {totalOpen === 0 && (
           <div className="rounded-2xl border border-dashed border-border bg-graphite/40 p-10 text-center">
             <p className="text-sm font-semibold text-foreground">You're all caught up</p>
@@ -247,6 +251,7 @@ function EngagementsPage() {
             </div>
           )}
         </section>
+        </div>
       </div>
       {confirmedLoad && <div role="status" className="mx-4 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-signal/40 bg-signal/10 p-4 md:mx-6">
         <div><p className="font-semibold">Engagement confirmed — continue in Dispatch</p>

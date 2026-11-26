@@ -1,6 +1,10 @@
 import { Link, useNavigate } from "@/lib/nav";
 import {
   Activity,
+  BusFront,
+  Truck,
+  Forklift,
+  CarFront,
   ArrowRight,
   Clock,
   Loader2,
@@ -28,7 +32,7 @@ const OAUTH_ERRORS: Record<string, string> = {
 };
 
 function Landing() {
-  const { loads, trucks, matches, login, authParty, authReady } = useTamp();
+  const { login, authParty, authReady } = useTamp();
   const navigate = useNavigate();
   const standalone = window.matchMedia("(display-mode: standalone)").matches
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -72,12 +76,6 @@ function Landing() {
     if (params.get("timeout")) setNotice("You were signed out after a period of inactivity.");
   }, []);
 
-  const loadsPosted = loads.length;
-  const trucksAvailable = trucks.filter((t) => t.status === "AVAILABLE").length;
-  const matchesAccepted = matches.filter(
-    (m) => m.status === "ACCEPTED" || m.status === "CONFIRMED",
-  ).length;
-
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -114,13 +112,13 @@ function Landing() {
     <main className={`login-page relative min-h-[100svh] overflow-hidden ${standalone ? "login-standalone bg-white text-[#16181d]" : "bg-[#071018] text-white"}`}>
       {!standalone && <div className="login-backdrop absolute inset-0" aria-hidden>
         <img
-          src="/tamp-login-hero.webp"
+          src="/tamp-transport-industry-hero.webp"
           alt=""
           className="login-backdrop-image size-full object-cover"
           fetchPriority="high"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,9,14,.88)_0%,rgba(3,9,14,.52)_48%,rgba(3,9,14,.72)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,8,13,.28)_0%,rgba(2,8,13,.08)_45%,rgba(2,8,13,.86)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,9,14,.72)_0%,rgba(3,9,14,.25)_48%,rgba(3,9,14,.62)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(2,8,13,.28)_0%,rgba(2,8,13,.08)_45%,rgba(2,8,13,.55)_100%)]" />
         <div className="login-ambient absolute -right-32 top-1/4 size-[34rem] rounded-full bg-signal/10 blur-[120px]" />
       </div>}
 
@@ -153,35 +151,29 @@ function Landing() {
       </header>
 
       <div className="login-layout relative z-10 mx-auto grid min-h-[calc(100svh-110px)] w-full max-w-[1480px] items-center gap-10 px-6 pb-10 sm:px-10 lg:grid-cols-[1.1fr_.9fr] lg:px-14 lg:pb-16">
-        {!standalone && <section className="login-copy max-w-2xl self-center pb-4 pt-6 lg:pb-24">
+        {!standalone && <section className="login-copy max-w-2xl self-center pb-4 pt-6 lg:pb-36">
           <div className="login-reveal login-delay-1 mb-6 flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.42em] text-white/70 sm:text-xs">
-            Cargo transportation <span className="h-px w-12 bg-white/55" />
+            Transport. Logistics. Possibility. <span className="h-px w-12 bg-white/55" />
           </div>
           <h1 className="login-reveal login-delay-2 text-4xl font-extrabold leading-[1.06] tracking-[-0.045em] sm:text-5xl lg:text-6xl xl:text-[4.6rem]">
-            Loads and trucks,
-            <span className="mt-1 block text-signal">matched in full view.</span>
+            Every journey.
+            <span className="mt-1 block text-signal">One connected platform.</span>
           </h1>
           <p className="login-reveal login-delay-3 mt-7 max-w-xl text-sm leading-7 text-white/68 sm:text-base">
-            TAMP connects South African freight owners with trusted truck capacity through
-            explainable matching, live visibility and accountable operations.
+            Move freight, connect people and put assets to work. TAMP brings South Africa’s
+            logistics, passenger transport and mining operations together with clear matching,
+            fleet management and live visibility.
           </p>
 
-          <div className="login-reveal login-delay-4 mt-9 flex flex-wrap gap-3">
-            <div className="login-stat">
-              <strong>{loadsPosted}</strong>
-              <span>Loads posted</span>
-            </div>
-            <div className="login-stat">
-              <strong>{trucksAvailable}</strong>
-              <span>Trucks ready</span>
-            </div>
-            <div className="login-stat">
-              <strong>{matchesAccepted}</strong>
-              <span>Matches accepted</span>
-            </div>
+          <div className="login-reveal login-delay-4 mt-7 grid max-w-lg grid-cols-2 gap-2 sm:grid-cols-4">
+            {[{ icon: Truck, label: "Freight & logistics" }, { icon: BusFront, label: "Buses & minibuses" },
+              { icon: Forklift, label: "Mining & assets" }, { icon: CarFront, label: "Bakkies & fleets" }].map(({ icon: Icon, label }) =>
+              <div key={label} className="flex flex-col gap-2 rounded-xl border border-white/15 bg-black/20 p-3 backdrop-blur-sm">
+                <Icon className="size-5 text-signal" strokeWidth={1.5} /><span className="text-xs font-medium text-white/85">{label}</span>
+              </div>)}
           </div>
 
-          <div className="login-reveal login-delay-5 mt-12 hidden flex-wrap items-center gap-x-8 gap-y-4 lg:flex">
+          <div className="login-reveal login-delay-5 mt-7 hidden flex-wrap items-center gap-x-8 gap-y-4 lg:flex">
             <Feature icon={Radar} label="Smart matching" />
             <Feature icon={Activity} label="Real-time visibility" />
             <Feature icon={ShieldCheck} label="Trusted operations" />

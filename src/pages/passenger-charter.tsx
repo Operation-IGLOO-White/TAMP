@@ -87,6 +87,8 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
     queryKey: ["passenger-catalogue", authParty?.id, authParty?.activeOrganisationId],
     queryFn: () => trpc.query<(Vehicle & { supplier: string; mine?: boolean })[]>("passenger.catalogue"),
     enabled: showCatalogue,
+    refetchInterval: 20_000,
+    staleTime: 0,
   });
   const [editor, setEditor] = useState<FleetVehicle | "new" | null>(null);
   const [type, setType] = useState("");

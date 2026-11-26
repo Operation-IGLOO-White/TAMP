@@ -73,9 +73,9 @@ function AddressField({ name, value, onChange }: { name: string; value: Address;
   </div>;
 }
 
-function LegFields({ title, prefix, addresses, setAddresses, defaultPassengers }: {
+function LegFields({ title, prefix, addresses, setAddresses, defaultPassengers, minPickup }: {
   title: string; prefix: string; addresses: LegAddresses; setAddresses: (addresses: LegAddresses) => void;
-  defaultPassengers?: string;
+  defaultPassengers?: string; minPickup?: string | undefined;
 }) {
   return <section className="grid gap-3 rounded-xl border border-border p-3 sm:p-4">
     <h3 className="font-semibold">{title}</h3>
@@ -93,7 +93,7 @@ function LegFields({ title, prefix, addresses, setAddresses, defaultPassengers }
     }><Plus className="mr-1 inline size-4" /> Add stop</button>}
     <AddressField name="Destination address" value={addresses.destination} onChange={(destination) => setAddresses({ ...addresses, destination })} />
     <div className="grid gap-3 sm:grid-cols-2">
-      <Field label="Pickup date and time (SAST) *"><input className={field} type="datetime-local" name={prefix + "pickup"} required /></Field>
+      <Field label="Pickup date and time (SAST) *"><input className={field} type="datetime-local" name={prefix + "pickup"} min={minPickup} required /></Field>
       <Field label="Total passengers *"><input className={field} type="number" min={1} max={1000} name={prefix + "passengers"} defaultValue={defaultPassengers} required /></Field>
       <Field label="Wheelchair positions needed"><input className={field} type="number" min={0} max={100} name={prefix + "wheelchairs"} /></Field>
       <Field label="Estimated luggage weight (kg)"><input className={field} type="number" min={0} max={50000} step="any" name={prefix + "kg"} /></Field>
@@ -144,6 +144,16 @@ export function CharterRequestForm({ listing, close, onSent }: {
   const finalStep = listing ? 2 : 3;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [pickup, setPickup] = useState("");
+  const routeReady = Boolean(outbound.origin.place && outbound.destination.place && !outbound.origin.dirty && !outbound.destination.dirty && outbound.stops.every((stop) => stop.place && !stop.dirty));
+  const routePreview = useQuery({
+    queryKey: ["charter-route-preview", outbound],
+    enabled: routeReady,
+    queryFn: () => computeRoute(outbound.origin.place!, outbound.destination.place!, outbound.stops.map((stop) => stop.place!)),
+    staleTime: 60_000, retry: 1,
+  });
+  const arrival = pickup && routePreview.data ? Date.parse(sasTime(pickup)) + routePreview.data.durationMin * 60_000 : null;
+  const earliestReturn = arrival ? new Date(Math.ceil((arrival + 60_000) / 60_000) * 60_000).toISOString() : null;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -165,6 +175,12 @@ export function CharterRequestForm({ listing, close, onSent }: {
       if (Date.parse(first.pickupAt) <= Date.now()) throw new Error("Choose a future pickup date and time.");
       if (second && second.pickupAt <= first.pickupAt) throw new Error("Return pickup must follow outbound pickup.");
       if (step < 2) {
+        setBusy(true);
+        const route = await computeRoute(first.origin, first.destination, first.stops);
+        if (!route?.routeToken) throw new Error("We could not calculate this route. Please retry before choosing your return.");
+        if (second && Date.parse(second.pickupAt) <= Date.parse(first.pickupAt) + route.durationMin * 60_000) {
+          throw new Error(`Your outbound trip arrives around ${displayTime(new Date(Date.parse(first.pickupAt) + route.durationMin * 60_000).toISOString())}. Choose a return pickup after this time.`);
+        }
         setStep(step + 1);
         formElement.scrollIntoView({ block: "start" });
         return;
@@ -176,7 +192,7 @@ export function CharterRequestForm({ listing, close, onSent }: {
       ]);
       if (!outRoute?.routeToken || (second && !returnRoute?.routeToken)) throw new Error("The route could not be calculated. Please try again.");
       if (second && Date.parse(second.pickupAt) <= Date.parse(first.pickupAt) + outRoute.durationMin * 60_000) {
-        throw new Error("Choose a return pickup after the estimated outbound arrival.");
+        throw new Error(`Your outbound trip arrives around ${displayTime(new Date(Date.parse(first.pickupAt) + outRoute.durationMin * 60_000).toISOString())}. Choose a later return pickup.`);
       }
       const trip = { outbound: { ...first, routeToken: outRoute.routeToken },
         returnLeg: second && { ...second, routeToken: returnRoute?.routeToken },
@@ -206,7 +222,10 @@ export function CharterRequestForm({ listing, close, onSent }: {
       setBusy(false);
     }
   }
-  return <form className={panel + " w-full min-w-0 scroll-mt-24"} onSubmit={submit} noValidate aria-busy={busy}>
+  return <form className={panel + " w-full min-w-0 scroll-mt-24"} onSubmit={submit} onChange={(event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.name === "out-pickup") setPickup(target.value);
+  }} noValidate aria-busy={busy}>
     <h2 className="mb-2 text-lg font-semibold">{listing ? "Request a charter quote" : "Find a charter transporter"}</h2>
     {listing && <p className="mb-4 text-sm text-muted-foreground">{listing.make} {listing.model} · {listing.supplier}</p>}
     <nav aria-label="Charter request progress" className={`mb-6 grid ${listing ? "grid-cols-3" : "grid-cols-4"} gap-1 sm:gap-2`}>
@@ -228,19 +247,31 @@ export function CharterRequestForm({ listing, close, onSent }: {
         })}
     </nav>
     {error && <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive">{error}</div>}
+    {step <= 1 && routeReady && <div className="mb-4 rounded-xl border border-signal/30 bg-signal/5 p-4 text-sm" aria-live="polite">
+      {routePreview.isFetching ? "Calculating road distance and travel time…" : routePreview.data ? <>
+        <p className="font-semibold">Outbound · {routePreview.data.distanceKm.toFixed(1)} km · {Math.floor(routePreview.data.durationMin / 60)}h {Math.ceil(routePreview.data.durationMin % 60)}m estimated driving time</p>
+        {arrival && <p className="mt-1">Estimated arrival: {displayTime(new Date(arrival).toISOString())}. Allow extra time for breaks, traffic and your activity before returning.</p>}
+      </> : <button type="button" className="underline" onClick={() => void routePreview.refetch()}>Route estimate unavailable. Retry</button>}
+    </div>}
     <fieldset className="grid gap-4" disabled={busy}>
       <div hidden={step !== 0} data-current={step === 0 ? "" : undefined}>
         <LegFields title="Outbound trip" prefix="out-" addresses={outbound} setAddresses={setOutbound} />
       </div>
       <div hidden={step !== 1} data-current={step === 1 ? "" : undefined}>
-        <label className="mb-3 flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" className="accent-signal" checked={Boolean(inbound)} onChange={(event) => {
-            const form = event.currentTarget.form;
-            if (form) setReturnPassengers(read(new FormData(form), "out-passengers"));
-            setInbound(event.target.checked ? { origin: outbound.destination, destination: outbound.origin, stops: [] } : null);
-          }} /> Add a return trip
-        </label>
-        {inbound && <LegFields title="Return trip" prefix="return-" addresses={inbound} setAddresses={setInbound} defaultPassengers={returnPassengers} />}
+        <button type="button" aria-pressed={Boolean(inbound)} className={primary + " mb-3 inline-flex items-center gap-2"} onClick={(event) => {
+          const form = event.currentTarget.form;
+          if (form) setReturnPassengers(read(new FormData(form), "out-passengers"));
+          setInbound(inbound ? null : { origin: outbound.destination, destination: outbound.origin, stops: [] });
+        }}><Undo2 className="size-4" />{inbound ? "Remove return trip" : "Add a return trip"}</button>
+        {inbound && earliestReturn && <div className="mb-3 rounded-xl border border-border p-3 text-sm">
+          <p className="font-medium">Choose a return pickup after {displayTime(earliestReturn)}</p>
+          <p className="mt-1 text-muted-foreground">Quick suggestions include time at your destination. You can also choose your own date and time below.</p>
+          <div className="mt-2 flex flex-wrap gap-2">{[1, 2, 4].map((hours) => <button key={hours} type="button" className={button} onClick={(event) => {
+            const input = event.currentTarget.form?.elements.namedItem("return-pickup");
+            if (input instanceof HTMLInputElement) input.value = localTime(new Date(Date.parse(earliestReturn) + hours * 3_600_000).toISOString());
+          }}>Stay {hours}h · {displayTime(new Date(Date.parse(earliestReturn) + hours * 3_600_000).toISOString())}</button>)}</div>
+        </div>}
+        {inbound && <LegFields title="Return trip" prefix="return-" addresses={inbound} setAddresses={setInbound} defaultPassengers={returnPassengers} minPickup={earliestReturn ? localTime(earliestReturn) : undefined} />}
       </div>
       <div hidden={step !== 2} data-current={step === 2 ? "" : undefined}>
         <div className="grid gap-3">
@@ -275,24 +306,30 @@ export function CharterRequestForm({ listing, close, onSent }: {
           })}
           <p className="text-sm text-muted-foreground">Go back to adjust the dates or group requirements and search again.</p>
         </div>}
-        {matches.map((match) => <label key={match.vehicleId} className={`grid cursor-pointer gap-2 rounded-xl border p-3 ${chosen === match.vehicleId ? "border-signal bg-signal/10" : "border-border"}`}>
-          <span className="flex items-center gap-2 font-semibold">
-            <input type="radio" name="supplier" className="accent-signal" checked={chosen === match.vehicleId}
-              onChange={() => setChosen(match.vehicleId)} />
-            {match.supplier}
-            <span className="text-xs font-normal text-muted-foreground">{match.vehicles.length} {match.vehicles.length === 1 ? "vehicle" : "vehicles"}</span>
-          </span>
-          {(match.allocations ?? [match]).map((allocation) => <span key={allocation.vehicleId} className="grid gap-1 pl-5">
-            {match.allocations && <span className="text-sm font-semibold">{allocation.supplier}</span>}
-            {allocation.vehicles.map((vehicle) => <span key={vehicle.id} className="grid gap-0.5 text-sm">
-            <span>{vehicle.make} {vehicle.model} · {vehicle.type.toLowerCase()}</span>
-            <span className="text-muted-foreground">{vehicle.seats} seats
-              {vehicle.wheelchairPositions > 0 && ` · ${vehicle.wheelchairPositions} wheelchair positions with ${vehicle.seats - vehicle.displacedSeats} seats`}
-              {` · ${vehicle.luggageKg} kg / ${vehicle.luggageM3} m³ luggage`}
-            </span>
-            </span>)}
-          </span>)}
-        </label>)}
+        <div className="grid gap-4 lg:grid-cols-2">{matches.map((match) => <label key={match.vehicleId} className={`min-w-0 cursor-pointer overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:shadow-md ${chosen === match.vehicleId ? "border-signal ring-1 ring-signal" : "border-border"}`}>
+          <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+            <span className="flex items-center gap-2 font-semibold"><input type="radio" name="supplier" className="accent-signal" checked={chosen === match.vehicleId} onChange={() => setChosen(match.vehicleId)} />{match.supplier}</span>
+            <span className="rounded-full bg-signal/15 px-3 py-1 text-xs font-semibold">{match.vehicles.length} {match.vehicles.length === 1 ? "vehicle" : "vehicles"}</span>
+          </div>
+          {(match.allocations ?? [match]).map((allocation) => <div key={allocation.vehicleId}>
+            {match.allocations && <p className="px-4 pt-3 text-sm font-semibold">{allocation.supplier}</p>}
+            {allocation.vehicles.map((vehicle) => <div key={vehicle.id}>
+              <div className="relative flex h-44 items-center justify-center bg-gradient-to-br from-white to-stone-100 p-4 sm:h-52">
+                <img src={passengerVehicleAsset(vehicle)} alt={`${vehicle.make} ${vehicle.model}`} className="h-full w-full object-contain" />
+                <span className="absolute bottom-2 right-3 text-[10px] text-stone-500">Illustrative image</span>
+              </div>
+              <div className="grid gap-3 p-4">
+                <div><p className="text-xs uppercase text-muted-foreground">{vehicle.type.toLowerCase()}</p><h3 className="text-lg font-bold">{vehicle.make} {vehicle.model}</h3></div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-xl border border-border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">Passenger seats</p><p className="font-semibold">{vehicle.seats}</p></div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">Luggage capacity</p><p className="font-semibold">{vehicle.luggageKg} kg / {vehicle.luggageM3} m³</p></div>
+                </div>
+                {vehicle.wheelchairPositions > 0 && <p className="text-sm text-muted-foreground">{vehicle.wheelchairPositions} wheelchair positions · {vehicle.seats - vehicle.displacedSeats} seats in wheelchair configuration</p>}
+              </div>
+            </div>)}
+          </div>)}
+          <div className={`border-t border-border px-4 py-3 text-center text-sm font-semibold ${chosen === match.vehicleId ? "bg-signal text-signal-foreground" : "text-muted-foreground"}`}>{chosen === match.vehicleId ? "Selected for quote request" : "Select this transporter"}</div>
+        </label>)}</div>
       </section>}
     </fieldset>
     <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
@@ -358,6 +395,7 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
 
     } catch (failure) {
       setError(errorText(failure));
+      toast.error("Charter action could not be completed", { description: errorText(failure) });
       await bookings.refetch();
     } finally {
       setBusy(false);
@@ -540,6 +578,7 @@ export function ReassignCharterDriver({ bookingId, vehicleId, registration, onSa
       toast.success("Replacement driver invited");
     } catch (failure) {
       setError(errorText(failure));
+      toast.error("Charter action could not be completed", { description: errorText(failure) });
     } finally {
       setSaving(false);
     }
@@ -594,6 +633,7 @@ function CombinedCharter({ id, bookings, canManage, canTrack, refresh }: {
       }));
     } catch (failure) {
       setError(errorText(failure));
+      toast.error("Charter action could not be completed", { description: errorText(failure) });
     } finally {
       setBusy(false);
     }
@@ -612,6 +652,7 @@ function CombinedCharter({ id, bookings, canManage, canTrack, refresh }: {
       toast.success("Replacement requested");
     } catch (failure) {
       setError(errorText(failure));
+      toast.error("Charter action could not be completed", { description: errorText(failure) });
       await refresh();
     } finally {
       setBusy(false);
@@ -679,6 +720,7 @@ function CombinedCharter({ id, bookings, canManage, canTrack, refresh }: {
         toast.success(action === "CONFIRM" ? "Combined charter booked" : "Combined charter cancelled");
       } catch (failure) {
         setError(errorText(failure));
+      toast.error("Charter action could not be completed", { description: errorText(failure) });
         await refresh();
       } finally {
         setBusy(false);
