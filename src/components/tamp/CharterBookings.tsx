@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarDays, Check, MapPin, Plus, Route, Trash2, Undo2, UserRound } from "lucide-react";
+import { CalendarDays, Check, MapPin, Plus, Route, Search, Trash2, Undo2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { charterAssignmentLabel, charterStageLabel, charterVehicleComplete, type CharterVehicleProgress } from "@/lib/charter-assignment";
 import { CharterFleetLive } from "@/components/tamp/CharterFleetLive";
@@ -324,11 +324,17 @@ export function CharterBookings() {
   const [editor, setEditor] = useState<{ id: string; version: string; action: "quote" | CharterAction } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const allBookings = bookings.data ?? [];
   const linked = allBookings.find((row) => row.id === bookingId);
-  const rows = allBookings.filter((row) => bookingId
+  const scopedRows = allBookings.filter((row) => bookingId
     ? row.id === bookingId || (!row.incoming && linked?.groupId && row.groupId === linked.groupId)
     : row.incoming === (tab === "incoming"));
+  const rows = scopedRows.filter((row) =>
+    (statusFilter === "ALL" || row.status === statusFilter)
+    && [row.id, row.vehicleName, row.customer, row.supplier, row.outbound.origin.label, row.outbound.destination.label]
+      .join(" ").toLowerCase().includes(search.trim().toLowerCase()));
   const customerGroups = [...new Set(rows.flatMap((row) => !row.incoming && row.groupId ? [row.groupId] : []))];
 
   async function save(path: string, data: unknown, message: string) {
@@ -347,12 +353,25 @@ export function CharterBookings() {
     }
   }
 
-  return <div className="grid gap-4">
+  return <div className="grid w-full min-w-0 gap-4">
     {!bookingId && role === "TRANSPORTER" && <div className="flex flex-wrap gap-2">
       <button className={tab === "incoming" ? primary : button} onClick={() => setTab("incoming")}>Incoming requests</button>
       <button className={tab === "sent" ? primary : button} onClick={() => setTab("sent")}>Sent requests</button>
     </div>}
     {bookingId && <Link to="/passenger-charter?view=bookings" className={button + " justify-self-start"}>All charter requests</Link>}
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
+      <label className="relative flex-1">
+        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input aria-label="Search charter bookings" type="search" className={field + " pl-9"} placeholder="Search route, reference, vehicle or company…"
+          value={search} onChange={(event) => setSearch(event.target.value)} />
+      </label>
+      <select aria-label="Filter charter status" className={field + " sm:w-44"} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+        <option value="ALL">All statuses</option>
+        {["REQUESTED", "QUOTED", "CONFIRMED", "DECLINED", "CANCELLED"].map((status) =>
+          <option key={status} value={status}>{status.toLowerCase().replace(/^./, (letter) => letter.toUpperCase())}</option>)}
+      </select>
+      <span role="status" className="shrink-0 text-xs text-muted-foreground">{rows.length} of {scopedRows.length} requests</span>
+    </div>
     {bookings.isPending && <p role="status">Loading charter requests…</p>}
     {bookings.isError && <div role="alert" className={panel}>Charter requests could not be loaded. <button className={button} onClick={() => void bookings.refetch()}>Retry</button></div>}
     {bookings.isSuccess && !rows.length && <p className={panel + " text-sm text-muted-foreground"}>{bookingId ? "This charter is unavailable in your organisation." : "No charter requests yet."}</p>}
@@ -371,14 +390,22 @@ export function CharterBookings() {
         setError("");
         setEditor({ id: booking.id, version: booking.version, action });
       };
-      return <article className={panel + " grid gap-4"} key={booking.id}>
+      return <article className="grid min-w-0 gap-4 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5" key={booking.id}>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div><p className="text-xs text-muted-foreground">{booking.groupId ? `Combined charter · ${booking.groupId}` : booking.id}</p><h2 className="text-lg font-semibold">{booking.vehicleName}</h2>
+          <div className="min-w-0 flex-1"><p className="break-all font-mono text-[10px] text-muted-foreground">{booking.groupId ? `Combined charter · ${booking.groupId}` : booking.id}</p><h2 className="mt-2 break-words text-sm font-black uppercase sm:text-base">{booking.outbound.origin.label} <span className="mx-1 inline-block text-xl">→</span> {booking.outbound.destination.label}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{booking.vehicleName} · {booking.outbound.passengers} passengers · {booking.returnLeg ? "Return trip" : "One-way"}</p>
             <p className="text-sm text-muted-foreground">{booking.incoming ? booking.customer : booking.supplier}</p></div>
-          <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold">
+          <span className="shrink-0 rounded-md bg-signal/15 px-2 py-1 text-[10px] font-bold uppercase">
             {booking.status === "CONFIRMED" && complete ? "Completed" : booking.status === "QUOTED" && !quoteValid ? "Quote expired" : booking.status.toLowerCase().replace(/^./, (ch) => ch.toUpperCase())}
           </span>
         </div>
+        <div className="flex flex-wrap justify-between gap-3 border-y border-border py-3 text-xs">
+          <p><span className="text-muted-foreground">Pickup </span>{displayTime(booking.outbound.pickupAt)} SAST</p>
+          {booking.quote && <p className="font-mono font-bold">{money.format(Number(booking.quote.total))} {booking.quote.vat === "INCL" ? "incl." : "excl."} VAT</p>}
+        </div>
+        <details open={Boolean(bookingId)} className="min-w-0">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-signal">View itinerary and booking details</summary>
+          <div className="mt-4 grid min-w-0 gap-4">
         <div className="grid gap-3 md:grid-cols-2">
           <LegSummary leg={booking.outbound} title="Outbound" />
           {booking.returnLeg && <LegSummary leg={booking.returnLeg} title="Return" />}
@@ -438,6 +465,8 @@ export function CharterBookings() {
           <ul className="mt-2 space-y-1">{booking.history.map((entry, index) =>
             <li key={index}>{displayTime(entry.at)} · {entry.status.toLowerCase()}{entry.reason && ` · ${entry.reason}`}</li>
           )}</ul>
+        </details>
+          </div>
         </details>
         {canManage && future && !active && <div className="flex flex-wrap gap-2">
           {booking.incoming && open && <button className={primary} onClick={() => choose("quote")}>{booking.quote ? "Revise quote" : "Prepare quote"}</button>}
