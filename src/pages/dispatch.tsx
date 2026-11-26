@@ -205,15 +205,26 @@ export default function DispatchPage() {
           <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
             {(Object.keys(queues) as Queue[]).map((queue) => <QueueColumn key={queue} extraCount={passengerVisible.filter((item) => item.queue === queue).length}
               passengerCards={passengerVisible.filter((item) => item.queue === queue).map(({ booking, vehicle, assignment }) =>
-                <article key={booking.id + vehicle.id} className="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm">
-                  <p className="text-[9px] font-bold uppercase text-signal">Passenger charter</p>
-                  <h3 className="break-words text-xs font-bold">{booking.outbound.origin.label} → {booking.outbound.destination.label}</h3>
-                  <p className="text-xs font-semibold">{vehicle.registration} · {vehicle.make} {vehicle.model}</p>
-                  <p className="text-[10px] text-muted-foreground">Pickup {formatDate(booking.outbound.pickupAt)} · {booking.outbound.passengers} passengers</p>
-                  <p className="text-xs">{assignment?.driverName ?? "Driver not assigned"}</p>
-                  {assignment?.reason && <p className="text-xs text-danger">{assignment.reason}</p>}
-                  {assignment?.canReassign && <ReassignCharterDriver bookingId={booking.id} vehicleId={vehicle.id} registration={vehicle.registration}
-                    onSaved={async () => { await passengerBookings.refetch(); }} />}
+                <article key={booking.id + vehicle.id} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:shadow-md">
+                  <button type="button" className="w-full p-3 text-left" onClick={() => setExpanded(expanded === booking.id + vehicle.id ? null : booking.id + vehicle.id)}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="truncate font-mono text-[10px] text-muted-foreground">{booking.id}</p>
+                        <h3 className="mt-1 text-sm font-black">{vehicle.registration}</h3></div>
+                      <Badge queue={queue} />
+                    </div>
+                    <p className="mt-1 text-[9px] font-bold uppercase text-muted-foreground">Passenger · {vehicle.make} {vehicle.model}</p>
+                    <div className="mt-3 space-y-2"><RouteRow label={shortPlace(booking.outbound.origin.label)} /><RouteRow label={shortPlace(booking.outbound.destination.label)} end /></div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[10px]">
+                      <Small label="Pickup" value={formatDate(booking.outbound.pickupAt)} />
+                      <Small label="Driver" value={assignment?.driverName ?? "Unassigned"} />
+                    </div>
+                    <div className="mt-3 flex justify-between text-[9px] font-bold uppercase text-muted-foreground"><span>{booking.outbound.passengers} passengers</span><span className="flex items-center gap-1 text-foreground">Manage <ChevronRight className={`size-3 ${expanded === booking.id + vehicle.id ? "rotate-90" : ""}`} /></span></div>
+                  </button>
+                  {expanded === booking.id + vehicle.id && <div className="space-y-3 border-t border-border bg-background/60 p-3">
+                    {assignment?.reason && <p className="text-xs text-danger">{assignment.reason}</p>}
+                    {assignment?.canReassign && <ReassignCharterDriver compact bookingId={booking.id} vehicleId={vehicle.id} registration={vehicle.registration}
+                      onSaved={async () => { await passengerBookings.refetch(); }} />}
+                  </div>}
                 </article>)}
               queue={queue} jobs={visible.filter((j) => queueFor(j) === queue)} allJobs={jobs} drivers={drivers} members={members} parties={parties} documentsByDriver={documentsByDriver} emails={emails} notes={notes} setEmails={setEmails} setNotes={setNotes} busy={busy} expanded={expanded} setExpanded={setExpanded} driverConflicts={driverConflicts} truckConflicts={truckConflicts} act={act} />)}
           </div>

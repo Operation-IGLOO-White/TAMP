@@ -505,23 +505,24 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
   </div>;
 }
 
-export function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved }: {
-  bookingId: string; vehicleId: string; registration: string; onSaved: () => Promise<void>;
+export function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved, compact = false }: {
+  bookingId: string; vehicleId: string; registration: string; onSaved: () => Promise<void>; compact?: boolean;
 }) {
   const { authParty } = useTamp();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(compact);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const options = useQuery({
     queryKey: ["charter-driver-options", authParty?.id, authParty?.activeOrganisationId, bookingId, vehicleId],
-    queryFn: () => trpc.query<{ expectedDriverId: string | null; drivers: { id: string; name: string }[] }>(
+    queryFn: () => trpc.query<{ expectedDriverId: string | null; drivers: { id: string; name: string; eligible?: boolean; reason?: string }[] }>(
       "charter.driverOptions", { bookingId, vehicleId }),
     enabled: open, retry: false, gcTime: 0,
   });
   if (!open) return <button type="button" className={button + " justify-self-start"}
     onClick={() => { setError(""); setOpen(true); }}>Assign / change driver</button>;
 
-  return <form className="mt-2 grid gap-3 rounded-lg border border-border p-3" onSubmit={async (event) => {
+  return <form className={compact ? "grid gap-3" : "mt-2 grid gap-3 rounded-lg border border-border p-3"} onSubmit={async (event) => {
     event.preventDefault();
     if (!options.data || saving) return;
     const form = new FormData(event.currentTarget);
@@ -530,9 +531,9 @@ export function ReassignCharterDriver({ bookingId, vehicleId, registration, onSa
     try {
       await trpc.mutation("charter.reassignDriver", {
         bookingId, vehicleId, expectedDriverId: options.data.expectedDriverId,
-        driverId: read(form, "replacementDriver"), reason: read(form, "replacementReason"),
+        driverId: read(form, "replacementDriver"), reason: read(form, "replacementReason") || "Initial driver assignment",
       });
-      setOpen(false);
+      if (!compact) setOpen(false);
       await onSaved();
       toast.success("Replacement driver invited");
     } catch (failure) {
@@ -541,27 +542,27 @@ export function ReassignCharterDriver({ bookingId, vehicleId, registration, onSa
       setSaving(false);
     }
   }}>
-    <h4 className="font-semibold">Reassign driver for {registration}</h4>
+    {!compact && <h4 className="font-semibold">Assign driver for {registration}</h4>}
     {options.isPending && <p role="status">Checking driver availability…</p>}
     {options.isError && <p role="alert">{errorText(options.error)}</p>}
     {options.data && !options.data.drivers.length && <p className="text-muted-foreground">No eligible replacement drivers are available for this reservation.</p>}
     {options.data && options.data.drivers.length > 0 && <>
-      <Field label="Replacement driver *">
-        <select className={field} name="replacementDriver" required defaultValue="" disabled={saving}>
+      <Field label="Select compliant driver">
+        <select className={field} name="replacementDriver" required value={selectedDriverId} onChange={(event) => setSelectedDriverId(event.target.value)} disabled={saving}>
           <option value="" disabled>Select a driver</option>
-          {options.data.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}
+          {options.data.drivers.map((driver) => <option key={driver.id} value={driver.id} disabled={driver.eligible === false}>{driver.name}{driver.reason ? ` — ${driver.reason}` : ""}</option>)}
         </select>
       </Field>
-      <Field label="Reason for reassignment *">
-        <textarea className={field} name="replacementReason" required maxLength={500} rows={2} disabled={saving} />
+      <Field label={options.data.expectedDriverId ? "Reason for reassignment *" : "Pickup or route instructions (optional)"}>
+        <textarea className={field} name="replacementReason" required={Boolean(options.data.expectedDriverId)} maxLength={500} rows={2} disabled={saving} />
       </Field>
     </>}
     {error && <p role="alert" className="text-destructive">{error}</p>}
     <div className="flex flex-wrap gap-2">
-      <button type="button" className={button} onClick={() => setOpen(false)} disabled={saving}>Close</button>
+      {!compact && <button type="button" className={button} onClick={() => setOpen(false)} disabled={saving}>Close</button>}
       {options.isError && <button type="button" className={button} onClick={() => void options.refetch()}>Retry</button>}
-      {options.data && options.data.drivers.length > 0 && <button className={primary} disabled={saving || options.isFetching}>
-        {saving ? "Sending offer…" : "Send new assignment"}
+      {options.data && options.data.drivers.length > 0 && <button className={primary + " w-full"} disabled={saving || options.isFetching || !selectedDriverId}>
+        {saving ? "Sending offer…" : "Send driver offer"}
       </button>}
     </div>
   </form>;
