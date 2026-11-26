@@ -78,7 +78,7 @@ export default function VerificationInbox() {
     enabled: canReviewPassengers,
   });
   const passengerReview = useMutation({
-    mutationFn: (input: { id: string; version: string; status: "VERIFIED" | "REJECTED"; reason: string }) =>
+    mutationFn: (input: { id: string; version: string; documentKey?: keyof PassengerReview["vehicle"]["documents"]; status: "VERIFIED" | "REJECTED"; reason: string }) =>
       trpc.mutation("passenger.review", input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: passengerKey });
@@ -320,7 +320,7 @@ export default function VerificationInbox() {
                     </tr>
                     {expanded && <tr><td colSpan={5} className="bg-muted/30 px-4 pb-4">
                       <PassengerReviewForm key={vehicle.version} vehicle={vehicle} busy={passengerReview.isPending}
-                        onReview={(status, reason) => passengerReview.mutate({ id: vehicle.id, version: vehicle.version, status, reason })} />
+                        onReview={(status, reason, documentKey) => passengerReview.mutate({ id: vehicle.id, version: vehicle.version, status, reason, ...(documentKey ? { documentKey } : {}) })} />
                     </td></tr>}
                   </Fragment>;
                 })}

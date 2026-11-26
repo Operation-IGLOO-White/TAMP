@@ -328,7 +328,7 @@ function VehiclePhoto({ vehicle, fleet }: { vehicle: Vehicle; fleet: boolean }) 
     ) : (
       <>
         {illustrationFailed ? <BusFront aria-hidden="true" className="size-12 text-muted-foreground" /> :
-          <img className="h-44 w-full object-contain px-6 pb-7 pt-4"
+          <img className="h-44 w-full object-contain px-4 pb-6 pt-2"
             src={passengerVehicleAsset(vehicle)}
             alt={`Generic ${types[vehicle.type].toLowerCase()}`} loading="lazy"
             onError={() => setIllustrationFailed(true)} />}

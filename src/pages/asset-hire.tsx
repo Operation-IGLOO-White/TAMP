@@ -484,6 +484,8 @@ const number = (key: string, label: string, value?: number | string, step = "1",
 
 function AssetForm({ asset, done }: { asset?: Asset | undefined; done: () => Promise<void> }) {
   const submission = useSubmission();
+  const assetPhotoInput = useRef<HTMLInputElement>(null);
+  const [selectedPhotoNames, setSelectedPhotoNames] = useState<string[]>([]);
   const [type, setType] = useState<AssetType>(asset?.type ?? "ADT");
   const [location, setLocation] = useState<Place | null>(asset?.location ?? null);
   const [photos, setPhotos] = useState(asset?.photos ?? []);
@@ -565,7 +567,18 @@ function AssetForm({ asset, done }: { asset?: Asset | undefined; done: () => Pro
       <img className="h-16 w-24 rounded object-cover" src={photo} alt="Asset" />
       <button className={button} type="button" onClick={() => setPhotos(photos.filter((url) => url !== photo))}>Remove photo</button>
     </div>)}
-    <Label name="Asset photos"><input type="file" name="photos" multiple accept="image/*" /></Label>
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 text-sm font-semibold">Asset photos</legend>
+      <input ref={assetPhotoInput} type="file" name="photos" multiple accept="image/*" hidden
+        onChange={(event) => setSelectedPhotoNames(Array.from(event.currentTarget.files ?? [], (file) => file.name))} />
+      <button type="button" className={primary + " flex w-fit items-center gap-2"}
+        disabled={submission.pending} onClick={() => assetPhotoInput.current?.click()}>
+        <Upload className="size-4" aria-hidden="true" />{selectedPhotoNames.length ? "Change photos" : "Upload photos"}
+      </button>
+      <p role="status" className="break-words text-xs text-muted-foreground">
+        {selectedPhotoNames.length ? selectedPhotoNames.join(", ") : "No photos selected"}
+      </p>
+    </fieldset>
     <label className="text-sm"><input type="checkbox" name="published" defaultChecked={asset?.published} /> Publish in Asset Rental</label>
     <Submit pending={submission.pending} error={submission.error}>Save asset</Submit>
   </form>;

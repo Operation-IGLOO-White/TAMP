@@ -1,3 +1,4 @@
+import { Check, Download, FileText, X } from "lucide-react";
 import { useState } from "react";
 
 const documents = {
@@ -34,6 +35,7 @@ export type PassengerReview = {
     reviewReason?: string;
     licenceExpiry: string;
     permitExpiry: string;
+    documentReviews?: Record<string, { status: "APPROVED" | "REJECTED"; reason?: string }>;
     documents: Record<keyof typeof documents, string>;
     photos: string[];
   };
@@ -44,7 +46,7 @@ const displayDate = new Intl.DateTimeFormat("en-ZA", {
 });
 
 export function PassengerReviewForm({ vehicle, busy, onReview }: {
-  vehicle: PassengerReview["vehicle"]; busy: boolean; onReview: (status: "VERIFIED" | "REJECTED", reason: string) => void;
+  vehicle: PassengerReview["vehicle"]; busy: boolean; onReview: (status: "VERIFIED" | "REJECTED", reason: string, documentKey?: keyof typeof documents) => void;
 }) {
   const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
   const [reason, setReason] = useState("");
@@ -81,24 +83,6 @@ export function PassengerReviewForm({ vehicle, busy, onReview }: {
           {!vehicle.photos.length && <p className="text-sm text-muted-foreground">No vehicle photos uploaded.</p>}
         </div>
       </section>
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
-      <h3 className="border-b border-border px-4 py-3 font-semibold">Vehicle documents</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr>
-            <th scope="col" className="px-4 py-3">Document</th><th scope="col" className="px-4 py-3">Actions</th>
-          </tr></thead>
-          <tbody className="divide-y divide-border">{documentKeys.map((key) => {
-            const url = vehicle.documents[key];
-            return <tr key={key}><th scope="row" className="px-4 py-3 font-medium">{documents[key]}</th>
-              <td className="px-4 py-3">{url ? <div className="flex flex-wrap gap-2">
-                <button type="button" className={primary} onClick={() => setPreview({ url, label: documents[key] })}>View document</button>
-                <a className={button} href={url + (url.includes("?") ? "&" : "?") + "download=1"}>Download</a>
-              </div> : <span className="text-destructive">File not uploaded</span>}</td></tr>;
-          })}</tbody>
-        </table>
-      </div>
-    </section>
     {preview && <section className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
         <h3 className="font-semibold">{preview.label}</h3>
@@ -120,6 +104,33 @@ export function PassengerReviewForm({ vehicle, busy, onReview }: {
       <button className={primary} disabled={busy || vehicle.verification === "VERIFIED"} onClick={() => onReview("VERIFIED", reason)}>Verify vehicle</button>
       <button className={button} disabled={busy || !reason.trim()} onClick={() => onReview("REJECTED", reason)}>Reject vehicle</button>
     </div>
+      <section className="grid gap-3 border-t border-border pt-4">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Vehicle documents</h3>
+        {documentKeys.map((key) => {
+          const url = vehicle.documents[key];
+          const status = vehicle.documentReviews?.[key]?.status ?? "PENDING";
+          return <div key={key} className="rounded-xl border border-border p-3">
+            <button type="button" disabled={!url} onClick={() => setPreview({ url, label: documents[key] })}
+              className="flex w-full items-center gap-2 text-left text-sm font-semibold disabled:opacity-50">
+              <FileText className="size-4 shrink-0 text-signal" />{documents[key]}
+            </button>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+              <span className={`text-[10px] font-bold ${status === "REJECTED" ? "text-destructive" : status === "APPROVED" ? "text-positive" : "text-signal"}`}>{url ? status : "NOT UPLOADED"}</span>
+              {url && <div className="flex gap-1">
+                <a aria-label={`Download ${documents[key]}`} title="Download" href={url + (url.includes("?") ? "&" : "?") + "download=1"} className="grid size-8 place-items-center rounded-lg border border-border"><Download className="size-4" /></a>
+                <button type="button" aria-label={`Approve ${documents[key]}`} title="Approve document" disabled={busy || status === "APPROVED"}
+                  className="grid size-8 place-items-center rounded-lg bg-signal text-signal-foreground disabled:opacity-40" onClick={() => onReview("VERIFIED", "", key)}><Check className="size-4" /></button>
+                <button type="button" aria-label={`Reject ${documents[key]}`} title="Reject document" disabled={busy}
+                  className="grid size-8 place-items-center rounded-lg border border-destructive/40 text-destructive disabled:opacity-40" onClick={() => {
+                    const rejection = window.prompt("Enter a reason for rejecting this document")?.trim();
+                    if (rejection) onReview("REJECTED", rejection, key);
+                  }}><X className="size-4" /></button>
+              </div>}
+            </div>
+            {vehicle.documentReviews?.[key]?.reason && <p className="mt-2 text-xs text-destructive">{vehicle.documentReviews[key].reason}</p>}
+          </div>;
+        })}
+      </section>
       </div>
     </aside>
   </div>;
