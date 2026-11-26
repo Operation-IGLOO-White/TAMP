@@ -134,6 +134,7 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
   const tableView = params.get("layout") === "table";
   const assetTab = tab === "browse" || tab === "assets";
   const rentalTab = ["requests", "hires", "incoming"].includes(tab);
+  const acceptedRentals = bookings.filter((booking) => !booking.incoming && ["CONFIRMED", "IN_HIRE"].includes(booking.status));
   const pendingIncoming = bookings.filter((booking) => booking.incoming && booking.status === "REQUESTED").length;
   const tabs: [string, string][] = [
     ["browse", "Browse assets"], ["requests", "My requests"], ["hires", "My rentals"],
@@ -186,6 +187,9 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
         {tabs.map(([value, label]) => <button key={value} className={tab === value ? primary : button}
           onClick={() => changeTab(value)} aria-current={tab === value ? "page" : undefined}>
           {label}
+          {value === "hires" && acceptedRentals.length > 0 && <span className="ml-2 rounded-full bg-positive/15 px-2 py-0.5 text-xs font-bold text-positive">
+            <span className="sr-only">Accepted active rentals </span>{acceptedRentals.length}
+          </span>}
           {value === "incoming" && pendingIncoming > 0 && <span className="ml-2 rounded-full bg-signal/20 px-2 py-0.5 text-xs">
             <span className="sr-only">Pending requests </span>{pendingIncoming}
           </span>}
@@ -267,6 +271,12 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
         {linkedBooking && <button className={button + " mb-4"} onClick={() => changeTab(params.get("view") === "calendar" ? "calendar" : tab)}>
           {params.get("view") === "calendar" ? "Back to rental calendar" : tab === "incoming" ? "View all incoming requests" : tab === "requests" ? "View my requests" : "View my rentals"}
         </button>}
+        {tab === "requests" && !linkedBooking && acceptedRentals.length > 0 && <div role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-positive/25 bg-positive/5 p-4">
+          <div><p className="text-sm font-bold">{acceptedRentals.length === 1 ? "Your accepted request is now in My rentals" : `${acceptedRentals.length} accepted requests are now in My rentals`}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Continue delivery, rental and return arrangements from there.</p></div>
+          <button type="button" className={primary} onClick={() => changeTab("hires")}>View my rentals</button>
+        </div>}
         {rentalTab && tableView && !linkedBooking && <RentalTable title="Asset rentals" columns={["Asset and reference", "Organisation", "Worksite", "Rental period (SAST)", "Total", "Status", "Actions"]} empty="No rentals to show.">
           {visibleBookings.map((booking) => <tr key={booking.id}>
             <td><strong>{booking.assetName}</strong><p className="break-all font-mono text-xs text-muted-foreground">{booking.id}</p></td>
@@ -707,7 +717,15 @@ function BookingCard({ booking, canManage, canMove, onEdit, done }: {
       {canManage && ["REQUESTED", "CONFIRMED"].includes(booking.status) &&
         <button className={button} onClick={() => onEdit({ mode: "reason", action: "CANCEL", booking })}>Cancel rental</button>}
       {canMove && ["CONFIRMED", "IN_HIRE", "COMPLETED"].includes(booking.status) &&
-        <button className={button} onClick={() => onEdit({ mode: "move", booking })}>Arrange transport</button>}
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(booking.moves ?? {}).map(([leg, reference]) => <Link key={leg} to={`/owner/loads/${reference}`} className={button}>
+            View {leg === "DELIVERY" ? "delivery" : "collection"} transport
+          </Link>)}
+          {!Object.keys(booking.handovers?.RETURN ?? {}).length && !booking.moves?.[transportDirection(booking)] &&
+            <button className={button} onClick={() => onEdit({ mode: "move", booking })}>
+              {transportDirection(booking) === "DELIVERY" ? "Arrange delivery transport" : "Arrange collection transport"}
+            </button>}
+        </div>}
     </div>}
   </article>;
 }
@@ -922,11 +940,16 @@ function ActionForm({ booking, action, done }: {
   </form>;
 }
 
+function transportDirection(booking: Booking): "DELIVERY" | "COLLECTION" {
+  return booking.status === "IN_HIRE" || booking.status === "COMPLETED"
+    || Object.keys(booking.handovers?.DELIVERY ?? {}).length > 0 ? "COLLECTION" : "DELIVERY";
+}
+
 function MoveForm({ asset, booking, done }: { asset?: Asset | undefined; booking?: Booking | undefined; done: () => Promise<void> }) {
   const submission = useSubmission();
-  const [direction, setDirection] = useState<"DELIVERY" | "COLLECTION">("DELIVERY");
-  const [origin, setOrigin] = useState(asset?.location ?? booking?.assetLocation ?? null);
-  const [destination, setDestination] = useState(booking?.site ?? null);
+  const [direction, setDirection] = useState<"DELIVERY" | "COLLECTION">(() => booking ? transportDirection(booking) : "DELIVERY");
+  const [origin, setOrigin] = useState(booking && transportDirection(booking) === "COLLECTION" ? booking.site : asset?.location ?? booking?.assetLocation ?? null);
+  const [destination, setDestination] = useState(booking && transportDirection(booking) === "COLLECTION" ? booking.assetLocation ?? null : booking?.site ?? null);
   const terms = booking?.terms ?? asset!;
   const existingMove = booking?.moves?.[direction];
   const estimate = useQuery({
@@ -951,7 +974,7 @@ function MoveForm({ asset, booking, done }: { asset?: Asset | undefined; booking
       setDirection(collection ? "COLLECTION" : "DELIVERY");
       setOrigin(collection ? booking.site : booking.assetLocation ?? null);
       setDestination(collection ? booking.assetLocation ?? null : booking.site);
-    }}><option value="DELIVERY">Deliver to worksite</option><option value="COLLECTION">Collect from worksite</option></select></Label>}
+    }}><option value="DELIVERY" disabled={Boolean(booking && transportDirection(booking) === "COLLECTION")}>Deliver to worksite</option><option value="COLLECTION">Collect from worksite</option></select></Label>}
     {terms.transportWeightKg > 200000 && <p className="text-sm text-danger">This asset exceeds the freight board’s 200 t limit.</p>}
     {existingMove ? <p className="text-sm">This leg has already been posted · {existingMove}</p> : <>
       <AddressInput value={origin} onSelect={setOrigin} placeholder="Pickup address" />
