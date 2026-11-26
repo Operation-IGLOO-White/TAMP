@@ -3,7 +3,7 @@ import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarDays, ChevronDown, ChevronUp, Check, MapPin, Plus, Route, Search, Trash2, Undo2, UserRound } from "lucide-react";
+import { CalendarDays, ChevronDown, Check, MapPin, Plus, Route, Search, Trash2, Undo2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { charterAssignmentLabel, charterStageLabel, charterVehicleComplete, type CharterVehicleProgress } from "@/lib/charter-assignment";
 import { CharterFleetLive } from "@/components/tamp/CharterFleetLive";
@@ -150,7 +150,12 @@ export function CharterRequestForm({ listing, close, onSent }: {
     for (const input of formElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
       "[data-current] input, [data-current] textarea",
     )) {
-      if (!input.reportValidity()) return;
+      if (!input.reportValidity()) {
+        const message = input.validationMessage || "Check the required fields before continuing.";
+        setError(message);
+        toast.error("Check your charter details", { description: message });
+        return;
+      }
     }
     const form = new FormData(event.currentTarget);
     setError("");
@@ -196,6 +201,7 @@ export function CharterRequestForm({ listing, close, onSent }: {
       onSent(result.id);
     } catch (failure) {
       setError(errorText(failure));
+      toast.error("Charter request could not continue", { description: errorText(failure) });
     } finally {
       setBusy(false);
     }
@@ -221,6 +227,7 @@ export function CharterRequestForm({ listing, close, onSent }: {
           </button>;
         })}
     </nav>
+    {error && <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive">{error}</div>}
     <fieldset className="grid gap-4" disabled={busy}>
       <div hidden={step !== 0} data-current={step === 0 ? "" : undefined}>
         <LegFields title="Outbound trip" prefix="out-" addresses={outbound} setAddresses={setOutbound} />
@@ -288,7 +295,6 @@ export function CharterRequestForm({ listing, close, onSent }: {
         </label>)}
       </section>}
     </fieldset>
-    {error && <p className="mt-3 text-sm text-destructive" role="alert">{error}</p>}
     <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
       <button className={button} type="button" onClick={() => {
         if (step === 0) close();
@@ -327,7 +333,6 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [minimizedQuotes, setMinimizedQuotes] = useState<Set<string>>(() => new Set());
   const [statusFilter, setStatusFilter] = useState("ALL");
   const allBookings = bookings.data ?? [];
   const linked = allBookings.find((row) => row.id === bookingId);
@@ -409,19 +414,14 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
           <p><span className="text-muted-foreground">Pickup </span>{displayTime(booking.outbound.pickupAt)}</p>
           {booking.quote && <p className="font-mono font-bold">{money.format(Number(booking.quote.total))} {booking.quote.vat === "INCL" ? "incl." : "excl."} VAT</p>}
         </div>
-        {booking.quote && workspace === "engagements" && <button type="button"
-          aria-expanded={!minimizedQuotes.has(booking.id)}
-          className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-border px-3 text-xs font-bold"
-          onClick={() => setMinimizedQuotes((current) => {
-            const next = new Set(current);
-            if (next.has(booking.id)) next.delete(booking.id);
-            else next.add(booking.id);
-            return next;
-          })}>
-          {minimizedQuotes.has(booking.id) ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
-          {minimizedQuotes.has(booking.id) ? "Show quote" : "Minimize quote"}
-        </button>}
-        {booking.quote && !(workspace === "engagements" && minimizedQuotes.has(booking.id)) && <CharterQuotePanel booking={booking} />}
+        <details className="group/booking min-w-0">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-xs font-bold text-signal">
+            <span className="group-open/booking:hidden">Show details</span>
+            <span className="hidden group-open/booking:inline">Hide details</span>
+            <ChevronDown className="size-4 transition-transform group-open/booking:rotate-180" aria-hidden />
+          </summary>
+          <div className="mt-3 grid min-w-0 gap-4">
+        {booking.quote && <CharterQuotePanel booking={booking} />}
         <details open={Boolean(bookingId)} className="min-w-0">
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-signal">View itinerary and booking details</summary>
           <div className="mt-4 grid min-w-0 gap-4">
@@ -500,6 +500,8 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
         </form>}
         {changed && <p className="text-sm text-muted-foreground" role="status">This charter changed. Review the updated details before continuing.</p>}
         {active && error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+          </div>
+        </details>
       </article>;
     })}
   </div>;
