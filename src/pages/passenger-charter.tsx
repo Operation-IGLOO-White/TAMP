@@ -162,7 +162,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
     <PageHeader title={title} actions={canEdit && !editor
       ? <button className={primary} onClick={() => openEditor("new")}><Plus className="mr-1 inline size-4" /> Add passenger vehicle</button>
       : undefined} />
-    <div className={`mx-auto grid w-full gap-5 p-4 md:p-6 ${mode === "fleet" ? "" : "max-w-7xl"}`}>
+    <div className="grid w-full min-w-0 gap-5 p-4 md:p-6">
       {mode === "catalogue" && !requestListing && <nav aria-label="Passenger Charter" className="flex flex-wrap gap-2">
         <Link to="/passenger-charter" className={showBookings ? button : primary}>Browse vehicles</Link>
         <Link to="/passenger-charter?view=bookings" className={showBookings ? primary : button}>Charter requests & bookings</Link>

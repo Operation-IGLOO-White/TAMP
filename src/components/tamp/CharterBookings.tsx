@@ -1,3 +1,4 @@
+import { passengerVehicleAsset } from "@/lib/passenger-assets";
 import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -29,7 +30,7 @@ type Leg = {
   passengers: number; wheelchairPositions: number; luggageKg: number; luggageM3: number;
   largestBag: Dimensions | null; distanceKm: number; routeProvider: string;
 };
-type FleetVehicle = { id: string; registration: string; make: string; model: string; seats: number; publicationIssue?: string | null };
+type FleetVehicle = { type?: string; photos?: string[]; id: string; registration: string; make: string; model: string; seats: number; publicationIssue?: string | null };
 type Booking = {
   id: string; version: string; incoming: boolean; allowSplit: boolean; vehicleId: string; vehicleName: string;
   vehicleProgress?: CharterVehicleProgress[];
@@ -404,9 +405,10 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
           </span>
         </div>
         <div className="flex flex-wrap justify-between gap-3 border-y border-border py-3 text-xs">
-          <p><span className="text-muted-foreground">Pickup </span>{displayTime(booking.outbound.pickupAt)} SAST</p>
+          <p><span className="text-muted-foreground">Pickup </span>{displayTime(booking.outbound.pickupAt)}</p>
           {booking.quote && <p className="font-mono font-bold">{money.format(Number(booking.quote.total))} {booking.quote.vat === "INCL" ? "incl." : "excl."} VAT</p>}
         </div>
+        {booking.quote && <CharterQuotePanel booking={booking} />}
         <details open={Boolean(bookingId)} className="min-w-0">
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-signal">View itinerary and booking details</summary>
           <div className="mt-4 grid min-w-0 gap-4">
@@ -420,17 +422,6 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
           {booking.suggestedVehicles && <p>Suggested vehicles · {booking.suggestedVehicles.map((v) => `${v.make} ${v.model}`).join(", ")}</p>}
           {booking.notes && <p className="mt-1 whitespace-pre-wrap">{booking.notes}</p>}
         </div>
-        {booking.quote && <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm">
-          <p className="font-semibold">{money.format(Number(booking.quote.total))} {booking.quote.vat === "INCL" ? "incl." : "excl."} VAT</p>
-          <p>Reservation window · {displayTime(booking.quote.start)} – {displayTime(booking.quote.end)}</p>
-          {booking.status === "QUOTED" && <p>Quote expires {displayTime(booking.quote.validUntil)}</p>}
-          {booking.quote.outboundArrivalBy && <p>Agreed outbound drop-off by {displayTime(booking.quote.outboundArrivalBy)}</p>}
-          {booking.quote.returnArrivalBy && <p>Agreed return drop-off by {displayTime(booking.quote.returnArrivalBy)}</p>}
-          <ul className="mt-2 list-inside list-disc">
-            {booking.quote.vehicles.map((vehicle) => <li key={vehicle.id}>{vehicle.registration} · {vehicle.make} {vehicle.model} · {vehicle.seats} seats</li>)}
-          </ul>
-          {booking.quote.terms && <p className="mt-2 whitespace-pre-wrap">{booking.quote.terms}</p>}
-        </div>}
         {canTrack && booking.status === "CONFIRMED" && (booking.incoming || !booking.groupId)
           && <CharterFleetLive bookingId={booking.id} origin={booking.outbound.origin} />}
         {progress.length > 0 && <section className="grid gap-2 rounded-xl border border-border p-3">
@@ -487,7 +478,7 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
           void save("charter.transition", { id: booking.id, version: booking.version, action: active, reason: read(form, "reason") },
             active === "CONFIRM" ? "Charter booked" : active === "DECLINE" ? "Request declined" : "Charter cancelled");
         }}>
-          {active === "CONFIRM" ? <label className="flex gap-2 text-sm"><input type="checkbox" required /> I accept the quoted vehicles, itinerary, price and terms.</label> :
+          {active === "CONFIRM" ? <label className="flex items-start gap-3 rounded-lg bg-signal/10 p-4 text-sm leading-relaxed"><input className="mt-1 size-4 shrink-0 accent-signal" type="checkbox" required /> I accept the quoted vehicles, itinerary, price and terms.</label> :
             <Field label="Reason *"><textarea className={field} name="reason" required maxLength={500} /></Field>}
           <div className="flex gap-2">
             <button type="button" className={button} disabled={busy} onClick={() => setEditor(null)}>Back</button>
@@ -692,12 +683,75 @@ function CombinedCharter({ id, bookings, canManage, canTrack, refresh }: {
   </section>;
 }
 
+function CharterQuotePanel({ booking }: { booking: Booking }) {
+  const quote = booking.quote!;
+  return <section aria-label="Charter quotation" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(280px,.65fr)_minmax(0,1fr)]">
+    <div className="overflow-hidden rounded-xl border border-border bg-[#faf9f6] text-[#202024] shadow-sm">
+      <div className="flex items-start justify-between gap-3 p-5">
+        <h3 className="text-2xl font-black italic tracking-tighter">CHARTER QUOTE</h3>
+        <span className="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-[10px] font-bold uppercase">{booking.status}</span>
+      </div>
+      <p className="break-all px-5 pb-5 font-mono text-[10px] text-zinc-500">{booking.id}</p>
+      <div className="grid grid-cols-2 gap-4 border-y border-dashed border-zinc-300 p-5">
+        <div><p className="text-[10px] font-bold uppercase text-zinc-500">Transporter</p><p className="mt-2 text-sm font-bold">{booking.supplier}</p></div>
+        <div><p className="text-[10px] font-bold uppercase text-zinc-500">Customer</p><p className="mt-2 text-sm font-bold">{booking.customer}</p></div>
+      </div>
+      <dl className="grid gap-3 p-5 text-xs">
+        {[["Journey", booking.returnLeg ? "Outbound & return" : "One-way"],
+          ["Passengers", String(booking.outbound.passengers)],
+          ["Vehicles", String(quote.vehicles.length)],
+          ["Pickup", displayTime(booking.outbound.pickupAt)],
+          ...(booking.status === "QUOTED" ? [["Quote expires", displayTime(quote.validUntil)]] : [])]
+          .map(([label, value]) => <div key={label} className="flex flex-wrap justify-between gap-2 border-b border-dashed border-zinc-200 pb-2">
+            <dt className="text-zinc-500">{label}</dt><dd className="font-semibold">{value}</dd>
+          </div>)}
+      </dl>
+      <div className="border-y border-amber-300/50 bg-amber-100/70 p-5">
+        <p className="text-[10px] font-bold uppercase tracking-wider">Total charter price</p>
+        <p className="mt-2 font-mono text-3xl font-black">{money.format(Number(quote.total))}</p>
+        <p className="mt-1 text-xs">{quote.vat === "INCL" ? "Including" : "Excluding"} VAT</p>
+      </div>
+      <div className="p-5 text-xs">
+        <p className="font-bold uppercase">Quote terms</p>
+        <p className="mt-2 whitespace-pre-wrap leading-relaxed text-zinc-600">{quote.terms || "No additional terms supplied."}</p>
+      </div>
+    </div>
+    <div className="grid min-w-0 content-start gap-4">
+      {quote.vehicles.map((vehicle) => <article key={vehicle.id} className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="relative flex h-48 items-center justify-center bg-gradient-to-br from-white via-[#f5f5f3] to-[#e8e8e4] sm:h-56">
+          <img src={passengerVehicleAsset({ type: vehicle.type ?? "COACH", model: vehicle.model })}
+            alt={`Illustrative ${vehicle.make} ${vehicle.model}`} loading="lazy" className="h-full w-full object-contain px-6 py-5" />
+          <span className="absolute bottom-2 right-3 rounded-full bg-white/90 px-2 py-1 text-[9px] text-zinc-500">Illustrative image</span>
+        </div>
+        <div className="grid gap-3 p-4">
+          <div><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{booking.supplier}</p>
+            <h3 className="mt-1 text-lg font-bold">{vehicle.make} {vehicle.model}</h3></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border bg-muted/30 p-3"><p className="text-[10px] uppercase text-muted-foreground">Registration</p><p className="mt-1 font-mono text-sm font-bold">{vehicle.registration}</p></div>
+            <div className="rounded-lg border border-border bg-muted/30 p-3"><p className="text-[10px] uppercase text-muted-foreground">Passenger capacity</p><p className="mt-1 text-sm font-bold">{vehicle.seats} seats</p></div>
+          </div>
+        </div>
+      </article>)}
+      <div className="rounded-xl border border-border bg-card p-4 text-xs">
+        <p className="font-bold uppercase tracking-wide text-muted-foreground">Reserved for your itinerary</p>
+        <p className="mt-2">{displayTime(quote.start)} – {displayTime(quote.end)}</p>
+        <p className="mt-2 text-muted-foreground">Review the vehicle, itinerary and total price before confirming your booking.</p>
+      </div>
+    </div>
+  </section>;
+}
+
 function LegSummary({ leg, title }: { leg: Leg; title: string }) {
   return <section className="grid gap-2 rounded-xl border border-border p-3 text-sm">
     <h3 className="font-semibold">{title}</h3>
-    <div className="flex gap-2"><MapPin className="mt-0.5 size-4 shrink-0" />
-      <ol className="min-w-0 break-words">{[leg.origin, ...leg.stops, leg.destination].map((point, index) => <li key={index}>{point.label}</li>)}</ol>
-    </div>
+    <ol className="grid gap-3">
+      {[leg.origin, ...leg.stops, leg.destination].map((point, index, points) => <li key={index} className="flex min-w-0 gap-3">
+        <span className={`mt-1 size-2.5 shrink-0 rounded-full ${index === 0 ? "bg-signal" : "border-2 border-foreground"}`} />
+        <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          {index === 0 ? "Pickup" : index === points.length - 1 ? "Destination" : `Stop ${index}`}</p>
+          <p className="mt-1 break-words font-medium">{point.label}</p></div>
+      </li>)}
+    </ol>
     <p className="flex gap-2"><CalendarDays className="mt-0.5 size-4 shrink-0" /> {displayTime(leg.pickupAt)}</p>
     <p>Estimated arrival {displayTime(leg.estimatedArrival)} · {leg.distanceKm} km{leg.routeProvider === "estimated" && " (estimated route)"}</p>
     <p>{leg.passengers} passengers · {leg.wheelchairPositions} wheelchair positions · {leg.luggageKg} kg / {leg.luggageM3} m³ luggage</p>
