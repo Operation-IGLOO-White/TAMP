@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@/lib/nav";
@@ -224,9 +225,7 @@ function UsersPage() {
           </tbody>
         </table>
         {isLoading && (
-          <p className="p-10 text-center text-sm text-muted-foreground">
-            Loading users from the database…
-          </p>
+          <LoadingIndicator />
         )}
         {!isLoading && visible.length === 0 && (
           <p className="p-10 text-center text-sm text-muted-foreground">No users match.</p>

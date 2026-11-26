@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useParams } from "react-router-dom";
 
 import { CheckCircle2, Circle, PackageCheck, Truck } from "lucide-react";
@@ -49,9 +50,7 @@ function TrackPage() {
   const { loads = [], trucks = [], parties = [], matches = [], trips = [] } = data ?? {};
   if (isPending)
     return (
-      <main className="p-8" role="status">
-        Loading delivery tracking…
-      </main>
+      <LoadingIndicator />
     );
   if (isError)
     return (

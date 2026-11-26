@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, KeyRound, LockKeyhole, Search, ShieldCheck, UserCog, Users } from "lucide-react";
@@ -82,7 +83,7 @@ export default function AccessControl() {
               <span className="text-xs text-muted-foreground">{members.length} member{members.length === 1 ? "" : "s"}</span>
             </div>
             <div className="divide-y divide-border">
-              {isLoading && <p className="p-10 text-center text-sm text-muted-foreground">Loading organisation access…</p>}
+              {isLoading && <LoadingIndicator />}
               {!isLoading && visibleMembers.length === 0 && <p className="p-10 text-center text-sm text-muted-foreground">No members found.</p>}
               {visibleMembers.map((member) => {
                 const currentRole = (Object.entries(ROLE_IDS).find(([, id]) => member.roleIds.includes(id))?.[0] ?? allowedRoles[0]) as OrganisationRole;

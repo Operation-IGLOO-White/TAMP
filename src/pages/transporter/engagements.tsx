@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import { CharterBookings } from "@/components/tamp/CharterBookings";
 
 import { useMemo, useState } from "react";
 import { Link } from "@/lib/nav";
@@ -33,6 +35,8 @@ type Opportunity = {
 type ConfirmationGroup = { load: Load; opportunities: Opportunity[] };
 
 function EngagementsPage() {
+  const [params, setParams] = useSearchParams();
+  const service = params.get("service") ?? "all";
   const {
     authParty,
     loads,
@@ -133,7 +137,18 @@ function EngagementsPage() {
     <AppShell>
       <PageHeader title="Engagements" />
 
-      <div className="mx-auto max-w-6xl space-y-10 p-4 sm:p-6 lg:p-8">
+      <div className="space-y-5 p-4 sm:p-6">
+        <nav aria-label="Engagement service" className="flex gap-1 rounded-xl border border-border bg-card p-2">
+          {["all", "freight", "passenger"].map((item) => <button key={item} type="button" aria-pressed={service === item}
+            className={`rounded-lg px-4 py-2 text-sm font-bold capitalize ${service === item ? "bg-signal text-signal-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            onClick={() => { const next = new URLSearchParams(params); next.set("service", item); next.delete("booking"); setParams(next); }}>{item}</button>)}
+        </nav>
+        {service !== "freight" && <section className="grid gap-3">
+          <h2 className="text-sm font-bold">Passenger requests & quotes</h2>
+          <CharterBookings workspace="engagements" />
+        </section>}
+      </div>
+      <div className={`space-y-10 p-4 sm:p-6 ${service === "passenger" ? "hidden" : ""}`}>
         {!canManageMatches && (
           <div className="rounded-xl border border-signal/40 bg-signal/10 p-4 text-sm">
             <div className="font-bold">Engagements are currently read-only</div>

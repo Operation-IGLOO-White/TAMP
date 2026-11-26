@@ -1,3 +1,4 @@
+import { CharterBookings } from "@/components/tamp/CharterBookings";
 import {
   AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, MapPin,
   RefreshCw, Route, Search, Send, Truck, UserPlus, Users, XCircle,
@@ -145,6 +146,10 @@ export default function DispatchPage() {
         <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
       </button>} />
     <main className="space-y-5 bg-background p-4 sm:p-6">
+      <section className="grid gap-3">
+        <h2 className="text-sm font-bold">Passenger dispatch</h2>
+        <CharterBookings workspace="dispatch" />
+      </section>
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric label="Operational jobs" hint="Confirmed jobs in this workspace" value={jobs.length} icon={Route} />
         <Metric label="Needs driver" hint="Assign a driver before pickup" value={counts("NEEDS_DRIVER")} icon={UserPlus} alert />

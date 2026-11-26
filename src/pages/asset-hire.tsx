@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -214,7 +215,7 @@ function AssetHireWorkspace({ bookingId }: { bookingId: string | null }) {
         {editor.mode === "hire" && <HireForm asset={editor.asset} start={start} end={end} done={() => done("Rental request sent", "requests")} />}
         {editor.mode === "move" && <MoveForm asset={editor.asset} booking={editor.booking} done={async () => { await refreshDomain(); await done("Asset transport posted", "moves"); }} />}
         {editor.mode === "reason" && <ActionForm booking={editor.booking} action={editor.action} done={() => done("Rental updated")} />}
-      </div> : query.isPending ? <p>Loading assets…</p> : query.isError ? <p role="alert">{query.error.message}</p> : bookingId && !linkedBooking
+      </div> : query.isPending ? <LoadingIndicator /> : query.isError ? <p role="alert">{query.error.message}</p> : bookingId && !linkedBooking
         ? <p role="status" className="text-sm text-muted-foreground">
             This rental is unavailable in your current organisation. Select the organisation that received the notification.
           </p>

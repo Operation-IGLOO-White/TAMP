@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { ArrowLeft, BadgeCheck, CalendarClock, Download, FileText, FolderOpen, Mail, MapPin, Phone, Plus, ShieldCheck, Star, Trash2, Truck, UserRound, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -22,7 +23,7 @@ export default function DriverProfilePage() {
   const truck = trucks.find((item) => item.driverId === driverId);
   const history = driverTrips(driverId, trips).sort((a, b) => new Date(b.events.at(-1)?.at ?? 0).getTime() - new Date(a.events.at(-1)?.at ?? 0).getTime());
 
-  if (isLoading) return <AppShell><div className="p-10 text-center text-sm text-muted-foreground">Loading driver profile…</div></AppShell>;
+  if (isLoading) return <AppShell><LoadingIndicator /></AppShell>;
   if (!driver) return <AppShell><div className="p-10 text-center"><p className="font-bold">Driver not found</p><Link to="/transporter/drivers" className="mt-3 inline-block text-sm font-bold text-signal">Return to directory</Link></div></AppShell>;
 
   const state = driverAvailability(driver, truck);
@@ -113,7 +114,7 @@ function DriverDocumentFolder({ organisationId, driverId, canManage }: { organis
         <button disabled={!file || invalidIssued || invalidExpires || invalidOrder || upload.isPending} onClick={() => upload.mutate()} className="w-full rounded-lg bg-signal py-2.5 text-xs font-black uppercase text-signal-foreground disabled:opacity-50">{upload.isPending ? "Uploading…" : "File document"}</button>
       </div>}
       <div className="space-y-2">{(Object.keys(DOCUMENT_LABELS) as DriverDocumentType[]).map((type) => { const document = latest.get(type); return <div key={type} className="flex items-center gap-3 rounded-xl border border-border p-3"><span className={`grid size-9 place-items-center rounded-lg ${document ? "bg-positive/10 text-positive" : "bg-steel/40 text-muted-foreground"}`}><FileText className="size-4" /></span><div className="min-w-0 flex-1"><div className="truncate text-xs font-bold">{DOCUMENT_LABELS[type]}</div><div className="truncate text-[10px] text-muted-foreground">{document ? `${document.filename}${document.expiresAt ? ` · expires ${new Date(`${document.expiresAt}T12:00:00`).toLocaleDateString("en-ZA")}` : ""}` : "Not uploaded"}</div></div>{document ? <><span className={`text-[9px] font-black uppercase ${document.status === "VALID" ? "text-positive" : document.status === "EXPIRING" ? "text-signal" : "text-danger"}`}>{document.status}</span><a href={document.fileUrl} target="_blank" rel="noreferrer" className="grid size-8 place-items-center rounded-lg border border-border" aria-label={`Download ${DOCUMENT_LABELS[type]}`}><Download className="size-3.5" /></a>{canManage && <button onClick={() => remove.mutate(document.id)} className="grid size-8 place-items-center rounded-lg border border-border text-danger" aria-label={`Remove ${DOCUMENT_LABELS[type]}`}><Trash2 className="size-3.5" /></button>}</> : <span className="text-[9px] font-black uppercase text-signal">Missing</span>}</div>; })}</div>
-      {isLoading && <p className="py-3 text-center text-xs text-muted-foreground">Loading documents…</p>}
+      {isLoading && <LoadingIndicator />}
     </div>
   </Panel>;
 }

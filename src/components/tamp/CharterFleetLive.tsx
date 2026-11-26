@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BusFront, Map, Radio } from "lucide-react";
@@ -53,7 +54,7 @@ function LiveMap({ bookingId, origin }: { bookingId: string; origin: Place }) {
 
   const vehicles = live.data ?? [];
   return <>
-    {live.isPending && <p role="status" className="text-sm text-muted-foreground">Loading vehicle locations…</p>}
+    {live.isPending && <LoadingIndicator />}
     {live.isError && <p role="alert" className="text-sm text-muted-foreground">
       Live tracking could not refresh. {live.data && "Shown locations are from the last successful update."}
       <button type="button" className={button + " ml-2"} onClick={() => void live.refetch()}>Retry</button>

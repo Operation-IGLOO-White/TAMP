@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { BriefcaseBusiness, CarFront, CheckCircle2, Search, ShieldAlert, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -55,7 +56,7 @@ export default function DriversDirectoryPage() {
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, vehicle or province…" className="w-full rounded-xl border border-border bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:border-signal" />
           </label>
         </div>
-        {isLoading ? <div className="p-10 text-center text-sm text-muted-foreground">Loading drivers…</div> : filtered.length === 0 ?
+        {isLoading ? <LoadingIndicator /> : filtered.length === 0 ?
           <div className="p-10 text-center"><Users className="mx-auto mb-3 size-9 text-muted-foreground" /><p className="font-semibold">No drivers found</p><p className="mt-1 text-sm text-muted-foreground">Add a driver to start assigning vehicles and work.</p></div> :
           <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((driver, index) => {

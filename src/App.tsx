@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { Providers } from "@/context/Providers";
@@ -69,10 +70,7 @@ export default function App() {
       <Providers>
         <Suspense
           fallback={
-            <div role="status" aria-label="Loading page" className="route-loading-track">
-              <span className="route-loading-bar" />
-              <span className="sr-only">Loading page</span>
-            </div>
+            <LoadingIndicator />
           }
         >
           <Routes>

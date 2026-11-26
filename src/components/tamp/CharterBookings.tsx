@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
@@ -302,7 +303,7 @@ export function CharterRequestForm({ listing, close, onSent }: {
   </form>;
 }
 
-export function CharterBookings() {
+export function CharterBookings({ workspace }: { workspace?: "engagements" | "dispatch" } = {}) {
   const { authParty, role } = useTamp();
   const [params] = useSearchParams();
   const bookingId = params.get("booking");
@@ -328,7 +329,9 @@ export function CharterBookings() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const allBookings = bookings.data ?? [];
   const linked = allBookings.find((row) => row.id === bookingId);
-  const scopedRows = allBookings.filter((row) => bookingId
+  const workspaceBookings = workspace ? allBookings.filter((row) => row.incoming
+    && (workspace === "dispatch" ? row.status === "CONFIRMED" : row.status !== "CONFIRMED")) : allBookings;
+  const scopedRows = workspaceBookings.filter((row) => bookingId
     ? row.id === bookingId || (!row.incoming && linked?.groupId && row.groupId === linked.groupId)
     : row.incoming === (tab === "incoming"));
   const rows = scopedRows.filter((row) =>
@@ -345,6 +348,7 @@ export function CharterBookings() {
       setEditor(null);
       await bookings.refetch();
       toast.success(message);
+
     } catch (failure) {
       setError(errorText(failure));
       await bookings.refetch();
@@ -354,11 +358,11 @@ export function CharterBookings() {
   }
 
   return <div className="grid w-full min-w-0 gap-4">
-    {!bookingId && role === "TRANSPORTER" && <div className="flex flex-wrap gap-2">
+    {!workspace && !bookingId && role === "TRANSPORTER" && <div className="flex flex-wrap gap-2">
       <button className={tab === "incoming" ? primary : button} onClick={() => setTab("incoming")}>Incoming requests</button>
       <button className={tab === "sent" ? primary : button} onClick={() => setTab("sent")}>Sent requests</button>
     </div>}
-    {bookingId && <Link to="/passenger-charter?view=bookings" className={button + " justify-self-start"}>All charter requests</Link>}
+    {bookingId && <Link to={workspace === "engagements" ? "/transporter/engagements?service=passenger" : workspace === "dispatch" ? "/transporter/dispatch" : "/passenger-charter?view=bookings"} className={button + " justify-self-start"}>All charter requests</Link>}
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
       <label className="relative flex-1">
         <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -372,7 +376,7 @@ export function CharterBookings() {
       </select>
       <span role="status" className="shrink-0 text-xs text-muted-foreground">{rows.length} of {scopedRows.length} requests</span>
     </div>
-    {bookings.isPending && <p role="status">Loading charter requests…</p>}
+    {bookings.isPending && <LoadingIndicator />}
     {bookings.isError && <div role="alert" className={panel}>Charter requests could not be loaded. <button className={button} onClick={() => void bookings.refetch()}>Retry</button></div>}
     {bookings.isSuccess && !rows.length && <p className={panel + " text-sm text-muted-foreground"}>{bookingId ? "This charter is unavailable in your organisation." : "No charter requests yet."}</p>}
     {customerGroups.map((id) => <CombinedCharter key={id} id={id} bookings={rows.filter((row) => row.groupId === id)}
@@ -468,6 +472,7 @@ export function CharterBookings() {
         </details>
           </div>
         </details>
+        {workspace === "engagements" && <Link to="/transporter/dispatch" className="text-xs font-semibold text-signal">Accepted passenger bookings appear in Dispatch →</Link>}
         {canManage && future && !active && <div className="flex flex-wrap gap-2">
           {booking.incoming && open && <button className={primary} onClick={() => choose("quote")}>{booking.quote ? "Revise quote" : "Prepare quote"}</button>}
           {!booking.groupId && !booking.incoming && booking.status === "QUOTED" && quoteValid && <button className={primary} onClick={() => choose("CONFIRM")}>Review and book</button>}
@@ -505,7 +510,7 @@ function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved }: 
   const [error, setError] = useState("");
   const options = useQuery({
     queryKey: ["charter-driver-options", authParty?.id, authParty?.activeOrganisationId, bookingId, vehicleId],
-    queryFn: () => trpc.query<{ expectedDriverId: string; drivers: { id: string; name: string }[] }>(
+    queryFn: () => trpc.query<{ expectedDriverId: string | null; drivers: { id: string; name: string }[] }>(
       "charter.driverOptions", { bookingId, vehicleId }),
     enabled: open, retry: false, gcTime: 0,
   });
@@ -706,7 +711,7 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
   const lastLeg = booking.returnLeg ?? booking.outbound;
   const [start, setStart] = useState(() => localTime(booking.quote?.start ?? booking.outbound.pickupAt));
   const [end, setEnd] = useState(() => localTime(booking.quote?.end ?? lastLeg.estimatedArrival));
-  const [manualIds, setManualIds] = useState<string[] | null>(() => booking.quote?.vehicles.map((vehicle) => vehicle.id) ?? null);
+  const [manualIds, setManualIds] = useState<string[] | null>(() => booking.quote?.vehicles.map((vehicle) => vehicle.id) ?? (booking.allowSplit ? null : [booking.vehicleId]));
   const validWindow = Boolean(start && end && start < end);
   const { authParty } = useTamp();
   const recommendation = useQuery({
@@ -714,7 +719,7 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
     queryFn: () => trpc.query<{ vehicleIds: string[] }>("charter.recommend", {
       id: booking.id, version: booking.version, start: sasTime(start), end: sasTime(end),
     }),
-    enabled: validWindow,
+    enabled: validWindow && booking.allowSplit,
     retry: false,
   });
   const suggestedIds = recommendation.data?.vehicleIds ?? [];
@@ -728,13 +733,13 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
       id: booking.id, version: booking.version, vehicleIds: selected, total: read(form, "total"),
       vat: read(form, "vat"), terms: read(form, "terms"), start: sasTime(read(form, "start")),
       end: sasTime(read(form, "end")), validUntil: sasTime(read(form, "validUntil")),
-      outboundArrivalBy: read(form, "outboundArrivalBy") ? sasTime(read(form, "outboundArrivalBy")) : null,
-      returnArrivalBy: read(form, "returnArrivalBy") ? sasTime(read(form, "returnArrivalBy")) : null,
     });
   }}>
     <fieldset disabled={busy} className="grid gap-3">
-      <legend className="mb-2 font-semibold">Choose the vehicles to quote</legend>
-      <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
+      <legend className="mb-2 font-semibold">{booking.allowSplit ? "Vehicles for this quote" : "Customer’s selected vehicle"}</legend>
+      {!booking.allowSplit && <p className="rounded-lg bg-muted/40 p-3 text-sm font-semibold">{booking.vehicleName}</p>}
+      <p className="text-sm text-muted-foreground">A driver can be assigned after the customer accepts the quote.</p>
+      {booking.allowSplit && <><div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
         {recommendationPending && <p>Checking your fleet for this itinerary…</p>}
         {!recommendationPending && validWindow && recommendation.isError && <p className="text-muted-foreground">
           {errorText(recommendation.error)}
@@ -755,6 +760,7 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
           {vehicle.registration} · {vehicle.make} {vehicle.model} · {vehicle.seats} seats
         </label>)}
       </div>
+      </>}
       {!vehicles.length && <p className="text-sm text-muted-foreground">No passenger fleet vehicles are available to quote.</p>}
       <p className="text-sm text-muted-foreground">Include time to reach pickup, wait between legs and finish after drop-off.</p>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -763,14 +769,6 @@ function QuoteForm({ booking, vehicles, busy, onSubmit, onClose }: {
         <Field label="Total price (ZAR) *"><input className={field} type="number" min="0.01" max="99999999.99" step="0.01" name="total" required defaultValue={booking.quote?.total} /></Field>
         <Field label="VAT treatment"><select className={field} name="vat" defaultValue={booking.quote?.vat ?? "EXCL"}><option value="EXCL">Excluding VAT</option><option value="INCL">Including VAT</option></select></Field>
         <Field label="Quote expires (SAST) *"><input className={field} type="datetime-local" name="validUntil" required defaultValue={booking.quote ? localTime(booking.quote.validUntil) : undefined} /></Field>
-        <Field label="Agreed outbound drop-off (SAST, optional)">
-          <input className={field} type="datetime-local" name="outboundArrivalBy"
-            defaultValue={booking.quote?.outboundArrivalBy ? localTime(booking.quote.outboundArrivalBy) : undefined} />
-        </Field>
-        {booking.returnLeg && <Field label="Agreed return drop-off (SAST, optional)">
-          <input className={field} type="datetime-local" name="returnArrivalBy"
-            defaultValue={booking.quote?.returnArrivalBy ? localTime(booking.quote.returnArrivalBy) : undefined} />
-        </Field>}
       </div>
       <Field label="Quote terms"><textarea className={field} maxLength={1500} name="terms" rows={2} defaultValue={booking.quote?.terms} /></Field>
     </fieldset>

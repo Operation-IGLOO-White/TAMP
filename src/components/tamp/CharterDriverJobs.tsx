@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useContext, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BusFront, CalendarDays, MapPin } from "lucide-react";
@@ -68,7 +69,7 @@ export function CharterDriverJobs() {
     }
   }
 
-  if (jobs.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading charter jobs…</p>;
+  if (jobs.isPending) return <LoadingIndicator />;
   if (jobs.isError) return <div role="alert" className="flex flex-wrap items-center gap-3 text-sm">
     Charter jobs could not be loaded.
     <button className={button} type="button" onClick={() => void jobs.refetch()}>Retry</button>

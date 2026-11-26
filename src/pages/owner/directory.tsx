@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,7 +39,7 @@ export default function FreightDirectory() {
           <TabButton active={tab === "templates"} onClick={() => { setParams({ view: "templates" }); setAdding(false); }} icon={PackagePlus} label="Load templates" count={counts.templates} />
         </div>
         {adding && <div className="border-b border-border bg-steel/20 p-4">{tab === "customers" ? <CustomerForm done={() => { setAdding(false); void refresh(); }} /> : tab === "locations" ? <LocationForm customers={data?.customers ?? []} done={() => { setAdding(false); void refresh(); }} /> : <TemplateForm customers={data?.customers ?? []} locations={data?.locations ?? []} done={() => { setAdding(false); void refresh(); }} />}</div>}
-        {isLoading ? <p className="p-12 text-center text-sm text-muted-foreground">Loading freight directory…</p> : <div className="divide-y divide-border">
+        {isLoading ? <LoadingIndicator /> : <div className="divide-y divide-border">
           {tab === "customers" && data?.customers.map((item) => <RecordRow key={item.id} icon={Building2} title={item.name} detail={[item.accountCode, item.contactName, item.contactEmail].filter(Boolean).join(" · ") || "No contact details"} onDelete={() => remove.mutate({ kind: "CUSTOMER", id: item.id })} />)}
           {tab === "locations" && data?.locations.map((item) => <RecordRow key={item.id} icon={MapPin} title={item.name} detail={item.place.label} onDelete={() => remove.mutate({ kind: "LOCATION", id: item.id })} />)}
           {tab === "templates" && data?.templates.map((item) => <RecordRow key={item.id} icon={PackagePlus} title={item.name} detail={`${item.cargoType.replaceAll("_", " ")} · ${(item.weightKg / 1000).toFixed(1)} t${item.originLocationId && item.destinationLocationId ? " · Saved lane" : ""}`} onDelete={() => remove.mutate({ kind: "TEMPLATE", id: item.id })} />)}

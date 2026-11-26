@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { passengerVehicleAsset } from "@/lib/passenger-assets";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -186,7 +187,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
       {editor && <VehicleForm key={editor === "new" ? "new" : editor.id} vehicle={editor === "new" ? undefined : editor}
         drivers={fleet.data?.drivers ?? []} subtypes={fleet.data?.subtypes} close={() => setEditor(null)}
         onSaved={async () => { setEditor(null); await fleet.refetch(); }} />}
-      {(mode !== "catalogue" || showCatalogue) && query.isPending && <p role="status" className="text-sm text-muted-foreground">Loading passenger vehicles…</p>}
+      {(mode !== "catalogue" || showCatalogue) && query.isPending && <LoadingIndicator />}
       {(mode !== "catalogue" || showCatalogue) && query.isError && <div role="alert" className={card + " p-4"}>
         <p>The passenger vehicle list could not be loaded.</p>
         <button className={button + " mt-2"} onClick={() => void query.refetch()}>Retry</button>

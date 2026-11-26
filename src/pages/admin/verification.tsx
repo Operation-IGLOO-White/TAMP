@@ -1,3 +1,4 @@
+import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { passengerVehicleAsset } from "@/lib/passenger-assets";
 import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -287,7 +288,7 @@ export default function VerificationInbox() {
           {showPassengerStatus && passengerReviews.isError && <p role="alert" className="p-4 text-sm text-destructive">
             Passenger vehicles could not be loaded. <button type="button" className="underline" onClick={() => void passengerReviews.refetch()}>Retry</button>
           </p>}
-          {showPassengerStatus && passengerReviews.isPending && <p role="status" className="p-4 text-sm text-muted-foreground">Loading passenger vehicles…</p>}
+          {showPassengerStatus && passengerReviews.isPending && <LoadingIndicator />}
           {passengerRows.length > 0 && <div className="overflow-x-auto border-b border-border" role="region" aria-label="Passenger vehicle reviews" tabIndex={0}>
             <table className="w-full min-w-[46rem] text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">

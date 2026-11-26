@@ -105,7 +105,6 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   TRANSPORTER: [
     { to: "/transporter", label: "Dashboard", icon: LayoutDashboard, exact: true, permission: "trucks.read" },
-    { to: "/passenger-charter", label: "Passenger Charter", icon: BusFront, permission: "loads.read" },
     { to: "/asset-hire", label: "Asset Rental", icon: Forklift, permission: "loads.read" },
     {
       to: "/transporter/fleet",
