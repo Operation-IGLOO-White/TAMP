@@ -116,7 +116,7 @@ function EngagementsPage() {
     const requestedLoadIds = new Set(requested.map((item) => item.load.id));
     const found: Opportunity[] = [];
     for (const match of matches) {
-      if (match.status !== "SUGGESTED" || match.score < 70) continue;
+      if (match.status !== "SUGGESTED") continue;
       if (!availableTruckIds.has(match.truckPostingId) || requestedLoadIds.has(match.loadId)) continue;
       const load = loadById.get(match.loadId);
       const truck = truckById.get(match.truckPostingId);
@@ -226,12 +226,12 @@ function EngagementsPage() {
           <SectionHeader
             title="Job opportunities"
             count={opportunities.length}
-            hint="Open loads your trucks match 70+"
+            hint="Eligible open loads for your available trucks"
           />
           {opportunities.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-graphite/40 p-6 text-center">
               <p className="text-xs text-muted-foreground">
-                No open jobs match your available trucks at 70+ right now.
+                No eligible open jobs match your available trucks right now.
               </p>
             </div>
           ) : (

@@ -1,3 +1,4 @@
+import { displayStatusForLoad } from "@/lib/tamp-selectors";
 import { Link, useNavigate } from "@/lib/nav";
 import {
   ClipboardList,
@@ -385,7 +386,7 @@ function navItemActive(item: NavItem, pathname: string, search: string) {
 }
 
 function useSidebarCounts(playSound = true): Record<string, number> {
-  const { role, me, matches, trips, dispatches, parties, trucks, vehicles, disputes } = useTamp();
+  const { role, me, matches, trips, dispatches, parties, trucks, vehicles, disputes, loads } = useTamp();
   const counts = useMemo(() => {
     const latestDispatch = new Map<string, (typeof dispatches)[number]>();
     for (const assignment of dispatches) {
@@ -396,9 +397,17 @@ function useSidebarCounts(playSound = true): Record<string, number> {
     }
     const activeTrips = trips.filter((trip) => !["COMPLETED", "CANCELLED"].includes(trip.status));
     if (role === "TRANSPORTER") {
-      const engagementCount = matches.filter((match) =>
-        ["SUGGESTED", "OFFERED", "ACCEPTED"].includes(match.status),
-      ).length;
+      const requestedLoadIds = new Set(matches.filter((match) => match.status === "OFFERED").map((match) => match.loadId));
+      const engagementCount = matches.filter((match) => {
+        const load = loads.find((item) => item.id === match.loadId);
+        const truck = trucks.find((item) => item.id === match.truckPostingId);
+        if (!load || !truck) return false;
+        if (match.status === "OFFERED") return true;
+        if (match.status === "ACCEPTED") return !["COMPLETED", "CLOSED"].includes(load.status);
+        return match.status === "SUGGESTED" && truck.status === "AVAILABLE"
+          && !requestedLoadIds.has(load.id)
+          && displayStatusForLoad(load, matches, trips, disputes) === "POSTED";
+      }).length;
       const dispatchCount = trips.filter((trip) => {
         if (trip.status !== "SCHEDULED") return false;
         return latestDispatch.get(trip.id)?.status !== "ACCEPTED";
@@ -444,7 +453,7 @@ function useSidebarCounts(playSound = true): Record<string, number> {
       };
     }
     return {};
-  }, [dispatches, matches, me.id, role, trips, parties, trucks, vehicles, disputes]);
+  }, [dispatches, matches, me.id, role, trips, parties, trucks, vehicles, disputes, loads]);
   const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
   const previous = useRef<number | null>(null);
   useEffect(() => {
