@@ -1,3 +1,4 @@
+import { CharterRecords } from "@/components/tamp/CharterRecords";
 import { AlertTriangle, Banknote, CheckCircle2, Clock3, FileCheck2, ReceiptText, Truck, WalletCards } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell, PageHeader } from "@/components/tamp/AppShell";
@@ -66,6 +67,7 @@ export function FinanceView({ mode }: { mode: "owner" | "carrier" | "admin" }) {
     <AppShell>
       <PageHeader title={title} />
       <div className="space-y-6 bg-background p-4 sm:p-6">
+        {mode !== "admin" && <CharterRecords invoices />}
         <div className="grid gap-3 sm:grid-cols-3">
           <Metric
             label={mode === "carrier" ? "Awaiting owner payment" : "Outstanding"}

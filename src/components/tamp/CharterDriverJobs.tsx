@@ -1,3 +1,5 @@
+import { Link } from "@/lib/nav";
+import { charterJourneyPercent } from "@/lib/charter-assignment";
 import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useContext, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +19,7 @@ const button = "min-h-11 rounded-lg border border-border px-3 py-2 text-sm font-
 const primary = button + " bg-signal text-signal-foreground";
 const jobKey = (job: DriverJob) => `${job.bookingId}:${job.vehicle.id}`;
 
-export function CharterDriverJobs() {
+export function CharterDriverJobs({ historyOnly = false }: { historyOnly?: boolean } = {}) {
   const { authParty } = useTamp();
   const client = useQueryClient();
   const queryKey = charterJobsKey(authParty);
@@ -40,6 +42,7 @@ export function CharterDriverJobs() {
       });
       setDeclining(null);
       await jobs.refetch();
+      await client.invalidateQueries({ queryKey: ["charter-bookings"] });
       toast.success(action === "ACCEPT" ? "Charter job accepted" : "Charter job declined");
     } catch (error) {
       setFailure({ key: jobKey(job), message: error instanceof Error ? error.message : "Please try again." });
@@ -58,7 +61,7 @@ export function CharterDriverJobs() {
       });
       await client.cancelQueries({ queryKey });
       client.setQueryData<DriverJob[]>(queryKey, (items) => items?.map((item) => jobKey(item) === jobKey(updated) ? updated : item));
-      if (action === "START" || action === "BOARD") setOpenMap({ job: jobKey(job), leg });
+      if (action === "START" || action === "BOARD" || action === "COMPLETE_STOP") setOpenMap({ job: jobKey(job), leg });
       if (action === "COMPLETE") setOpenMap(null);
       await jobs.refetch();
     } catch (error) {
@@ -79,13 +82,15 @@ export function CharterDriverJobs() {
   </p>;
 
   return <div className="grid gap-4 lg:grid-cols-2">
+    {!historyOnly && <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-sm lg:col-span-2"><span>Passenger charter jobs</span><Link className="font-bold text-signal" to="/driver/history">Journey history →</Link></div>}
+    {jobs.data.some((job) => job.rating) && <p className="text-sm font-semibold lg:col-span-2">Overall charter rating: {(jobs.data.reduce((sum, job) => sum + (job.rating?.stars ?? 0), 0) / jobs.data.filter((job) => job.rating).length).toFixed(1)}/5</p>}
     {sharing.active && <div className="rounded-xl border border-border bg-card p-3 text-sm lg:col-span-2" aria-live="polite">
       <p className="font-semibold">{sharing.state === "sharing" ? "Charter GPS sharing is active"
         : sharing.state === "requesting" ? "Getting your GPS position…" : "Charter GPS needs attention"}</p>
       <p className="text-muted-foreground">{sharing.message || "Keep TAMP open during the active leg."}</p>
       {sharing.state === "error" && <button type="button" className={button + " mt-2"} onClick={sharing.retry}>Retry GPS</button>}
     </div>}
-    {jobs.data.map((job) => {
+    {jobs.data.filter((job) => !historyOnly || charterJourneyPercent(job.itinerary) === 100).map((job) => {
       const key = jobKey(job);
       const isDeclining = declining === key;
       const awaiting = job.status === "OFFERED" && Date.parse(job.responseDeadline ?? job.itinerary.outbound.pickupAt) > Date.now();
@@ -104,14 +109,18 @@ export function CharterDriverJobs() {
           const leg = job.itinerary[keyName];
           if (!leg) return null;
           const blocked = keyName === "returnLeg" && job.itinerary.outbound.progress.stage !== "COMPLETED";
-          const startsAt = Date.parse(job.reservationStartsAt);
-          const tooEarly = Number.isFinite(startsAt) && startsAt > Date.now();
           return <CharterJobLeg key={keyName} leg={leg} title={keyName === "outbound" ? "Outbound" : "Return"}
-            canAdvance={job.status === "ACCEPTED"} blocked={blocked} startsAt={tooEarly ? job.reservationStartsAt : null}
+            canAdvance={job.status === "ACCEPTED"} blocked={blocked} startsAt={null}
             busy={busy} mapOpen={openMap?.job === key && openMap.leg === keyName}
             onMap={(open) => setOpenMap(open ? { job: key, leg: keyName } : null)}
             onAdvance={(action) => void advance(job, keyName, leg.progress.revision, action)} />;
         })}
+        <div className="rounded-xl border border-dashed border-border bg-muted/20 p-3">
+          <p className="text-xs font-bold uppercase">Passenger waybill · {charterJourneyPercent(job.itinerary)}% complete</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-signal transition-all" style={{ width: `${charterJourneyPercent(job.itinerary)}%` }} /></div>
+          {job.itinerary.returnLeg && <p className="mt-2 text-xs text-muted-foreground">Outbound drop-off: 50% · Return drop-off: 100%</p>}
+          {job.rating && <p className="mt-2 text-sm">Your ride rating: {job.rating.stars}/5 · {job.rating.comment}</p>}
+        </div>
         <p className="text-sm">Organiser · {job.customer}</p>
         {job.notes && <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{job.notes}</p>}
         {job.reason && <p className="break-words text-sm text-muted-foreground">Decline reason · {job.reason}</p>}
@@ -149,9 +158,9 @@ function CharterJobLeg({ leg, title, canAdvance, blocked, startsAt, busy, mapOpe
 }) {
   const { stage, nextStop } = leg.progress;
   const atStop = stage === "ON_ROUTE" ? leg.stops[nextStop] : undefined;
-  const target = stage === "TO_PICKUP" ? leg.origin : stage === "ON_ROUTE" ? atStop ?? leg.destination : null;
+  const target = stage === "TO_PICKUP" || stage === "SCHEDULED" ? leg.origin : stage === "ON_ROUTE" ? atStop ?? leg.destination : null;
   const next: { action: CharterLegAction; label: string } | undefined = {
-    SCHEDULED: { action: "START", label: `Start ${title.toLowerCase()}` },
+    SCHEDULED: { action: "START", label: `Start ${title.toLowerCase()} · travel to pickup` },
     TO_PICKUP: { action: "ARRIVE_PICKUP", label: "Confirm pickup arrival" },
     AT_PICKUP: { action: "BOARD", label: "Confirm passengers boarded" },
     ON_ROUTE: atStop ? { action: "COMPLETE_STOP", label: `Complete stop ${nextStop + 1}` }

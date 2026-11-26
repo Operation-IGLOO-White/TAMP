@@ -1,3 +1,5 @@
+import { CharterRecords } from "@/components/tamp/CharterRecords";
+import { CharterDriverJobs } from "@/components/tamp/CharterDriverJobs";
 
 
 import { History } from "lucide-react";
@@ -9,7 +11,7 @@ import { EngagementCard, type Engagement } from "./engagements";
 const ACTIVE_STATUSES = ["SCHEDULED", "EN_ROUTE_PICKUP", "AT_PICKUP", "LOADED", "IN_TRANSIT", "AT_DROPOFF"];
 
 function HistoryPage() {
-  const { loads, trucks, parties, matches, trips, disputes, ratings, me, rateLoad } = useTamp();
+  const { loads, trucks, parties, matches, trips, disputes, ratings, me, role, rateLoad } = useTamp();
 
   const done: Engagement[] = trips
     .map((trip) => {
@@ -27,6 +29,7 @@ function HistoryPage() {
       <PageHeader title="History" />
 
       <div className="space-y-3 p-6">
+        {role === "DRIVER" ? <CharterDriverJobs historyOnly /> : <CharterRecords />}
         {done.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
             <History className="size-8 text-muted-foreground" />

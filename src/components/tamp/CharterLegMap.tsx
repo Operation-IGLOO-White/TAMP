@@ -22,7 +22,7 @@ export function CharterLegMap({ target, onClose }: { target: Place; onClose: () 
   useEffect(() => {
     let active = true;
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(({ coords }) => {
+      const watch = navigator.geolocation.watchPosition(({ coords }) => {
         if (!active) return;
         setLocating(false);
         setLocationError(false);
@@ -31,7 +31,8 @@ export function CharterLegMap({ target, onClose }: { target: Place; onClose: () 
         if (!active) return;
         setLocating(false);
         setLocationError(true);
-      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 });
+      }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 });
+      return () => { active = false; navigator.geolocation.clearWatch(watch); };
     } else {
       queueMicrotask(() => {
         if (active) { setLocationError(true); setLocating(false); }
@@ -41,7 +42,7 @@ export function CharterLegMap({ target, onClose }: { target: Place; onClose: () 
   }, [request]);
 
   const route = useQuery({
-    queryKey: ["charter-navigation", position?.lat, position?.lng, targetLat, targetLng],
+    queryKey: ["charter-navigation", position ? Math.round(position.lat * 1000) : null, position ? Math.round(position.lng * 1000) : null, targetLat, targetLng],
     queryFn: () => computeRoute(position!, { lat: targetLat, lng: targetLng }),
     enabled: Boolean(position),
     retry: false,
@@ -54,8 +55,8 @@ export function CharterLegMap({ target, onClose }: { target: Place; onClose: () 
     void import("leaflet").then(({ default: L }) => {
       if (!active || !element.current) return;
       instance = L.map(element.current, { scrollWheelZoom: false }).setView([targetLat, targetLng], 14);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
+      L.tileLayer("https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors © CARTO",
       }).on("tileerror", () => {
         if (active) setTileError(true);
       }).addTo(instance);
@@ -97,7 +98,7 @@ export function CharterLegMap({ target, onClose }: { target: Place; onClose: () 
       <p className="flex gap-2 break-words text-sm font-semibold"><Navigation className="mt-0.5 size-4 shrink-0 text-signal" /> {target.label}</p>
       <button type="button" className={button} onClick={onClose} aria-label="Close route map"><X className="size-4" /></button>
     </div>
-    <div ref={element} className="isolate h-56 overflow-hidden rounded-lg bg-muted" aria-label="Map to the next checkpoint" />
+    <div ref={element} className="isolate h-[45svh] min-h-64 overflow-hidden rounded-lg bg-muted" aria-label="Map to the next checkpoint" />
     <div className="text-sm text-muted-foreground" aria-live="polite">
       {locating ? "Finding your current position…" : locationError ? "Current position unavailable. Check your location permission or use a navigation app."
         : route.isFetching ? "Calculating road route…" : road ? `${road.distanceKm} km · about ${road.durationMin} min`

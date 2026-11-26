@@ -15,6 +15,7 @@ export type CharterLegProgress = {
   nextStop: number;
   revision: number;
   updatedAt?: string;
+  events?: { action: string; at: string; stopIndex?: number }[];
 };
 
 export const charterStageLabel: Record<CharterLegProgress["stage"], string> = {
@@ -35,4 +36,10 @@ export type CharterVehicleProgress = {
 export function charterVehicleComplete(vehicle: CharterVehicleProgress) {
   return vehicle.status === "ACCEPTED" && vehicle.legs.outbound.stage === "COMPLETED"
     && (!vehicle.legs.returnLeg || vehicle.legs.returnLeg.stage === "COMPLETED");
+}
+
+
+export function charterJourneyPercent(legs: { outbound: { progress: CharterLegProgress }; returnLeg?: { progress: CharterLegProgress } }) {
+  const portion = (leg: { progress: CharterLegProgress }) => ({ SCHEDULED: 0, TO_PICKUP: 10, AT_PICKUP: 20, ON_ROUTE: 60, COMPLETED: 100 })[leg.progress.stage];
+  return Math.round((portion(legs.outbound) + (legs.returnLeg ? portion(legs.returnLeg) : 0)) / (legs.returnLeg ? 2 : 1));
 }

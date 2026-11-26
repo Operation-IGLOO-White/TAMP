@@ -153,7 +153,7 @@ export default function DispatchPage() {
       return !progress || !charterVehicleComplete(progress);
     }).map((vehicle) => {
       const assignment = booking.driverAssignments?.find((item) => item.vehicleId === vehicle.id);
-      const queue: Queue = !vehicle.driverId ? "NEEDS_DRIVER" : assignment?.status === "ACCEPTED" ? "ACCEPTED"
+      const queue: Queue = assignment?.status === "ACCEPTED" ? "ACCEPTED" : !(assignment?.driverId ?? vehicle.driverId) ? "NEEDS_DRIVER"
         : assignment?.status === "DECLINED" || assignment?.status === "CANCELLED" ? "EXCEPTION" : "OFFERED";
       return { booking, vehicle, assignment, queue };
     }));

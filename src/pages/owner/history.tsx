@@ -1,3 +1,4 @@
+import { CharterRecords } from "@/components/tamp/CharterRecords";
 
 import { Link } from "@/lib/nav";
 import { History, Star } from "lucide-react";
@@ -34,7 +35,8 @@ function HistoryPage() {
     <AppShell>
       <PageHeader title="History" />
 
-      <div className="p-6">
+      <div className="space-y-6 p-6">
+        <CharterRecords />
         {done.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center">
             <History className="size-8 text-muted-foreground" />

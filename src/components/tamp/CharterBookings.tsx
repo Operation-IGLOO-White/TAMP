@@ -1,3 +1,4 @@
+import { CharterWaybill } from "@/components/tamp/CharterRecords";
 import { passengerVehicleAsset } from "@/lib/passenger-assets";
 import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -35,12 +36,15 @@ export type Booking = {
   id: string; version: string; incoming: boolean; allowSplit: boolean; vehicleId: string; vehicleName: string;
   vehicleProgress?: CharterVehicleProgress[];
   driverAssignments?: {
-    vehicleId: string; registration: string; driverName: string; canReassign?: boolean; status: keyof typeof charterAssignmentLabel; reason?: string;
+    vehicleId: string; registration: string; driverId?: string | null; driverName: string; canReassign?: boolean; status: keyof typeof charterAssignmentLabel; reason?: string;
   }[];
   groupId?: string; suggestedVehicles?: CharterMatch["vehicles"];
   customer: string; supplier: string; status: "REQUESTED" | "QUOTED" | "CONFIRMED" | "CANCELLED" | "DECLINED";
   outbound: Leg; returnLeg: Leg | null; contactName: string; contactPhone: string; notes: string;
   quote: { total: string; vat: "INCL" | "EXCL"; terms: string; start: string; end: string; validUntil: string; outboundArrivalBy?: string | null; returnArrivalBy?: string | null; vehicles: FleetVehicle[] } | null;
+  completedAt?: string;
+  ratings?: Record<string, { stars: number; comment: string; at: string }>;
+  invoice?: { number: string; issuedAt: string; total: string; vat: string; status: string; currency: string };
   history: { status: string; at: string; reason?: string }[];
 };
 type CharterAction = "CONFIRM" | "DECLINE" | "CANCEL";
@@ -460,6 +464,7 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
           </summary>
           <div className="mt-3 grid min-w-0 gap-4">
         {booking.quote && <CharterQuotePanel booking={booking} />}
+        {booking.vehicleProgress?.map((vehicle) => <CharterWaybill key={vehicle.vehicleId} booking={booking} vehicle={vehicle} />)}
         <details open={Boolean(bookingId)} className="min-w-0">
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-signal">View itinerary and booking details</summary>
           <div className="mt-4 grid min-w-0 gap-4">

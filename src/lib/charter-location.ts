@@ -25,6 +25,8 @@ export type CharterDriverJob = {
   notes: string;
   status: AssignmentStatus;
   reason?: string;
+  rating?: { stars: number; comment: string; at: string } | null;
+  completedAt?: string | null;
 };
 
 export type CharterPosition = { lat: number; lng: number; accuracyM: number; recordedAt: string };

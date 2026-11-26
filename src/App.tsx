@@ -169,7 +169,7 @@ export default function App() {
             <Route
               path="/driver/history"
               element={
-                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="dispatch.manage">
+                <RequireRole role={["TRANSPORTER", "DRIVER"]} permission="trips.read">
                   <Page11 />
                 </RequireRole>
               }
