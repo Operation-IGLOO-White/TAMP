@@ -1,3 +1,4 @@
+import { passengerVehicleAsset } from "@/lib/passenger-assets";
 import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -300,7 +301,7 @@ export default function VerificationInbox() {
                     <tr className="hover:bg-steel/25">
                       <th scope="row" className="px-4 py-3 font-medium">
                         <div className="flex items-center gap-3">
-                          <img src={`${import.meta.env.BASE_URL}fleet/tamp-passenger-${vehicle.type.toLowerCase()}.webp`} alt="" className="h-10 w-16 object-contain" loading="lazy" />
+                          <img src={passengerVehicleAsset(vehicle)} alt="" className="h-10 w-16 object-contain" loading="lazy" />
                           <div><p className="font-mono font-bold">{vehicle.registration}</p>
                             <p>{vehicle.make} {vehicle.model}</p>
                             <p className="text-xs capitalize text-muted-foreground">{vehicle.type.toLowerCase()}{vehicle.subtypeLabel && ` · ${vehicle.subtypeLabel}`}</p></div>

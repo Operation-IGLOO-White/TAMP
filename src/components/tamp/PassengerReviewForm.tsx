@@ -48,14 +48,39 @@ export function PassengerReviewForm({ vehicle, busy, onReview }: {
 }) {
   const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
   const [reason, setReason] = useState("");
-  return <div className="grid gap-3 border-t border-border pt-3">
-    <p>{vehicle.location.label} · {vehicle.serviceArea}</p>
-    <p>{displayDate.format(new Date(vehicle.availability.start))} – {displayDate.format(new Date(vehicle.availability.end))} SAST</p>
-    <p>{vehicle.wheelchairPositions} wheelchair positions · {vehicle.seats - vehicle.displacedSeats} seats with wheelchair configuration</p>
-    <p>Luggage capacity · {vehicle.luggageKg} kg / {vehicle.luggageM3} m³
-      {vehicle.luggageDimensions && <> · {vehicle.luggageDimensions.lengthM} × {vehicle.luggageDimensions.widthM} × {vehicle.luggageDimensions.heightM} m</>}
-    </p>
-    <p>Vehicle licence expires {vehicle.licenceExpiry} · Operating licence expires {vehicle.permitExpiry}</p>
+  const specifications = [
+    ["Vehicle", [vehicle.make, vehicle.model].join(" ")],
+    ["Vehicle type", vehicle.subtypeLabel || vehicle.type.toLowerCase()],
+    ["Passenger seats", String(vehicle.seats)],
+    ["Wheelchair positions", String(vehicle.wheelchairPositions)],
+    ["Seats with wheelchair configuration", String(vehicle.seats - vehicle.displacedSeats)],
+    ["Luggage capacity", `${vehicle.luggageKg} kg / ${vehicle.luggageM3} m³`],
+    ["Current location", vehicle.location.label],
+    ["Service area", vehicle.serviceArea],
+    ["Available from (SAST)", displayDate.format(new Date(vehicle.availability.start))],
+    ["Available until (SAST)", displayDate.format(new Date(vehicle.availability.end))],
+    ["Vehicle licence expiry", vehicle.licenceExpiry],
+    ["Operating licence expiry", vehicle.permitExpiry],
+    ...(vehicle.luggageDimensions ? [["Luggage dimensions", `${vehicle.luggageDimensions.lengthM} × ${vehicle.luggageDimensions.widthM} × ${vehicle.luggageDimensions.heightM} m`]] : []),
+  ];
+  return <div className="grid min-w-0 gap-5 py-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid min-w-0 content-start gap-5">
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <h3 className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Specification</h3>
+        <dl className="grid sm:grid-cols-2">
+          {specifications.map(([label, value]) => <div key={label} className="min-w-0 border-b border-border px-4 py-3 sm:odd:border-r">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+            <dd className="mt-1 break-words text-sm capitalize">{value || "Not provided"}</dd>
+          </div>)}
+        </dl>
+      </section>
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <h3 className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Vehicle photos ({vehicle.photos.length})</h3>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          {vehicle.photos.map((url, index) => <ReviewPhoto key={url + index} url={url} index={index} />)}
+          {!vehicle.photos.length && <p className="text-sm text-muted-foreground">No vehicle photos uploaded.</p>}
+        </div>
+      </section>
     <section className="overflow-hidden rounded-xl border border-border bg-card">
       <h3 className="border-b border-border px-4 py-3 font-semibold">Vehicle documents</h3>
       <div className="overflow-x-auto">
@@ -83,21 +108,29 @@ export function PassengerReviewForm({ vehicle, busy, onReview }: {
       <iframe key={preview.url} title={preview.label} src={preview.url} className="h-[65vh] min-h-80 w-full bg-white" />
       <p className="p-3 text-xs text-muted-foreground">If the preview is unavailable, open the document in a new tab or download it.</p>
     </section>}
-    <section>
-      <h3 className="mb-3 font-semibold">Uploaded vehicle photos</h3>
-      {vehicle.photos.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {vehicle.photos.map((url, index) => <a key={index} href={url} target="_blank" rel="noreferrer"
-          className="overflow-hidden rounded-xl border border-border bg-card">
-          <img src={url} alt={`Uploaded vehicle photo ${index + 1}`} loading="lazy" className="h-44 w-full object-contain" />
-          <span className="block border-t border-border p-2 text-sm">View photo {index + 1}</span>
-        </a>)}
-      </div> : <p className="text-muted-foreground">No vehicle photos uploaded.</p>}
-    </section>
+    </div>
+    <aside className="h-fit rounded-2xl border border-border bg-card shadow-sm">
+      <h3 className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Vehicle verification</h3>
+      <div className="grid gap-4 p-4">
+        <p className="font-mono text-sm font-bold">{vehicle.registration}</p>
+        <span className="w-fit rounded-full bg-muted px-3 py-1 text-xs font-semibold">{vehicle.verification.toLowerCase()}</span>
     {vehicle.reviewReason && <p className="text-sm text-destructive">{vehicle.reviewReason}</p>}
-    <label className="grid max-w-xl gap-1.5">Review notes<input className="min-h-10 rounded-md border border-border bg-background px-3" value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} /></label>
+    <label className="grid gap-1.5 text-sm">Review notes<textarea rows={4} placeholder="Add review notes or a reason for rejection" className="w-full rounded-lg border border-border bg-background p-3" value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} /></label>
     <div className="flex flex-wrap gap-2">
       <button className={primary} disabled={busy || vehicle.verification === "VERIFIED"} onClick={() => onReview("VERIFIED", reason)}>Verify vehicle</button>
       <button className={button} disabled={busy || !reason.trim()} onClick={() => onReview("REJECTED", reason)}>Reject vehicle</button>
     </div>
+      </div>
+    </aside>
   </div>;
+}
+
+
+function ReviewPhoto({ url, index }: { url: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+  return <a href={url} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-border bg-muted">
+    {failed ? <div className="grid aspect-[4/3] place-items-center px-3 text-center text-sm text-muted-foreground">Preview unavailable. Open the uploaded photo.</div>
+      : <img src={url} alt={`Vehicle view ${index + 1}`} loading="lazy" onError={() => setFailed(true)} className="aspect-[4/3] w-full object-contain" />}
+    <span className="block border-t border-border px-3 py-2 text-xs font-bold">Open photo {index + 1} ↗</span>
+  </a>;
 }

@@ -1,3 +1,4 @@
+import { passengerVehicleAsset } from "@/lib/passenger-assets";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -328,7 +329,7 @@ function VehiclePhoto({ vehicle, fleet }: { vehicle: Vehicle; fleet: boolean }) 
       <>
         {illustrationFailed ? <BusFront aria-hidden="true" className="size-12 text-muted-foreground" /> :
           <img className="h-44 w-full object-contain px-6 pb-7 pt-4"
-            src={`${import.meta.env.BASE_URL}fleet/tamp-passenger-${vehicle.type.toLowerCase()}.webp`}
+            src={passengerVehicleAsset(vehicle)}
             alt={`Generic ${types[vehicle.type].toLowerCase()}`} loading="lazy"
             onError={() => setIllustrationFailed(true)} />}
         <span className="absolute bottom-2 right-2 rounded-full bg-card px-2 py-1 text-xs text-muted-foreground">
