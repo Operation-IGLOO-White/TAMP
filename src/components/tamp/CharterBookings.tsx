@@ -3,7 +3,7 @@ import { LoadingIndicator } from "@/components/tamp/LoadingIndicator";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarDays, Check, MapPin, Plus, Route, Search, Trash2, Undo2, UserRound } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronUp, Check, MapPin, Plus, Route, Search, Trash2, Undo2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { charterAssignmentLabel, charterStageLabel, charterVehicleComplete, type CharterVehicleProgress } from "@/lib/charter-assignment";
 import { CharterFleetLive } from "@/components/tamp/CharterFleetLive";
@@ -30,8 +30,8 @@ type Leg = {
   passengers: number; wheelchairPositions: number; luggageKg: number; luggageM3: number;
   largestBag: Dimensions | null; distanceKm: number; routeProvider: string;
 };
-type FleetVehicle = { type?: string; photos?: string[]; id: string; registration: string; make: string; model: string; seats: number; publicationIssue?: string | null };
-type Booking = {
+type FleetVehicle = { driverId?: string | null; type?: string; photos?: string[]; id: string; registration: string; make: string; model: string; seats: number; publicationIssue?: string | null };
+export type Booking = {
   id: string; version: string; incoming: boolean; allowSplit: boolean; vehicleId: string; vehicleName: string;
   vehicleProgress?: CharterVehicleProgress[];
   driverAssignments?: {
@@ -327,6 +327,7 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [minimizedQuotes, setMinimizedQuotes] = useState<Set<string>>(() => new Set());
   const [statusFilter, setStatusFilter] = useState("ALL");
   const allBookings = bookings.data ?? [];
   const linked = allBookings.find((row) => row.id === bookingId);
@@ -408,7 +409,19 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
           <p><span className="text-muted-foreground">Pickup </span>{displayTime(booking.outbound.pickupAt)}</p>
           {booking.quote && <p className="font-mono font-bold">{money.format(Number(booking.quote.total))} {booking.quote.vat === "INCL" ? "incl." : "excl."} VAT</p>}
         </div>
-        {booking.quote && <CharterQuotePanel booking={booking} />}
+        {booking.quote && workspace === "engagements" && <button type="button"
+          aria-expanded={!minimizedQuotes.has(booking.id)}
+          className="inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-border px-3 text-xs font-bold"
+          onClick={() => setMinimizedQuotes((current) => {
+            const next = new Set(current);
+            if (next.has(booking.id)) next.delete(booking.id);
+            else next.add(booking.id);
+            return next;
+          })}>
+          {minimizedQuotes.has(booking.id) ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+          {minimizedQuotes.has(booking.id) ? "Show quote" : "Minimize quote"}
+        </button>}
+        {booking.quote && !(workspace === "engagements" && minimizedQuotes.has(booking.id)) && <CharterQuotePanel booking={booking} />}
         <details open={Boolean(bookingId)} className="min-w-0">
           <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-signal">View itinerary and booking details</summary>
           <div className="mt-4 grid min-w-0 gap-4">
@@ -492,7 +505,7 @@ export function CharterBookings({ workspace }: { workspace?: "engagements" | "di
   </div>;
 }
 
-function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved }: {
+export function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved }: {
   bookingId: string; vehicleId: string; registration: string; onSaved: () => Promise<void>;
 }) {
   const { authParty } = useTamp();
@@ -506,7 +519,7 @@ function ReassignCharterDriver({ bookingId, vehicleId, registration, onSaved }: 
     enabled: open, retry: false, gcTime: 0,
   });
   if (!open) return <button type="button" className={button + " justify-self-start"}
-    onClick={() => { setError(""); setOpen(true); }}>Reassign driver</button>;
+    onClick={() => { setError(""); setOpen(true); }}>Assign / change driver</button>;
 
   return <form className="mt-2 grid gap-3 rounded-lg border border-border p-3" onSubmit={async (event) => {
     event.preventDefault();

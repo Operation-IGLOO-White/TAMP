@@ -166,7 +166,7 @@ function PassengerWorkspace({ mode }: { mode: Mode }) {
       {mode === "catalogue" && !requestListing && <nav aria-label="Passenger Charter" className="flex flex-wrap gap-2">
         <Link to="/passenger-charter" className={showBookings ? button : primary}>Browse vehicles</Link>
         <Link to="/passenger-charter?view=bookings" className={showBookings ? primary : button}>Charter requests & bookings</Link>
-        {!showBookings && canRequest && <button className={primary} onClick={() => setRequestListing("compare")}>
+        {!showBookings && canRequest && <button className={primary + " ml-auto"} onClick={() => setRequestListing("compare")}>
           Find a transporter
         </button>}
       </nav>}

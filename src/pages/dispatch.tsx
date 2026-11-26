@@ -1,4 +1,6 @@
-import { CharterBookings } from "@/components/tamp/CharterBookings";
+import { trpc } from "@/lib/trpc";
+import { charterVehicleComplete } from "@/lib/charter-assignment";
+import { ReassignCharterDriver, type Booking } from "@/components/tamp/CharterBookings";
 import {
   AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, Clock3, MapPin,
   RefreshCw, Route, Search, Send, Truck, UserPlus, Users, XCircle,
@@ -29,6 +31,12 @@ export default function DispatchPage() {
   const { me, authParty, trips, matches, loads, trucks, parties, dispatches, updateDispatch } = tamp;
   const carrierMode = authParty?.permissions?.includes("dispatch.manage") ?? false;
   const organisationId = authParty?.activeOrganisationId ?? null;
+  const passengerBookings = useQuery({
+    queryKey: ["charter-bookings", me.id, organisationId],
+    queryFn: () => trpc.query<Booking[]>("charter.list"),
+    enabled: carrierMode,
+    refetchInterval: 20_000,
+  });
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -139,19 +147,33 @@ export default function DispatchPage() {
 
   if (!carrierMode) return <DriverOffers jobs={jobs} meId={me.id} notes={notes} setNotes={setNotes} busy={busy} act={act} />;
 
-  const counts = (queue: Queue) => jobs.filter((j) => queueFor(j) === queue).length;
+  const passengerRows = (passengerBookings.data ?? []).filter((booking) => booking.incoming && booking.status === "CONFIRMED")
+    .flatMap((booking) => (booking.quote?.vehicles ?? []).filter((vehicle) => {
+      const progress = booking.vehicleProgress?.find((item) => item.vehicleId === vehicle.id);
+      return !progress || !charterVehicleComplete(progress);
+    }).map((vehicle) => {
+      const assignment = booking.driverAssignments?.find((item) => item.vehicleId === vehicle.id);
+      const queue: Queue = !vehicle.driverId ? "NEEDS_DRIVER" : assignment?.status === "ACCEPTED" ? "ACCEPTED"
+        : assignment?.status === "DECLINED" || assignment?.status === "CANCELLED" ? "EXCEPTION" : "OFFERED";
+      return { booking, vehicle, assignment, queue };
+    }));
+  const passengerVisible = passengerRows.filter(({ booking, vehicle }) => {
+    const pickup = new Date(booking.outbound.pickupAt);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const limit = new Date(today); limit.setDate(limit.getDate() + (range === "TODAY" ? 1 : 7));
+    return (range === "ALL" || (pickup >= today && pickup < limit))
+      && [booking.id, booking.outbound.origin.label, booking.outbound.destination.label, vehicle.registration]
+        .join(" ").toLowerCase().includes(query.toLowerCase());
+  });
+  const counts = (queue: Queue) => jobs.filter((j) => queueFor(j) === queue).length + passengerRows.filter((item) => item.queue === queue).length;
   return <AppShell>
     <PageHeader title="Dispatch Control Centre" actions={
-      <button onClick={() => void refetch()} disabled={isFetching} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-bold hover:border-signal disabled:opacity-50">
+      <button onClick={() => { void refetch(); void passengerBookings.refetch(); }} disabled={isFetching} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-bold hover:border-signal disabled:opacity-50">
         <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
       </button>} />
     <main className="space-y-5 bg-background p-4 sm:p-6">
-      <section className="grid gap-3">
-        <h2 className="text-sm font-bold">Passenger dispatch</h2>
-        <CharterBookings workspace="dispatch" />
-      </section>
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Metric label="Operational jobs" hint="Confirmed jobs in this workspace" value={jobs.length} icon={Route} />
+        <Metric label="Operational jobs" hint="Confirmed jobs in this workspace" value={jobs.length + passengerRows.length} icon={Route} />
         <Metric label="Needs driver" hint="Assign a driver before pickup" value={counts("NEEDS_DRIVER")} icon={UserPlus} alert />
         <Metric label="Awaiting response" hint="Waiting for the driver to accept" value={counts("OFFERED")} icon={Clock3} />
         <Metric label="Ready" hint="Driver has accepted the assignment" value={counts("ACCEPTED")} icon={CheckCircle2} />
@@ -181,7 +203,19 @@ export default function DispatchPage() {
           />
           <Schedule jobs={jobs} />
           <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-            {(Object.keys(queues) as Queue[]).map((queue) => <QueueColumn key={queue} queue={queue} jobs={visible.filter((j) => queueFor(j) === queue)} allJobs={jobs} drivers={drivers} members={members} parties={parties} documentsByDriver={documentsByDriver} emails={emails} notes={notes} setEmails={setEmails} setNotes={setNotes} busy={busy} expanded={expanded} setExpanded={setExpanded} driverConflicts={driverConflicts} truckConflicts={truckConflicts} act={act} />)}
+            {(Object.keys(queues) as Queue[]).map((queue) => <QueueColumn key={queue} extraCount={passengerVisible.filter((item) => item.queue === queue).length}
+              passengerCards={passengerVisible.filter((item) => item.queue === queue).map(({ booking, vehicle, assignment }) =>
+                <article key={booking.id + vehicle.id} className="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm">
+                  <p className="text-[9px] font-bold uppercase text-signal">Passenger charter</p>
+                  <h3 className="break-words text-xs font-bold">{booking.outbound.origin.label} → {booking.outbound.destination.label}</h3>
+                  <p className="text-xs font-semibold">{vehicle.registration} · {vehicle.make} {vehicle.model}</p>
+                  <p className="text-[10px] text-muted-foreground">Pickup {formatDate(booking.outbound.pickupAt)} · {booking.outbound.passengers} passengers</p>
+                  <p className="text-xs">{assignment?.driverName ?? "Driver not assigned"}</p>
+                  {assignment?.reason && <p className="text-xs text-danger">{assignment.reason}</p>}
+                  {assignment?.canReassign && <ReassignCharterDriver bookingId={booking.id} vehicleId={vehicle.id} registration={vehicle.registration}
+                    onSaved={async () => { await passengerBookings.refetch(); }} />}
+                </article>)}
+              queue={queue} jobs={visible.filter((j) => queueFor(j) === queue)} allJobs={jobs} drivers={drivers} members={members} parties={parties} documentsByDriver={documentsByDriver} emails={emails} notes={notes} setEmails={setEmails} setNotes={setNotes} busy={busy} expanded={expanded} setExpanded={setExpanded} driverConflicts={driverConflicts} truckConflicts={truckConflicts} act={act} />)}
           </div>
         </div>
         <aside className="space-y-4">
@@ -319,6 +353,7 @@ function ReadinessMetric({ label, value, positive = false, danger = false }: { l
 }
 
 type ColumnProps = {
+  passengerCards?: import("react").ReactNode; extraCount?: number;
   queue: Queue; jobs: Job[]; allJobs: Job[]; drivers: OrganisationMember[]; members: OrganisationMember[]; parties: Party[];
   documentsByDriver: Map<string, DriverDocument[]>;
   emails: Record<string, string>; notes: Record<string, string>;
@@ -330,8 +365,8 @@ type ColumnProps = {
 function QueueColumn(p: ColumnProps) {
   const meta = queues[p.queue];
   return <section className={`min-w-0 rounded-2xl border ${meta.style}`}>
-    <div className="flex items-center justify-between border-b border-border/70 p-4"><span><span className="block text-sm font-black">{meta.title}</span><span className="text-[10px] text-muted-foreground">{meta.hint}</span></span><span className="grid size-8 place-items-center rounded-full bg-background font-mono text-sm font-black shadow-sm">{p.jobs.length}</span></div>
-    <div className="space-y-3 p-3">{p.jobs.map((job) => <JobCard key={job.trip.id} job={job} {...p} />)}{p.jobs.length === 0 && <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-8 text-center text-xs text-muted-foreground">No jobs in this queue.</div>}</div>
+    <div className="flex items-center justify-between border-b border-border/70 p-4"><span><span className="block text-sm font-black">{meta.title}</span><span className="text-[10px] text-muted-foreground">{meta.hint}</span></span><span className="grid size-8 place-items-center rounded-full bg-background font-mono text-sm font-black shadow-sm">{p.jobs.length + (p.extraCount ?? 0)}</span></div>
+    <div className="space-y-3 p-3">{p.jobs.map((job) => <JobCard key={job.trip.id} job={job} {...p} />)}{p.passengerCards}{p.jobs.length === 0 && !p.extraCount && <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-8 text-center text-xs text-muted-foreground">No jobs in this queue.</div>}</div>
   </section>;
 }
 
